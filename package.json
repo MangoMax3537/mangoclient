@@ -1,0 +1,65 @@
+{
+  "name": "mangoclient",
+  "productName": "MangoClient",
+  "version": "1.0.0",
+  "description": "A fast Minecraft launcher with Modrinth mods, Fabric/Forge support and one-click performance profiles.",
+  "main": "src/main/index.js",
+  "author": "mangomax",
+  "license": "MIT",
+  "repository": "https://github.com/MangoMax3537/mangoclient",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --linux AppImage tar.gz",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "electron-updater": "^6.8.9",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.mangomax.mangoclient",
+    "productName": "MangoClient",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "Game",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png"
+    },
+    "publish": [
+      {
+        "provider": "github"
+      }
+    ]
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

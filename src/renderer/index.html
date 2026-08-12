@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data: blob: https://cdn.modrinth.com https://api.modrinth.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:;" />
+  <title>MangoClient</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ============================ STATUSBAR ============================ -->
+    <header id="statusbar">
+      <div class="sb-left">
+        <span class="brand-mark" id="brand-mark"></span>
+        <button class="icon-btn" id="nav-back" data-icon="arrowLeft" data-tip="tip.back" aria-label="Zurück"></button>
+        <button class="icon-btn" id="nav-fwd" data-icon="arrowRight" data-tip="tip.forward" aria-label="Vor"></button>
+      </div>
+
+      <div class="sb-drag"><span id="breadcrumb">Start</span></div>
+
+      <div class="sb-right">
+        <button class="update-pill" id="update-pill" hidden><span data-icon="download"></span><span id="update-pill-text"></span></button>
+        <button class="run-pill" id="run-pill" hidden><span class="dot up"></span><span id="run-name"></span></button>
+        <button class="icon-btn" id="btn-console" data-icon="terminal" data-tip="btn.console" aria-label="Konsole"></button>
+        <button class="icon-btn" id="btn-sidebar" data-icon="panelRight" data-tip="tip.sidebar" aria-label="Seitenleiste"></button>
+        <div class="win-controls">
+          <button class="win-btn" id="btn-min" data-icon="minus" aria-label="Minimieren"></button>
+          <button class="win-btn" id="btn-max" data-icon="square" aria-label="Maximieren"></button>
+          <button class="win-btn close" id="btn-close" data-icon="close" aria-label="Schließen"></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============================== RAIL ============================== -->
+    <nav id="rail">
+      <button class="rail-btn active" data-view="start" data-icon="home" data-tip="nav.start"></button>
+      <button class="rail-btn" data-view="mods" data-icon="compass" data-tip="nav.mods"></button>
+      <button class="rail-btn" data-view="profiles" data-icon="layers" data-tip="nav.profiles"></button>
+      <button class="rail-btn" data-view="servers" data-icon="server" data-tip="nav.servers"></button>
+      <div class="rail-sep"></div>
+      <div id="rail-instances"></div>
+      <button class="rail-btn" id="rail-new" data-icon="plus" data-tip="profiles.new"></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" data-view="settings" data-icon="sliders" data-tip="nav.settings"></button>
+      <button class="rail-btn rail-avatar" id="account-chip">
+        <img id="chip-avatar" alt="" />
+      </button>
+      <div class="menu" id="account-menu" hidden></div>
+    </nav>
+
+    <!-- ============================== MAIN ============================== -->
+    <main id="main">
+      <!-- ============================ START ============================ -->
+      <section class="view active" id="view-start">
+        <section class="panel instance-hero">
+          <span class="cover lg" id="lp-tile"></span>
+          <div class="hero-body">
+            <h1 id="lp-name"></h1>
+            <p id="lp-sub"></p>
+            <div class="facts" id="lp-facts"></div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn brand lg" id="btn-play">
+              <span data-icon="play"></span>
+              <span id="play-label">Spielen</span>
+            </button>
+            <button class="btn" id="btn-edit-current" data-icon="pencil"><span data-i18n="profiles.edit">Bearbeiten</span></button>
+          </div>
+        </section>
+
+        <div class="notice warn" id="ram-warn" hidden>
+          <span data-icon="alert"></span>
+          <span data-i18n="warn.lowram">Wenig Arbeitsspeicher zugewiesen, das Spiel könnte ruckeln.</span>
+        </div>
+
+        <div class="progress" id="launch-progress" hidden>
+          <div class="progress-label"><span id="progress-text">…</span><span id="progress-pct">0%</span></div>
+          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        </div>
+
+        <section class="panel start-mods">
+          <div class="panel-head">
+            <h2><span data-i18n="mods.installed">Installiert</span> <span class="count" id="start-mod-count"></span></h2>
+            <div class="panel-actions">
+              <button class="btn sm" id="btn-start-add-mods" data-icon="plus"><span data-i18n="mods.add">Mods hinzufügen</span></button>
+              <button class="btn sm" id="btn-start-mods-folder" data-icon="folder"><span data-i18n="mods.openFolder">Ordner öffnen</span></button>
+            </div>
+          </div>
+          <div class="rows" id="start-mod-list"></div>
+        </section>
+      </section>
+
+      <!-- =========================== PROFILES =========================== -->
+      <section class="view" id="view-profiles">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="profiles.title">Profile</h1>
+            <p class="view-sub" data-i18n="profiles.sub">Jedes Profil hat eigene Mods, Welten und Einstellungen.</p>
+          </div>
+          <button class="btn brand" id="btn-new-profile" data-icon="plus"><span data-i18n="profiles.new">Neues Profil</span></button>
+        </div>
+        <div class="instance-grid" id="profile-grid"></div>
+      </section>
+
+      <!-- =========================== ACCOUNTS =========================== -->
+      <section class="view" id="view-accounts">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="accounts.title">Konten</h1>
+            <p class="view-sub" data-i18n="accounts.sub">Melde dich mit Microsoft an, um auf Online-Servern zu spielen.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn brand" id="btn-add-msa" data-icon="user"><span data-i18n="accounts.addMs">Mit Microsoft anmelden</span></button>
+            <button class="btn" id="btn-add-offline" data-icon="plus"><span data-i18n="accounts.addOffline">Offline-Konto</span></button>
+          </div>
+        </div>
+        <div class="card-grid" id="account-grid"></div>
+
+        <section class="panel skin-panel">
+          <div class="panel-head"><h2 data-i18n="skin.title">Skin</h2></div>
+          <div class="skin-stage">
+            <canvas id="skin-canvas"></canvas>
+            <span class="skin-hint" data-i18n="skin.hint">Ziehen zum Drehen, Doppelklick setzt zurück</span>
+          </div>
+        </section>
+      </section>
+
+      <!-- ============================= MODS ============================= -->
+      <section class="view" id="view-mods">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="mods.title">Mods</h1>
+            <p class="view-sub" id="mods-sub"></p>
+          </div>
+          <div class="tabs" id="mod-tabs">
+            <button class="tab active" data-tab="browse" data-i18n="mods.browse">Suchen</button>
+            <button class="tab" data-tab="installed" data-i18n="mods.installed">Installiert</button>
+          </div>
+        </div>
+
+        <div id="mods-browse">
+          <div class="toolbar">
+            <div class="input-icon">
+              <span data-icon="search"></span>
+              <input type="search" id="mod-search" data-i18n-ph="mods.search" placeholder="Auf Modrinth suchen" />
+            </div>
+            <select id="mod-type">
+              <option value="mod" data-i18n="mods.type.mod">Mods</option>
+              <option value="modpack" data-i18n="mods.type.modpack">Modpacks</option>
+              <option value="resourcepack" data-i18n="mods.type.rp">Resource Packs</option>
+              <option value="shader" data-i18n="mods.type.shader">Shader</option>
+            </select>
+            <select id="mod-sort">
+              <option value="relevance" data-i18n="mods.sort.relevance">Relevanz</option>
+              <option value="downloads" data-i18n="mods.sort.downloads">Downloads</option>
+              <option value="follows" data-i18n="mods.sort.follows">Follower</option>
+              <option value="newest" data-i18n="mods.sort.newest">Neueste</option>
+              <option value="updated" data-i18n="mods.sort.updated">Aktualisiert</option>
+            </select>
+            <label class="check">
+              <input type="checkbox" id="mod-filter-version" checked />
+              <span data-i18n="mods.onlyCompatible">Nur passende</span>
+              <b id="mod-filter-label"></b>
+            </label>
+          </div>
+          <div class="quickpicks" id="quickpicks"></div>
+          <div class="card-grid mods" id="mod-grid"></div>
+          <div class="center-row"><button class="btn" id="btn-load-more" hidden data-i18n="mods.more">Mehr laden</button></div>
+        </div>
+
+        <div id="mods-installed" hidden>
+          <div class="toolbar">
+            <button class="btn" id="btn-check-updates" data-icon="refresh"><span data-i18n="mods.checkUpdates">Nach Updates suchen</span></button>
+            <button class="btn" id="btn-open-mods-folder" data-icon="folder"><span data-i18n="mods.openFolder">Ordner öffnen</span></button>
+          </div>
+          <div class="rows" id="installed-list"></div>
+        </div>
+      </section>
+
+      <!-- ============================ SERVERS ============================ -->
+      <section class="view" id="view-servers">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="servers.title">Server</h1>
+            <p class="view-sub" data-i18n="servers.sub">Status wird live abgefragt. Beitreten startet das gewählte Profil.</p>
+          </div>
+          <button class="btn" id="btn-refresh-servers" data-icon="refresh"><span data-i18n="servers.refresh">Aktualisieren</span></button>
+        </div>
+        <div class="card-grid" id="server-grid"></div>
+      </section>
+
+      <!-- =========================== SETTINGS =========================== -->
+      <section class="view" id="view-settings">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="settings.title">Einstellungen</h1>
+            <p class="view-sub" data-i18n="settings.sub">Gilt für alle Profile, sofern ein Profil nichts eigenes vorgibt.</p>
+          </div>
+        </div>
+        <div class="settings-grid" id="settings-grid"></div>
+      </section>
+    </main>
+
+    <!-- ============================= SIDEBAR ============================= -->
+    <aside id="sidebar">
+      <section class="panel">
+        <div class="panel-head">
+          <h2 data-i18n="nav.accounts">Konten</h2>
+          <button class="btn sm" data-view-link="accounts" data-i18n="servers.all">Alle</button>
+        </div>
+        <div class="side-account" id="side-account"></div>
+      </section>
+
+      <section class="panel side-servers">
+        <div class="panel-head">
+          <h2 data-i18n="servers.title">Server</h2>
+          <button class="btn sm" data-view-link="servers" data-i18n="servers.all">Alle</button>
+        </div>
+        <div class="server-list" id="server-list"></div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ============================= CONSOLE ============================= -->
+  <div class="drawer" id="console-drawer" hidden>
+    <div class="drawer-head">
+      <h3 data-i18n="console.title">Konsole</h3>
+      <div class="panel-actions">
+        <button class="btn sm" id="btn-clear-console" data-i18n="console.clear">Leeren</button>
+        <button class="btn sm danger" id="btn-kill" data-i18n="console.kill">Spiel beenden</button>
+        <button class="btn sm icon-only" id="btn-close-console" data-icon="close" aria-label="Schließen"></button>
+      </div>
+    </div>
+    <pre class="console-out" id="console-out"></pre>
+  </div>
+
+  <!-- ============================== MODAL ============================== -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="modal-title"></h3>
+        <button class="btn sm icon-only" id="modal-close" data-icon="close" aria-label="Schließen"></button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-foot" id="modal-foot"></div>
+    </div>
+  </div>
+
+  <!-- Shown only while the launch-time update installs itself. -->
+  <div id="update-overlay" hidden>
+    <div class="uo-box">
+      <span class="uo-mark" id="uo-mark"></span>
+      <h2 data-i18n="update.applyingTitle">MangoClient wird aktualisiert</h2>
+      <p id="uo-text"></p>
+      <div class="progress-track"><div class="progress-fill" id="uo-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/skin3d.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
