@@ -88,6 +88,38 @@ function isModernNative(lib) {
   return !lib.natives && /:natives-/.test(lib.name || '');
 }
 
+/** Every spelling of the architecture we are running on. */
+const ARCH_ALIASES = {
+  x64: ['x64', 'x86_64', 'x86-64', 'amd64'],
+  ia32: ['x86', 'x86_32', 'i386'],
+  arm64: ['arm64', 'aarch64'],
+  arm: ['arm', 'arm32'],
+};
+const CURRENT_ARCHES = ARCH_ALIASES[process.arch] || [process.arch];
+const KNOWN_ARCHES = new Set(Object.values(ARCH_ALIASES).flat());
+
+/**
+ * Split `…:natives-windows-arm64` into its os/arch parts. Mojang's rules only
+ * name the OS for these libraries (all three Windows variants carry
+ * `{"os":{"name":"windows"}}`), so the architecture lives in the classifier and
+ * nowhere else. A trailing word that is not an architecture — macOS ships a
+ * `natives-macos-patch` library — belongs to the OS variant, not the arch.
+ */
+function parseNativeClassifier(name) {
+  const m = /:natives-([a-z0-9]+)(?:-([a-z0-9_]+))?$/.exec(name || '');
+  if (!m) return null;
+  const suffix = m[2] || null;
+  return {
+    os: m[1] === 'macos' ? 'osx' : m[1],
+    arch: suffix && KNOWN_ARCHES.has(suffix) ? suffix : null,
+  };
+}
+
+/** Group key for "the same native library, same OS, different architecture". */
+function nativeVariantKey(name, info) {
+  return `${name.split(':').slice(0, 3).join(':')}@${info.os}`;
+}
+
 // ---- version json ----------------------------------------------------------
 
 function mergeVersionJson(child, parent) {
@@ -154,10 +186,32 @@ function collectLibraries(version) {
   const natives = [];
   const seen = new Set();
 
+  // Which native libraries ship a build for exactly this architecture. Anything
+  // that does is preferred over the un-suffixed (x64) variant, which is only a
+  // fallback for machines Mojang publishes no dedicated build for.
+  const hasExactArch = new Set();
+  for (const lib of version.libraries || []) {
+    if (!isModernNative(lib) || !rulesAllow(lib.rules)) continue;
+    const info = parseNativeClassifier(lib.name);
+    if (info?.arch && CURRENT_ARCHES.includes(info.arch)) {
+      hasExactArch.add(nativeVariantKey(lib.name, info));
+    }
+  }
+
   for (const lib of version.libraries || []) {
     if (!rulesAllow(lib.rules)) continue;
     if (seen.has(lib.name)) continue;
     seen.add(lib.name);
+
+    if (isModernNative(lib)) {
+      const info = parseNativeClassifier(lib.name);
+      // Extraction flattens every archive into one directory, so letting a
+      // foreign architecture through means its lwjgl.dll overwrites ours and
+      // the JVM dies with "Failed to locate library".
+      if (info && info.os !== OS_NAME) continue;
+      if (info?.arch && !CURRENT_ARCHES.includes(info.arch)) continue;
+      if (info && !info.arch && hasExactArch.has(nativeVariantKey(lib.name, info))) continue;
+    }
 
     const artifact = lib.downloads?.artifact;
     const classifier = nativeClassifier(lib);
@@ -212,6 +266,11 @@ async function extractNatives(version, natives, onLog) {
   const stamp = natives.map((n) => `${n.name}:${n.sha1 || ''}`).sort().join('|');
   const existing = await fsp.readFile(stampFile, 'utf8').catch(() => null);
   if (existing === stamp) return dir;
+
+  // Start from an empty directory: a leftover library from an earlier, wrongly
+  // selected set would still be found by java.library.path.
+  await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+  await fsp.mkdir(dir, { recursive: true });
 
   for (const nat of natives) {
     try {
