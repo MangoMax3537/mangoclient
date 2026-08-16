@@ -14,7 +14,7 @@ const modrinth = require('./modrinth');
 const localmods = require('./localmods');
 const servers = require('./servers');
 const skins = require('./skins');
-const { launch } = require('./launcher');
+const { launch, isGameAlive } = require('./launcher');
 const { createUpdater } = require('./updater');
 
 app.setName('MangoClient');
@@ -26,9 +26,55 @@ let win = null;
 let updater = null;
 /** profileId -> GameInstance */
 const running = new Map();
+/**
+ * Games still playing from an earlier launcher run: profileId -> pid. Closing
+ * the launcher leaves the game alone, so on the next start the session has to
+ * be recognised again - if only to keep a second JVM off the same world.
+ */
+const detached = new Map();
+let detachedTimer = null;
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+/** Everything the UI should show a Stop button for. */
+function runningProfileIds() {
+  return [...new Set([...running.keys(), ...detached.keys()])];
+}
+
+/** Note (or forget) the session that survives us, so the next start knows. */
+function rememberSession(profileId, session) {
+  store.updateProfile(profileId, { session });
+}
+
+/** Adopt sessions recorded before the last shutdown that are still playing. */
+async function adoptDetachedSessions() {
+  for (const profile of store.profiles) {
+    const pid = profile.session?.pid;
+    if (!pid) continue;
+    if (await isGameAlive(pid)) detached.set(profile.id, pid);
+    else rememberSession(profile.id, null);
+  }
+  watchDetachedSessions();
+}
+
+/** Adopted sessions have no child handle, so their end has to be noticed. */
+function watchDetachedSessions() {
+  if (detachedTimer || detached.size === 0) return;
+  detachedTimer = setInterval(async () => {
+    for (const [profileId, pid] of [...detached]) {
+      if (await isGameAlive(pid)) continue;
+      detached.delete(profileId);
+      rememberSession(profileId, null);
+      send('launch:state', { profileId, state: 'stopped' });
+    }
+    if (detached.size === 0) {
+      clearInterval(detachedTimer);
+      detachedTimer = null;
+    }
+  }, 10000);
+  detachedTimer.unref?.();
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +220,7 @@ function registerIpc() {
       totalRam: totalRamMB(),
       paths: { root: P.root, instances: P.instances },
       version: app.getVersion(),
-      running: [...running.keys()],
+      running: runningProfileIds(),
     };
   });
 
@@ -365,6 +411,10 @@ function registerIpc() {
   // --- launching
   handle('game:launch', async (profileId, quickJoinServer) => {
     if (running.has(profileId)) throw new Error('This profile is already running.');
+    if (detached.has(profileId)) {
+      // Two JVMs on one instance folder fight over the same world files.
+      throw new Error('This profile is still running from before the launcher was restarted. Close the game first.');
+    }
     const profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
     const account = store.selectedAccount;
@@ -382,8 +432,11 @@ function registerIpc() {
     });
 
     running.set(profileId, instance);
+    // Recorded now, because the launcher may well be closed before the game is.
+    rememberSession(profileId, { pid: instance.pid, versionId: instance.versionId, startedAt: Date.now() });
     instance.on('exit', () => {
       running.delete(profileId);
+      rememberSession(profileId, null);
       send('launch:state', { profileId, state: 'stopped' });
       if (store.config.hideOnLaunch && win && !win.isVisible()) win.show();
     });
@@ -397,12 +450,21 @@ function registerIpc() {
 
   handle('game:stop', async (profileId) => {
     const instance = running.get(profileId);
-    if (!instance) return false;
-    instance.kill();
+    if (instance) {
+      instance.kill();
+      return true;
+    }
+    // A session adopted from an earlier run is only known by its pid.
+    const pid = detached.get(profileId);
+    if (!pid) return false;
+    try { process.kill(pid); } catch { /* it beat us to it */ }
+    detached.delete(profileId);
+    rememberSession(profileId, null);
+    send('launch:state', { profileId, state: 'stopped' });
     return true;
   });
 
-  handle('game:running', async () => [...running.keys()]);
+  handle('game:running', async () => runningProfileIds());
 
   // --- mods on disk
   handle('mods:sync', async (profileId) => {
@@ -591,6 +653,7 @@ if (!gotLock) {
     registerIpc();
     syncAllMods();
     refreshModWatchers();
+    adoptDetachedSessions().catch((err) => console.error('[sessions]', err));
     createWindow();
 
     // The launch check installs and relaunches by itself, so a player always
@@ -607,12 +670,9 @@ if (!gotLock) {
   });
 
   app.on('before-quit', () => {
-    // Record the session before killing: the child's 'close' event would arrive
-    // after the process is already gone.
-    for (const instance of running.values()) {
-      instance.flushPlayTime();
-      instance.kill();
-    }
+    // A running game keeps playing without us. Record the session now, since
+    // the child's 'close' event will never reach this process.
+    for (const instance of running.values()) instance.flushPlayTime();
     for (const id of [...modWatchers.keys()]) closeModWatcher(id);
   });
 }
