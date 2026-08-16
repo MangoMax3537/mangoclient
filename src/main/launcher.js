@@ -2,8 +2,12 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
 const { EventEmitter } = require('events');
+const { StringDecoder } = require('string_decoder');
+
+const execFileAsync = promisify(execFile);
 const P = require('./paths');
 const { installVersion, resolveVersionJson, rulesAllow } = require('./installer');
 const { ensureLoader } = require('./loaders');
@@ -74,11 +78,12 @@ async function seedInstanceOptions(gameDir, { language }) {
 }
 
 class GameInstance extends EventEmitter {
-  constructor(profileId, child, versionId) {
+  constructor(profileId, child, versionId, logFile) {
     super();
     this.profileId = profileId;
     this.child = child;
     this.versionId = versionId;
+    this.logFile = logFile;
     this.startedAt = Date.now();
     this.pid = child.pid;
   }
@@ -159,6 +164,84 @@ function createLogParser(emit) {
       buffer = buffer.slice(end + CLOSE.length);
     }
   };
+}
+
+/**
+ * Follow a growing log file and hand new text to `onText`.
+ *
+ * The game writes to a file rather than to our pipes, so that closing the
+ * launcher cannot break its stdout. The price is that the live view has to poll
+ * instead of being pushed to.
+ */
+function followLog(file, onText, intervalMs = 300) {
+  const decoder = new StringDecoder('utf8'); // a chunk may cut a character in half
+  let offset = 0;
+  let busy = false;
+
+  const pump = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const { size } = await fsp.stat(file);
+      if (size < offset) offset = 0; // a new session truncated it
+      if (size > offset) {
+        const handle = await fsp.open(file, 'r');
+        try {
+          const buffer = Buffer.alloc(size - offset);
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
+          offset += bytesRead;
+          const text = decoder.write(buffer.subarray(0, bytesRead));
+          if (text) onText(text);
+        } finally {
+          await handle.close();
+        }
+      }
+    } catch { /* the game has not written anything yet */ }
+    busy = false;
+  };
+
+  const timer = setInterval(pump, intervalMs);
+  timer.unref?.(); // never hold the launcher open just to watch a log
+  return {
+    /** Read whatever is left, then stop following. */
+    async stop() {
+      clearInterval(timer);
+      await pump();
+    },
+  };
+}
+
+/**
+ * Is this pid still a running game?
+ *
+ * A session outlives the launcher, so a pid recorded before a restart has to be
+ * re-checked. The image name is part of the check because the operating system
+ * hands pids out again, and mistaking a stranger's process for the game would
+ * mean showing it as running - or killing it.
+ */
+async function isGameAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0); // existence check only, no signal delivered
+  } catch (err) {
+    if (err.code !== 'EPERM') return false; // EPERM: alive, just not ours to signal
+  }
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV']);
+      return /^"javaw?\.exe"/im.test(stdout);
+    }
+    const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'comm=']);
+    return /java/i.test(stdout);
+  } catch {
+    return false; // no such process, or no way to tell
+  }
+}
+
+/** Log file name a human can pick out of the folder. */
+function logFileFor(profile) {
+  const slug = profile.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'instance';
+  return path.join(P.logs, `${slug}-${profile.id.slice(0, 8)}.log`);
 }
 
 /**
@@ -307,13 +390,27 @@ async function launch({
   // 6. Go
   onState('launching');
   log(`Launching: ${path.basename(javaPath)} ${version.mainClass} (${ram} MB heap)`);
-  const child = spawn(javaPath, args, {
-    cwd: gameDir,
-    env: { ...process.env, INST_NAME: profile.name, INST_ID: profile.id, INST_DIR: gameDir },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  // The session belongs to the player, not to the launcher's lifetime: closing
+  // MangoClient leaves the game running. That rules out pipes, whose read end
+  // would die with us, so the game gets a real log file and we follow it.
+  await fsp.mkdir(P.logs, { recursive: true });
+  const logFile = logFileFor(profile);
+  const logFd = fs.openSync(logFile, 'w');
+  let child;
+  try {
+    child = spawn(javaPath, args, {
+      cwd: gameDir,
+      env: { ...process.env, INST_NAME: profile.name, INST_ID: profile.id, INST_DIR: gameDir },
+      stdio: ['ignore', logFd, logFd], // one file, so stdout and stderr keep their order
+      detached: true,
+      windowsHide: true,
+    });
+  } finally {
+    fs.closeSync(logFd); // the child has its own copy now
+  }
+  child.unref(); // and it must not hold the launcher's event loop open
 
-  const instance = new GameInstance(profile.id, child, version.id);
+  const instance = new GameInstance(profile.id, child, version.id, logFile);
   instance.onFlushPlayTime = (played) => {
     store?.updateProfile(profile.id, {
       lastPlayed: Date.now(),
@@ -322,28 +419,31 @@ async function launch({
   };
 
   let sawWindow = false;
-  const handle = (stream, level) => {
-    const feed = createLogParser((line, lineLevel) => {
-      onLog(line, lineLevel || level);
-      if (!sawWindow && /Setting user:|LWJGL Version|Created:.*minecraft:textures|OpenAL initialized/.test(line)) {
-        sawWindow = true;
-        onState('running');
-        instance.emit('running');
-      }
-    });
-    stream.on('data', (chunk) => feed(chunk.toString()));
-  };
-  handle(child.stdout, 'info');
-  handle(child.stderr, 'error');
+  const feed = createLogParser((line, lineLevel) => {
+    // stdout and stderr share the file, so anything log4j did not label is
+    // judged by how it reads: stack traces belong in red.
+    const level = lineLevel
+      || (/^(\s+at |Exception |Caused by:|Error:|java\.lang\.|.*\bFATAL\b)/.test(line) ? 'error' : 'info');
+    onLog(line, level);
+    if (!sawWindow && /Setting user:|LWJGL Version|Created:.*minecraft:textures|OpenAL initialized/.test(line)) {
+      sawWindow = true;
+      onState('running');
+      instance.emit('running');
+    }
+  });
+  const follower = followLog(logFile, feed);
+  instance.stopFollowing = () => follower.stop();
 
   child.on('error', (err) => {
     onLog(`Failed to start the game: ${err.message}`, 'error');
     onState('crashed');
+    follower.stop();
     instance.emit('exit', -1);
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     instance.flushPlayTime();
+    await follower.stop(); // pick up the last lines the game wrote
     onLog(`Game exited with code ${code}`, code === 0 ? 'info' : 'error');
     onState(code === 0 ? 'stopped' : 'crashed');
     instance.emit('exit', code);
@@ -362,4 +462,4 @@ async function launch({
   return instance;
 }
 
-module.exports = { launch, PRESETS, GameInstance };
+module.exports = { launch, PRESETS, GameInstance, followLog, isGameAlive };

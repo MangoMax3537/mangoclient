@@ -98,6 +98,7 @@ class Store {
       ram: data.ram || null,                  // null = inherit global
       javaArgs: data.javaArgs || '',
       mods: data.mods || [],                  // installed Modrinth mods
+      session: null,                          // {pid} while the game is playing
       lastPlayed: null,
       playTimeMs: 0,
       created: Date.now(),
