@@ -223,7 +223,10 @@
       case 'checking': return t('update.checking');
       case 'downloading': return t('update.downloading', { version: u.version, percent: u.percent ?? 0 });
       case 'ready': return t('update.ready', { version: u.version });
-      case 'error': return t('update.error', { error: u.error });
+      case 'error':
+        if (u.code === 'no-release') return t('update.errorNoRelease');
+        if (u.code === 'offline') return t('update.errorOffline');
+        return t('update.error', { error: u.error });
       case 'disabled': return u.reason === 'dev' ? t('update.disabledDev') : t('update.disabledTarget');
       case 'current': return t('update.current');
       default: return t('update.idle');

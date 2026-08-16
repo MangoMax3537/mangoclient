@@ -47,6 +47,9 @@
       ],
       "icon": "build/icon.png"
     },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
     "mac": {
       "target": [
         "dmg"

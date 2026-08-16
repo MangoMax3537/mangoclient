@@ -17,6 +17,20 @@ const { autoUpdater } = require('electron-updater');
 /** Players leave a launcher open for days, so re-check while it runs. */
 const RECHECK_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
+/**
+ * electron-updater rejects with the provider's entire HTTP response, headers
+ * and cookies included. Boil that down to something a player can act on; the
+ * full text still goes to the console.
+ */
+function describeError(err) {
+  const raw = String(err?.message || err);
+  const first = raw.split('\n')[0].trim().slice(0, 200);
+  // A missing feed means no release is published where the app looks for one.
+  if (/\b404\b|No published versions/i.test(raw)) return { code: 'no-release', error: first };
+  if (/ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|net::/i.test(raw)) return { code: 'offline', error: first };
+  return { code: 'other', error: first };
+}
+
 function createUpdater({ onState }) {
   let last = { state: 'idle', version: app.getVersion() };
   let timer = null;
@@ -48,7 +62,8 @@ function createUpdater({ onState }) {
   autoUpdater.on('error', (err) => {
     // Never strand the player on the update screen because GitHub was down.
     applyOnDownload = false;
-    emit({ state: 'error', error: String(err?.message || err) });
+    console.error('[updater]', err);
+    emit({ state: 'error', ...describeError(err) });
   });
 
   const api = {
@@ -96,7 +111,8 @@ function createUpdater({ onState }) {
         await autoUpdater.checkForUpdates();
       } catch (err) {
         applyOnDownload = false;
-        emit({ state: 'error', error: String(err?.message || err) });
+        console.error('[updater]', err);
+        emit({ state: 'error', ...describeError(err) });
       }
       return last;
     },
