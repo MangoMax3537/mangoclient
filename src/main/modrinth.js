@@ -199,7 +199,8 @@ async function setModEnabled(profile, projectId, enabled) {
 
 /** Check every installed mod for a newer build matching the profile. */
 async function checkUpdates(profile) {
-  const mods = (profile.mods || []).filter((m) => m.type === 'mod');
+  // Hand-added jars have no Modrinth project to compare against.
+  const mods = (profile.mods || []).filter((m) => m.type === 'mod' && !m.local);
   const results = await pool(mods, 6, async (mod) => {
     try {
       const versions = await getVersions(mod.projectId, { loader: profile.loader, gameVersion: profile.mcVersion });

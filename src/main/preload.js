@@ -91,6 +91,10 @@ contextBridge.exposeInMainWorld('mango', {
     running: () => call('game:running'),
   },
 
+  mods: {
+    sync: (profileId) => call('mods:sync', profileId),
+  },
+
   modrinth: {
     search: (opts) => call('modrinth:search', opts),
     project: (id) => call('modrinth:project', id),
@@ -116,5 +120,6 @@ contextBridge.exposeInMainWorld('mango', {
     skinUpdated: (cb) => on('skin:updated', cb),
     updateState: (cb) => on('update:state', cb),
     serverPinged: (cb) => on('servers:pinged', cb),
+    modsChanged: (cb) => on('mods:changed', cb),
   },
 });
