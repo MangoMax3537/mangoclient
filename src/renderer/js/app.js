@@ -175,7 +175,7 @@
     $('#nav-back').disabled = history.idx === 0;
     $('#nav-fwd').disabled = history.idx >= history.stack.length - 1;
 
-    if (name === 'mods') renderMods();
+    if (name === 'mods') { renderMods(); syncLocalMods(); }
     if (name === 'servers') renderServerGrid();
     if (name === 'settings') renderSettings();
     if (name === 'profiles') renderProfiles();
@@ -922,7 +922,7 @@
       $$('#mod-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
       $('#mods-browse').hidden = btn.dataset.tab !== 'browse';
       $('#mods-installed').hidden = btn.dataset.tab !== 'installed';
-      if (btn.dataset.tab === 'installed') renderInstalledMods();
+      if (btn.dataset.tab === 'installed') { renderInstalledMods(); syncLocalMods(); }
       else renderMods();
     };
   });
@@ -1071,6 +1071,28 @@
   }
 
   /**
+   * Jars can be dropped into the mods folder by hand, so the list has to be
+   * re-read from disk rather than trusted from the last install.
+   */
+  function applyMods(profileId, mods) {
+    const profile = state.profiles.find((p) => p.id === profileId);
+    if (profile) profile.mods = mods;
+    if (state.profile?.id === profileId) state.profile.mods = mods;
+    renderStart();
+    if ($('#view-mods').classList.contains('active') && !$('#mods-installed').hidden) renderInstalledMods();
+  }
+
+  async function syncLocalMods() {
+    if (!state.profile) return;
+    const id = state.profile.id;
+    try {
+      applyMods(id, await api.mods.sync(id));
+    } catch (err) {
+      console.warn('mod folder sync failed', err);
+    }
+  }
+
+  /**
    * The installed-mods list, shared by the Start view and the Mods view.
    * Each row carries an enable/disable switch and a delete button; deleting
    * always asks first, since it removes the jar from disk.
@@ -1088,9 +1110,10 @@
         <div class="row-meta">
           <div class="row-name">${esc(m.title)}
             ${m.dependency ? `<span class="badge">${esc(t('mods.dependency'))}</span>` : ''}
+            ${m.local ? `<span class="badge" data-tip-text="${esc(t('mods.localHint'))}">${esc(t('mods.local'))}</span>` : ''}
             ${m.update ? `<span class="badge warn">${esc(t('mods.updateAvailable'))}</span>` : ''}
           </div>
-          <div class="row-sub">${esc(m.versionNumber)} · ${esc(m.filename)}</div>
+          <div class="row-sub">${m.versionNumber ? `${esc(m.versionNumber)} · ` : ''}${esc(m.filename)}</div>
         </div>
         <span class="row-state">${esc(m.enabled === false ? t('mods.off') : t('mods.on'))}</span>
         <label class="switch" data-tip-text="${esc(t('mods.toggle'))}">
@@ -1532,6 +1555,10 @@
     for (const a of state.accounts) if (a.uuid !== state.account?.uuid) loadSkin(a.uuid);
 
     pingServers();
+
+    // The main process watches every instance's mods folder, so a jar dropped
+    // in while the launcher is open appears without a click.
+    api.on.modsChanged(({ profileId, mods }) => applyMods(profileId, mods));
 
     api.versions.manifest().then((m) => { state.versions = m; }).catch((err) => {
       console.warn('version manifest failed', err);

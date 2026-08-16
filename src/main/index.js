@@ -11,6 +11,7 @@ const installer = require('./installer');
 const loaders = require('./loaders');
 const javaMod = require('./java');
 const modrinth = require('./modrinth');
+const localmods = require('./localmods');
 const servers = require('./servers');
 const skins = require('./skins');
 const { launch } = require('./launcher');
@@ -28,6 +29,73 @@ const running = new Map();
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+// ---------------------------------------------------------------------------
+// Manually added mods
+//
+// Jars copied into an instance's `mods` folder are loaded by the game either
+// way, so the list has to follow the folder rather than only its own records.
+// ---------------------------------------------------------------------------
+
+/** profileId -> {watcher, timer} */
+const modWatchers = new Map();
+
+/** Fold the mods folder into a profile's list. Returns the current list. */
+function syncMods(profileId) {
+  const profile = store.getProfile(profileId);
+  if (!profile) return [];
+  const { mods, changed } = localmods.syncProfileMods(profile);
+  if (changed) store.updateProfile(profileId, { mods });
+  return { mods, changed };
+}
+
+function syncAllMods() {
+  for (const profile of store.profiles) {
+    try { syncMods(profile.id); } catch (err) { console.error('[mods:sync]', err); }
+  }
+}
+
+/**
+ * Watch an instance's mods folder so a jar dropped in while the launcher is
+ * open shows up without the player having to click anything.
+ */
+function watchMods(profileId) {
+  if (modWatchers.has(profileId)) return;
+  const dir = localmods.modsDirFor(profileId);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const entry = { timer: null, watcher: null };
+    entry.watcher = fs.watch(dir, () => {
+      // Copying a large jar fires several events; settle before reading it.
+      clearTimeout(entry.timer);
+      entry.timer = setTimeout(() => {
+        try {
+          const { mods, changed } = syncMods(profileId);
+          if (changed) send('mods:changed', { profileId, mods });
+        } catch (err) { console.error('[mods:watch]', err); }
+      }, 500);
+    });
+    entry.watcher.on('error', () => closeModWatcher(profileId));
+    modWatchers.set(profileId, entry);
+  } catch (err) {
+    console.error('[mods:watch]', err); // fall back to syncing on demand
+  }
+}
+
+function closeModWatcher(profileId) {
+  const entry = modWatchers.get(profileId);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  try { entry.watcher?.close(); } catch { /* already gone */ }
+  modWatchers.delete(profileId);
+}
+
+/** Keep one watcher per existing profile, and none for deleted ones. */
+function refreshModWatchers() {
+  const ids = new Set(store.profiles.map((p) => p.id));
+  for (const id of [...modWatchers.keys()]) if (!ids.has(id)) closeModWatcher(id);
+  for (const id of ids) watchMods(id);
 }
 
 function createWindow() {
@@ -94,17 +162,21 @@ function registerIpc() {
   });
 
   // --- bootstrap
-  handle('app:state', async () => ({
-    config: store.config,
-    profiles: store.profiles,
-    accounts: store.accounts.map(publicAccount),
-    selectedProfile: store.selectedProfile,
-    selectedAccount: store.selectedAccount ? publicAccount(store.selectedAccount) : null,
-    totalRam: totalRamMB(),
-    paths: { root: P.root, instances: P.instances },
-    version: app.getVersion(),
-    running: [...running.keys()],
-  }));
+  handle('app:state', async () => {
+    // Pick up jars that were added or removed while the launcher was closed.
+    syncAllMods();
+    return {
+      config: store.config,
+      profiles: store.profiles,
+      accounts: store.accounts.map(publicAccount),
+      selectedProfile: store.selectedProfile,
+      selectedAccount: store.selectedAccount ? publicAccount(store.selectedAccount) : null,
+      totalRam: totalRamMB(),
+      paths: { root: P.root, instances: P.instances },
+      version: app.getVersion(),
+      running: [...running.keys()],
+    };
+  });
 
   handle('config:set', async (patch) => store.setConfig(patch));
 
@@ -186,9 +258,17 @@ function registerIpc() {
 
   // --- profiles
   handle('profile:list', async () => store.profiles);
-  handle('profile:create', async (data) => store.addProfile(data));
+  handle('profile:create', async (data) => {
+    const profile = store.addProfile(data);
+    refreshModWatchers();
+    return profile;
+  });
   handle('profile:update', async (id, patch) => store.updateProfile(id, patch));
-  handle('profile:delete', async (id) => { store.deleteProfile(id); return store.profiles; });
+  handle('profile:delete', async (id) => {
+    closeModWatcher(id);
+    store.deleteProfile(id);
+    return store.profiles;
+  });
   handle('profile:select', async (id) => store.setConfig({ selectedProfile: id }));
   // --- profile pictures
   /** Read a profile's picture back as a data URL the renderer can show. */
@@ -243,6 +323,7 @@ function registerIpc() {
     const src = store.getProfile(id);
     if (!src) throw new Error('Profile not found');
     const copy = store.addProfile({ ...src, name: `${src.name} (copy)`, mods: [] });
+    refreshModWatchers();
     // Copy the instance folder so mods/configs/worlds come along.
     await fsp.cp(P.instanceDir(id), P.instanceDir(copy.id), { recursive: true }).catch(() => {});
     if (src.cover) await fsp.copyFile(P.coverFile(id), P.coverFile(copy.id)).catch(() => {});
@@ -322,6 +403,12 @@ function registerIpc() {
   });
 
   handle('game:running', async () => [...running.keys()]);
+
+  // --- mods on disk
+  handle('mods:sync', async (profileId) => {
+    if (!store.getProfile(profileId)) throw new Error('Profile not found');
+    return syncMods(profileId).mods;
+  });
 
   // --- Modrinth
   handle('modrinth:search', async (opts) => modrinth.search(opts));
@@ -502,6 +589,8 @@ if (!gotLock) {
     store = new Store();
     updater = createUpdater({ onState: (s) => send('update:state', s) });
     registerIpc();
+    syncAllMods();
+    refreshModWatchers();
     createWindow();
 
     // The launch check installs and relaunches by itself, so a player always
@@ -524,5 +613,6 @@ if (!gotLock) {
       instance.flushPlayTime();
       instance.kill();
     }
+    for (const id of [...modWatchers.keys()]) closeModWatcher(id);
   });
 }
