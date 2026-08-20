@@ -348,6 +348,7 @@
     updatePlayButton();
     renderAccountChip();
     renderRunPill();
+    renderMangoConfigPill();
     renderRailInstances();
     renderModList($('#start-mod-list'));
     $('#start-mod-count').textContent = (state.profile?.mods || []).length || '';
@@ -388,6 +389,45 @@
   }
 
   /** Running instances live in the statusbar, next to the console button. */
+  /**
+   * The switch in the statusbar. It follows the selected profile, because
+   * MangoConfig is per instance - the global setting only decides what a
+   * profile does when it has no opinion of its own.
+   */
+  async function renderMangoConfigPill() {
+    const pill = $('#mc-pill');
+    if (!pill) return;
+    if (!state.profile) { pill.hidden = true; return; }
+
+    let info;
+    try {
+      info = await api.mangoConfig.info(state.profile.id);
+    } catch {
+      pill.hidden = true;
+      return;
+    }
+    state.mangoConfig = info;
+
+    pill.hidden = false;
+    pill.classList.toggle('on', info.enabled && info.supported);
+    pill.classList.toggle('off', !info.enabled);
+    $('#mc-state').textContent = info.enabled
+      ? (info.supported ? t('mangoconfig.on') : t('mangoconfig.na'))
+      : t('mangoconfig.off');
+    pill.dataset.tipText = info.supported
+      ? t('mangoconfig.tip')
+      : t('mangoconfig.unsupported', { versions: info.gameVersions.join(', ') });
+  }
+
+  $('#mc-pill').onclick = async () => {
+    if (!state.profile) return;
+    const on = state.mangoConfig?.enabled;
+    // null puts the instance back under the global setting, which is on.
+    await api.profiles.update(state.profile.id, { mangoConfig: on ? false : null });
+    await refreshState();
+    toast(on ? t('mangoconfig.turnedOff') : t('mangoconfig.turnedOn'), 'ok');
+  };
+
   function renderRunPill() {
     const running = [...state.running];
     const pill = $('#run-pill');
@@ -1146,7 +1186,6 @@
           <div class="row-name">${esc(m.title)}
             ${m.dependency ? `<span class="badge">${esc(t('mods.dependency'))}</span>` : ''}
             ${m.local ? `<span class="badge" data-tip-text="${esc(t('mods.localHint'))}">${esc(t('mods.local'))}</span>` : ''}
-            ${m.mangoConfig ? `<span class="badge">${esc(t('mangoconfig.badge'))}</span>` : ''}
             ${m.update ? `<span class="badge warn">${esc(t('mods.updateAvailable'))}</span>` : ''}
           </div>
           <div class="row-sub">${m.versionNumber ? `${esc(m.versionNumber)} · ` : ''}${esc(m.filename)}</div>
@@ -1329,21 +1368,6 @@
     { key: 'updates', glyph: 'download' },
   ];
 
-  /**
-   * MangoConfig is OneConfig underneath, and says so wherever it is named -
-   * Polyfrost's licence asks for the attribution and it costs us one line.
-   */
-  function renderMangoConfigCredit() {
-    api.mangoConfig.info().then((info) => {
-      const box = $('#mangoconfig-credit');
-      if (!box) return; // the player left the section while we asked
-      box.innerHTML = `${esc(t('mangoconfig.credit', { credit: info.credit }))}
-        <a href="#" data-act="home">${esc(info.homepage)}</a><br>
-        ${esc(t('mangoconfig.loaders', { loaders: info.loaders.join(', ') }))}`;
-      $('[data-act="home"]', box).onclick = (e) => { e.preventDefault(); api.openExternal(info.homepage); };
-    }).catch(() => {});
-  }
-
   function renderSettingsNav() {
     const nav = $('#settings-nav');
     nav.innerHTML = SETTINGS_SECTIONS.map((s) => `
@@ -1492,7 +1516,6 @@
           <div><div class="toggle-label">${esc(t('mangoconfig.title'))}</div><div class="toggle-desc">${esc(t('mangoconfig.desc'))}</div></div>
           <label class="switch"><input type="checkbox" id="set-mangoconfig" ${c.mangoConfig !== false ? 'checked' : ''} /><span class="slider"></span></label>
         </div>
-        <div class="hint" id="mangoconfig-credit"></div>
       </div>
 
       <div class="settings-card" data-section="storage">
@@ -1543,8 +1566,10 @@
     $('#set-keep').onchange = (e) => save({ keepLauncherOpen: e.target.checked });
     $('#set-hide').onchange = (e) => save({ hideOnLaunch: e.target.checked });
     $('#set-snap').onchange = (e) => save({ showSnapshots: e.target.checked });
-    $('#set-mangoconfig').onchange = (e) => save({ mangoConfig: e.target.checked });
-    renderMangoConfigCredit();
+    $('#set-mangoconfig').onchange = async (e) => {
+      await save({ mangoConfig: e.target.checked });
+      renderMangoConfigPill();
+    };
     $('#set-lang').onchange = async (e) => {
       window.i18n.setLanguage(e.target.value);
       await save({ language: e.target.value });
@@ -1805,7 +1830,10 @@
     ram.onchange = () => save({ ram: Number(ram.value) });
     $('#ins-args').onchange = (e) => save({ javaArgs: e.target.value });
     // null rather than true, so the instance goes back to following the global setting.
-    $('#ins-mangoconfig').onchange = (e) => save({ mangoConfig: e.target.checked ? null : false });
+    $('#ins-mangoconfig').onchange = async (e) => {
+      await save({ mangoConfig: e.target.checked ? null : false });
+      renderMangoConfigPill();
+    };
 
     $('#ins-set-edit').onclick = () => openProfileDialog(profile);
     $('#ins-set-dup').onclick = async () => { await api.profiles.duplicate(profile.id); await refreshState(); };

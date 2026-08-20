@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "mangoconfig",
+	"version": "${version}",
+	"name": "MangoConfig",
+	"description": "MangoClient's in-game HUD and settings layer: armour, coordinates, keystrokes and more, all customisable.",
+	"authors": [
+		"mangomax"
+	],
+	"contact": {
+		"homepage": "https://github.com/MangoMax3537/mangoclient",
+		"sources": "https://github.com/MangoMax3537/mangoclient"
+	},
+	"license": "MIT",
+	"icon": "assets/mangoconfig/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"gg.mangoclient.mangoconfig.MangoConfig"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.21.11",
+		"java": ">=21"
+	},
+	"mixins": [
+		{
+			"config": "mangoconfig.client.mixins.json",
+			"environment": "client"
+		}
+	]
+}
