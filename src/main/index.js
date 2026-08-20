@@ -1,8 +1,9 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
+const { pathToFileURL } = require('url');
 
 const P = require('./paths');
 const { Store, totalRamMB } = require('./store');
@@ -14,10 +15,19 @@ const modrinth = require('./modrinth');
 const localmods = require('./localmods');
 const servers = require('./servers');
 const skins = require('./skins');
-const { launch, isGameAlive } = require('./launcher');
+const screenshots = require('./screenshots');
+const gamelogs = require('./gamelogs');
+const stats = require('./stats');
+const storage = require('./storage');
+const { launch, isGameAlive, logFileFor } = require('./launcher');
 const { createUpdater } = require('./updater');
 
 app.setName('MangoClient');
+// Screenshots sit in the instance folder, which the renderer's CSP will not
+// load over file://. A scheme of our own serves them - and nothing else.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'mangoimg', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
 // Minecraft's own launcher does this too; some Linux/GPU combos need it.
 app.commandLine.appendSwitch('enable-features', 'WaylandWindowDecorations');
 
@@ -142,6 +152,17 @@ function refreshModWatchers() {
   const ids = new Set(store.profiles.map((p) => p.id));
   for (const id of [...modWatchers.keys()]) if (!ids.has(id)) closeModWatcher(id);
   for (const id of ids) watchMods(id);
+}
+
+/** Serve exactly the pictures inside an instance folder, and refuse the rest. */
+function registerImageProtocol() {
+  protocol.handle('mangoimg', async (request) => {
+    const file = screenshots.fileFromUrl(request.url);
+    if (!file || !screenshots.isInsideInstances(file)) {
+      return new Response('Not found', { status: 404 });
+    }
+    return net.fetch(pathToFileURL(file).toString());
+  });
 }
 
 function createWindow() {
@@ -544,6 +565,48 @@ function registerIpc() {
     return info;
   });
 
+  // --- screenshots
+  handle('shots:list', async (profileId) => {
+    requireProfile(profileId);
+    return screenshots.listScreenshots(profileId);
+  });
+  handle('shots:delete', async (profileId, name) => {
+    requireProfile(profileId);
+    return screenshots.deleteScreenshot(profileId, name);
+  });
+  handle('shots:reveal', async (profileId, name) => {
+    requireProfile(profileId);
+    return screenshots.revealScreenshot(profileId, name);
+  });
+  handle('shots:copy', async (profileId, name) => {
+    requireProfile(profileId);
+    return screenshots.copyScreenshot(profileId, name);
+  });
+  handle('shots:folder', async (profileId) => {
+    requireProfile(profileId);
+    return screenshots.openFolder(profileId);
+  });
+
+  // --- logs
+  handle('logs:list', async (profileId) => gamelogs.listLogs(profileId, launcherLogFor(profileId)));
+  handle('logs:read', async (profileId, id) => gamelogs.readLog(profileId, id, launcherLogFor(profileId)));
+  handle('logs:upload', async (profileId, id) => gamelogs.uploadLog(profileId, id, launcherLogFor(profileId)));
+  handle('logs:delete', async (profileId, id) => gamelogs.deleteLog(profileId, id, launcherLogFor(profileId)));
+  handle('logs:folder', async (profileId) => {
+    requireProfile(profileId);
+    return gamelogs.openLogsFolder(profileId);
+  });
+
+  // --- statistics
+  handle('stats:summary', async (days) => stats.summary(store.profiles, days || 14));
+
+  // --- storage
+  handle('storage:usage', async () => storage.usage());
+  handle('storage:clear', async (key) => {
+    if (runningProfileIds().length) throw new Error('Close the game before clearing files');
+    return storage.clear(key);
+  });
+
   // --- servers
   handle('servers:partners', async () => servers.FEATURED_SERVERS);
   handle('servers:ping', async (address) => servers.pingServer(address));
@@ -618,6 +681,17 @@ function openSignInWindow() {
   });
 }
 
+function requireProfile(id) {
+  const profile = store.getProfile(id);
+  if (!profile) throw new Error('Profile not found');
+  return profile;
+}
+
+/** The launcher's own capture of a profile's last run, shown beside the game's. */
+function launcherLogFor(profileId) {
+  return logFileFor(requireProfile(profileId));
+}
+
 /** Never hand tokens to the renderer; it only needs identity and cosmetics. */
 function publicAccount(account) {
   return {
@@ -650,6 +724,7 @@ if (!gotLock) {
     P.ensureDirs();
     store = new Store();
     updater = createUpdater({ onState: (s) => send('update:state', s) });
+    registerImageProtocol();
     registerIpc();
     syncAllMods();
     refreshModWatchers();

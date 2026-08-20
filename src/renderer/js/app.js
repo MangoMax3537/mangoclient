@@ -24,6 +24,12 @@
     covers: new Map(),
     modSearch: { offset: 0 },
     consoleLines: [],
+    instanceTab: 'overview',
+    shots: [],
+    shotIndex: 0,
+    logs: [],
+    statsDays: 14,
+    settingsSection: 'game',
   };
 
   let viewer = null;
@@ -83,6 +89,20 @@
     return `${(mb / 1024).toFixed(1)} GB`;
   }
 
+  function fmtBytes(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = Number(bytes) || 0;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+    return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+  }
+
+  function fmtDateTime(ts) {
+    if (!ts) return t('profiles.never');
+    return new Date(ts).toLocaleString(window.i18n.lang === 'de' ? 'de-DE' : 'en-GB',
+      { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
   const LOADER_LABEL = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', neoforge: 'NeoForge', forge: 'Forge' };
 
   function javaBadgeFor(mcVersion) {
@@ -114,6 +134,22 @@
   function coverLetter(profile) {
     if (profile && state.covers.get(profile.id)) return '';
     return esc((profile?.name || '?').trim().slice(0, 1));
+  }
+
+  /** The facts under an instance's name, shared by Start and the instance page. */
+  function factsHtml(profile, extra = []) {
+    const ram = profile.ram || state.config.ram || 4096;
+    const loader = LOADER_LABEL[profile.loader] || profile.loader;
+    return [
+      [t('facts.version'), profile.mcVersion],
+      [t('facts.loader'), profile.loaderVersion ? `${loader} ${profile.loaderVersion}` : loader],
+      [t('facts.java'), javaBadgeFor(profile.mcVersion)],
+      [t('facts.ram'), fmtGB(ram)],
+      [t('facts.mods'), String((profile.mods || []).length)],
+      [t('facts.lastPlayed'), fmtDate(profile.lastPlayed)],
+      ...extra,
+    ].map(([k, v]) => `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`)
+      .join('');
   }
 
   function coverHtml(profile, size = '') {
@@ -171,7 +207,10 @@
   function renderView(name) {
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
     $$('.rail-btn').forEach((n) => n.classList.toggle('active', n.dataset.view === name));
-    $('#breadcrumb').textContent = t(`nav.${name}`);
+    // An instance page is about one instance, so it says which one.
+    $('#breadcrumb').textContent = name === 'instance'
+      ? (state.profile?.name || t('nav.instance'))
+      : t(`nav.${name}`);
     $('#nav-back').disabled = history.idx === 0;
     $('#nav-fwd').disabled = history.idx >= history.stack.length - 1;
 
@@ -180,6 +219,8 @@
     if (name === 'settings') renderSettings();
     if (name === 'profiles') renderProfiles();
     if (name === 'accounts') renderAccounts();
+    if (name === 'instance') renderInstance();
+    if (name === 'stats') renderStats();
   }
 
   function showView(name) {
@@ -295,19 +336,7 @@
       $('#lp-sub').textContent = `${profile.mcVersion} · ${LOADER_LABEL[profile.loader] || profile.loader}`;
 
       const ram = profile.ram || state.config.ram || 4096;
-      const facts = [
-        [t('facts.version'), profile.mcVersion],
-        [t('facts.loader'), profile.loaderVersion
-          ? `${LOADER_LABEL[profile.loader] || profile.loader} ${profile.loaderVersion}`
-          : (LOADER_LABEL[profile.loader] || profile.loader)],
-        [t('facts.java'), javaBadgeFor(profile.mcVersion)],
-        [t('facts.ram'), fmtGB(ram)],
-        [t('facts.mods'), String((profile.mods || []).length)],
-        [t('facts.lastPlayed'), fmtDate(profile.lastPlayed)],
-      ];
-      $('#lp-facts').innerHTML = facts
-        .map(([k, v]) => `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`)
-        .join('');
+      $('#lp-facts').innerHTML = factsHtml(profile);
       $('#ram-warn').hidden = ram >= 3072;
     } else {
       $('#lp-name').textContent = t('profiles.none');
@@ -337,26 +366,25 @@
       </button>`).join('');
 
     $$('.rail-instance', rail).forEach((btn) => {
-      btn.onclick = async () => {
-        await api.profiles.select(btn.dataset.id);
-        await refreshState();
-        showView('start');
-      };
+      btn.onclick = () => openInstance(btn.dataset.id);
     });
   }
 
   function updatePlayButton() {
-    const btn = $('#btn-play');
-    const label = $('#play-label');
     const running = state.profile && state.running.has(state.profile.id);
     const busy = ['preparing', 'java', 'loader', 'downloading', 'account', 'launching'].includes(state.launchState);
 
-    btn.disabled = busy;
-    btn.classList.toggle('brand', !running);
-    label.textContent = running ? t('btn.stop') : busy ? t('btn.preparing') : t('btn.play');
-
-    const glyph = $('.ic', btn);
-    if (glyph) glyph.outerHTML = icon(running ? 'stop' : 'play');
+    // Start and the instance page each have one, and they must never disagree.
+    for (const [btnSel, labelSel] of [['#btn-play', '#play-label'], ['#ins-play', '#ins-play-label']]) {
+      const btn = $(btnSel);
+      const label = $(labelSel);
+      if (!btn || !label) continue;
+      btn.disabled = busy;
+      btn.classList.toggle('brand', !running);
+      label.textContent = running ? t('btn.stop') : busy ? t('btn.preparing') : t('btn.play');
+      const glyph = $('.ic', btn);
+      if (glyph) glyph.outerHTML = icon(running ? 'stop' : 'play');
+    }
   }
 
   /** Running instances live in the statusbar, next to the console button. */
@@ -435,7 +463,7 @@
     for (const id of state.running) await api.game.stop(id).catch(() => {});
   };
 
-  $('#btn-play').onclick = async () => {
+  async function playOrStop() {
     if (!state.profile) { showView('profiles'); return; }
     if (state.running.has(state.profile.id)) {
       await api.game.stop(state.profile.id).catch(() => {});
@@ -443,7 +471,9 @@
     }
     if (!state.account) { toast(t('launch.needAccount'), 'err'); showView('accounts'); return; }
     await doLaunch(state.profile.id);
-  };
+  }
+
+  $('#btn-play').onclick = () => playOrStop();
 
   async function doLaunch(profileId, quickJoin) {
     state.launchState = 'preparing';
@@ -564,12 +594,10 @@
 
     $$('.instance-card', grid).forEach((card) => {
       const id = card.dataset.id;
-      // Clicking the tile itself selects the instance and shows it on Start.
-      card.onclick = async (e) => {
+      // Clicking the tile opens the instance's own page.
+      card.onclick = (e) => {
         if (e.target.closest('[data-act]')) return;
-        await api.profiles.select(id);
-        await refreshState();
-        showView('start');
+        openInstance(id);
       };
       $('[data-act="menu"]', card).onclick = (e) => {
         e.stopPropagation();
@@ -883,7 +911,10 @@
     }
   };
 
-  $('#btn-add-offline').onclick = () => {
+  $('#btn-add-offline').onclick = () => openOfflineDialog();
+
+  /** Ask for an offline name and add the account. `onClose` always runs. */
+  function openOfflineDialog(onClose) {
     openModal({
       title: t('accounts.offlineTitle'),
       body: `
@@ -905,13 +936,14 @@
           }
         } },
       ],
+      onClose: () => onClose?.(),
       onOpen: (body) => {
         const input = $('#off-name', body);
         input.focus();
         input.onkeydown = (e) => { if (e.key === 'Enter') $('#modal-foot .brand').click(); };
       },
     });
-  };
+  }
 
   // =========================================================================
   // mods
@@ -1169,6 +1201,14 @@
     });
   }
 
+  /** Mark which installed mods a newer version was found for. */
+  function applyModUpdates(updates) {
+    for (const mod of state.profile?.mods || []) {
+      const hit = updates.find((u) => u.projectId === mod.projectId);
+      if (hit) mod.update = hit; else delete mod.update;
+    }
+  }
+
   function renderInstalledMods() {
     renderModList($('#installed-list'));
   }
@@ -1179,10 +1219,7 @@
     btn.disabled = true;
     try {
       const updates = await api.modrinth.checkUpdates(state.profile.id);
-      for (const mod of state.profile.mods || []) {
-        const hit = updates.find((u) => u.projectId === mod.projectId);
-        if (hit) mod.update = hit; else delete mod.update;
-      }
+      applyModUpdates(updates);
       renderInstalledMods();
       toast(updates.length ? t('mods.updatesFound', { n: updates.length }) : t('mods.upToDate'),
         updates.length ? 'info' : 'ok');
@@ -1281,10 +1318,83 @@
   // settings
   // =========================================================================
 
+  /** OneLauncher splits its settings into pages; this is that rail. */
+  const SETTINGS_SECTIONS = [
+    { key: 'game', glyph: 'monitor' },
+    { key: 'performance', glyph: 'gauge' },
+    { key: 'java', glyph: 'coffee' },
+    { key: 'launcher', glyph: 'window' },
+    { key: 'storage', glyph: 'database' },
+    { key: 'updates', glyph: 'download' },
+  ];
+
+  function renderSettingsNav() {
+    const nav = $('#settings-nav');
+    nav.innerHTML = SETTINGS_SECTIONS.map((s) => `
+      <button data-section="${s.key}">
+        <span data-icon="${s.glyph}"></span>${esc(t(`settings.section.${s.key}`))}
+      </button>`).join('');
+    hydrateIcons(nav);
+    $$('button', nav).forEach((b) => { b.onclick = () => showSettingsSection(b.dataset.section); });
+  }
+
+  function showSettingsSection(key) {
+    state.settingsSection = key;
+    $$('#settings-nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === key));
+    $$('#settings-grid .settings-card').forEach((c) => { c.hidden = c.dataset.section !== key; });
+    // Walking the folder tree is not free, so only do it when it is on screen.
+    if (key === 'storage') loadStorageUsage();
+  }
+
+  async function loadStorageUsage() {
+    const list = $('#storage-list');
+    if (!list) return;
+    list.innerHTML = '<div class="loading-row">…</div>';
+
+    let usage;
+    try {
+      usage = await api.storage.usage();
+    } catch (err) {
+      list.textContent = err.message;
+      return;
+    }
+    if (!$('#storage-list')) return; // the player left the section meanwhile
+
+    $('#storage-total').textContent = fmtBytes(usage.total);
+    $('#storage-list').innerHTML = usage.sections.map((s) => `
+      <div class="storage-row">
+        <div class="storage-name">${esc(t(`storage.${s.key}`))}<small>${esc(t(`storage.${s.key}D`))}</small></div>
+        <span class="storage-size">${esc(fmtBytes(s.bytes))}</span>
+        ${s.removable ? `<button class="btn sm danger" data-clear="${s.key}">${esc(t('settings.storageClear'))}</button>` : ''}
+      </div>`).join('');
+
+    $$('[data-clear]', $('#storage-list')).forEach((btn) => {
+      btn.onclick = () => clearStorage(btn.dataset.clear);
+    });
+  }
+
+  function clearStorage(key) {
+    const name = t(`storage.${key}`);
+    confirmDialog({
+      title: name,
+      text: t('settings.storageClearConfirm', { name }),
+      confirmLabel: t('settings.storageClear'),
+      onConfirm: async () => {
+        try {
+          await api.storage.clear(key);
+          toast(t('settings.storageCleared', { name }), 'ok');
+          loadStorageUsage();
+        } catch (err) {
+          toast(err.message, 'err');
+        }
+      },
+    });
+  }
+
   function renderSettings() {
     const c = state.config;
     $('#settings-grid').innerHTML = `
-      <div class="settings-card">
+      <div class="settings-card" data-section="game">
         <h2><span data-icon="monitor"></span>${esc(t('settings.game'))}</h2>
         <div class="sc-sub">${esc(t('settings.gameSub'))}</div>
         <div class="field">
@@ -1306,7 +1416,7 @@
         </div>
       </div>
 
-      <div class="settings-card">
+      <div class="settings-card" data-section="performance">
         <h2><span data-icon="gauge"></span>${esc(t('settings.performance'))}</h2>
         <div class="sc-sub">${esc(t('settings.performanceSub'))}</div>
         <div class="preset-row" id="set-presets">
@@ -1323,7 +1433,7 @@
         </div>
       </div>
 
-      <div class="settings-card">
+      <div class="settings-card" data-section="java">
         <h2><span data-icon="coffee"></span>${esc(t('settings.java'))}</h2>
         <div class="sc-sub">${esc(t('settings.javaSub'))}</div>
         <div class="field">
@@ -1340,7 +1450,7 @@
         </div>
       </div>
 
-      <div class="settings-card">
+      <div class="settings-card" data-section="launcher">
         <h2><span data-icon="window"></span>${esc(t('settings.launcher'))}</h2>
         <div class="sc-sub">${esc(t('settings.launcherSub'))}</div>
         <div class="field">
@@ -1364,7 +1474,7 @@
         </div>
       </div>
 
-      <div class="settings-card">
+      <div class="settings-card" data-section="storage">
         <h2><span data-icon="database"></span>${esc(t('settings.storage'))}</h2>
         <div class="sc-sub">${esc(t('settings.storageSub'))}</div>
         <div class="field"><input readonly value="${esc(state.paths?.root || '')}" /></div>
@@ -1372,9 +1482,14 @@
           <button class="btn" id="btn-open-root" data-icon="folder"><span>${esc(t('settings.openRoot'))}</span></button>
           <button class="btn" id="btn-open-logs" data-icon="folder"><span>${esc(t('settings.openLogs'))}</span></button>
         </div>
+        <div class="toggle-row" style="margin-top:14px">
+          <div class="toggle-label">${esc(t('settings.storageTotal'))}</div>
+          <b id="storage-total">…</b>
+        </div>
+        <div id="storage-list"></div>
       </div>
 
-      <div class="settings-card">
+      <div class="settings-card" data-section="updates">
         <h2><span data-icon="download"></span>${esc(t('settings.updates'))}</h2>
         <div class="sc-sub">${esc(t('settings.updatesSub'))}</div>
         <div class="field">
@@ -1387,7 +1502,10 @@
           <button class="btn brand" id="btn-update-install" hidden>${esc(t('update.install'))}</button>
         </div>
       </div>`;
+    $('#settings-grid').classList.add('sectioned');
     hydrateIcons($('#settings-grid'));
+    renderSettingsNav();
+    showSettingsSection(state.settingsSection);
 
     const save = (patch) => api.app.setConfig(patch).then((cfg) => { state.config = cfg; });
 
@@ -1446,6 +1564,671 @@
         : t('settings.javaNone');
     }).catch(() => {});
   }
+
+  // =========================================================================
+  // instance page
+  //
+  // OneLauncher gives every instance a page of its own with a tab bar; this is
+  // that page, over MangoClient's profiles. The page always shows the selected
+  // profile, so the rail, the Start view and this view never disagree.
+  // =========================================================================
+
+  const INSTANCE_TABS = ['overview', 'mods', 'shots', 'logs', 'settings'];
+
+  async function openInstance(profileId, tab = 'overview') {
+    if (profileId && profileId !== state.profile?.id) {
+      await api.profiles.select(profileId);
+      await refreshState();
+    }
+    state.instanceTab = INSTANCE_TABS.includes(tab) ? tab : 'overview';
+    // showView() ignores a repeat of the current view, but switching instances
+    // does have to redraw, so say it plainly.
+    if (history.stack[history.idx] === 'instance') renderView('instance');
+    else showView('instance');
+  }
+
+  function renderInstance() {
+    const profile = state.profile;
+    if (!profile) { showView('profiles'); return; }
+
+    const tile = $('#ins-tile');
+    tile.setAttribute('style', coverStyle(profile));
+    tile.textContent = coverLetter(profile);
+    $('#ins-name').textContent = profile.name;
+    $('#ins-sub').textContent = `${profile.mcVersion} · ${LOADER_LABEL[profile.loader] || profile.loader}`;
+    $('#ins-facts').innerHTML = factsHtml(profile, [
+      [t('instance.playTime'), fmtDuration(profile.playTimeMs || 0)],
+      [t('instance.created'), fmtDate(profile.created)],
+    ]);
+    updatePlayButton();
+    showInstanceTab(state.instanceTab || 'overview');
+  }
+
+  function showInstanceTab(tab) {
+    state.instanceTab = tab;
+    $$('#ins-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.itab === tab));
+    $$('#view-instance .tabpanel').forEach((p) => p.classList.toggle('active', p.id === `itab-${tab}`));
+
+    if (tab === 'overview') renderInstanceOverview();
+    if (tab === 'mods') renderInstanceMods();
+    if (tab === 'shots') renderShots();
+    if (tab === 'logs') renderInstanceLogs();
+    if (tab === 'settings') renderInstanceSettings();
+  }
+
+  $$('#ins-tabs .tab').forEach((btn) => { btn.onclick = () => showInstanceTab(btn.dataset.itab); });
+  $('#ins-edit').onclick = () => state.profile && openProfileDialog(state.profile);
+  $('#ins-folder').onclick = () => state.profile && api.app.openFolder(state.profile.id);
+  $('#ins-play').onclick = () => playOrStop();
+
+  // --- overview ------------------------------------------------------------
+
+  function renderInstanceOverview() {
+    const profile = state.profile;
+    if (!profile) return;
+    const panel = $('#itab-overview');
+    panel.innerHTML = `
+      <section class="panel">
+        <div class="panel-head"><h2>${esc(t('instance.quick'))}</h2></div>
+        <div class="rows">
+          <button class="row menu-row" data-act="browse">
+            <span data-icon="compass"></span><span class="row-name">${esc(t('instance.selectMods'))}</span></button>
+          <button class="row menu-row" data-act="shots">
+            <span data-icon="image"></span><span class="row-name">${esc(t('instance.openShots'))}</span></button>
+          <button class="row menu-row" data-act="logs">
+            <span data-icon="file"></span><span class="row-name">${esc(t('instance.openLogs'))}</span></button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>${esc(t('instance.recentShots'))}</h2>
+          <button class="btn sm" data-act="allshots">${esc(t('servers.all'))}</button>
+        </div>
+        <div class="rows"><div class="shot-grid" id="ov-shots"></div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>${esc(t('mods.installed'))} <span class="count">${(profile.mods || []).length || ''}</span></h2>
+          <button class="btn sm" data-act="allmods">${esc(t('servers.all'))}</button>
+        </div>
+        <div class="rows" id="ov-mods"></div>
+      </section>`;
+    hydrateIcons(panel);
+
+    $('[data-act="browse"]', panel).onclick = () => showView('mods');
+    $('[data-act="shots"]', panel).onclick = () => api.screenshots.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
+    $('[data-act="logs"]', panel).onclick = () => api.logs.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
+    $('[data-act="allshots"]', panel).onclick = () => showInstanceTab('shots');
+    $('[data-act="allmods"]', panel).onclick = () => showInstanceTab('mods');
+
+    renderModList($('#ov-mods'));
+
+    // The strip is a preview, so a slow folder must never hold up the page.
+    api.screenshots.list(profile.id).then((shots) => {
+      state.shots = shots;
+      const strip = $('#ov-shots');
+      if (!strip) return; // the player moved on while we read the folder
+      if (!shots.length) {
+        strip.innerHTML = `<div class="empty"><div class="et">${esc(t('shots.none'))}</div>${esc(t('shots.noneHint'))}</div>`;
+        return;
+      }
+      strip.innerHTML = shots.slice(0, 4).map((s, i) => shotHtml(s, i)).join('');
+      bindShots(strip);
+    }).catch(() => {});
+  }
+
+  // --- mods ----------------------------------------------------------------
+
+  function renderInstanceMods() {
+    const profile = state.profile;
+    if (!profile) return;
+    const panel = $('#itab-mods');
+    panel.innerHTML = `
+      <div class="tab-toolbar">
+        <button class="btn brand" data-act="browse" data-icon="plus"><span>${esc(t('mods.add'))}</span></button>
+        <button class="btn" data-act="updates" data-icon="refresh"><span>${esc(t('mods.checkUpdates'))}</span></button>
+        <button class="btn" data-act="folder" data-icon="folder"><span>${esc(t('mods.openFolder'))}</span></button>
+      </div>
+      <div class="rows" id="ins-mod-list"></div>`;
+    hydrateIcons(panel);
+
+    $('[data-act="browse"]', panel).onclick = () => showView('mods');
+    $('[data-act="folder"]', panel).onclick = () => api.app.openFolder(profile.id);
+    $('[data-act="updates"]', panel).onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const updates = await api.modrinth.checkUpdates(profile.id);
+        applyModUpdates(updates);
+        renderModList($('#ins-mod-list'));
+        toast(updates.length ? t('mods.updatesFound', { n: updates.length }) : t('mods.upToDate'),
+          updates.length ? 'info' : 'ok');
+      } catch (err) {
+        toast(err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    renderModList($('#ins-mod-list'));
+  }
+
+  // --- per-instance settings ----------------------------------------------
+
+  function renderInstanceSettings() {
+    const profile = state.profile;
+    if (!profile) return;
+    const panel = $('#itab-settings');
+    panel.innerHTML = `
+      <div class="settings-grid sectioned">
+        <div class="settings-card">
+          <h2><span data-icon="gauge"></span>${esc(t('settings.performance'))}</h2>
+          <div class="sc-sub">${esc(t('instance.settingsSub'))}</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${esc(t('instance.ramOverride'))}</div>
+              <div class="toggle-desc">${esc(t('instance.ramInherit', { value: fmtGB(state.config.ram || 4096) }))}</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="ins-ram-on" ${profile.ram ? 'checked' : ''} /><span class="slider"></span>
+            </label>
+          </div>
+          <div class="field" id="ins-ram-field" ${profile.ram ? '' : 'hidden'}>
+            <div class="range-head"><label>${esc(t('settings.ram'))}</label><b id="ins-ram-label">${esc(fmtGB(profile.ram || state.config.ram || 4096))}</b></div>
+            <input type="range" id="ins-ram" min="1024" max="${state.totalRam}" step="512" value="${profile.ram || state.config.ram || 4096}" />
+          </div>
+          <div class="field">
+            <label>${esc(t('instance.argsOverride'))}</label>
+            <input id="ins-args" value="${esc(profile.javaArgs || '')}" placeholder="${esc(state.config.javaArgs || '-XX:+UseG1GC')}" />
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2><span data-icon="layers"></span>${esc(t('profiles.title'))}</h2>
+          <div class="sc-sub">${esc(t('instance.dangerSub'))}</div>
+          <div class="field-row">
+            <button class="btn" id="ins-set-edit" data-icon="pencil"><span>${esc(t('profiles.edit'))}</span></button>
+            <button class="btn" id="ins-set-dup" data-icon="copy"><span>${esc(t('profiles.duplicate'))}</span></button>
+            <button class="btn danger" id="ins-set-del" data-icon="trash"><span>${esc(t('instance.dangerZone'))}</span></button>
+          </div>
+        </div>
+      </div>`;
+    hydrateIcons(panel);
+
+    const save = (patch) => api.profiles.update(profile.id, patch).then(() => refreshState());
+
+    const ram = $('#ins-ram');
+    $('#ins-ram-on').onchange = (e) => {
+      $('#ins-ram-field').hidden = !e.target.checked;
+      save({ ram: e.target.checked ? Number(ram.value) : null });
+    };
+    ram.oninput = () => { $('#ins-ram-label').textContent = fmtGB(ram.value); };
+    ram.onchange = () => save({ ram: Number(ram.value) });
+    $('#ins-args').onchange = (e) => save({ javaArgs: e.target.value });
+
+    $('#ins-set-edit').onclick = () => openProfileDialog(profile);
+    $('#ins-set-dup').onclick = async () => { await api.profiles.duplicate(profile.id); await refreshState(); };
+    $('#ins-set-del').onclick = () => confirmDialog({
+      title: t('profiles.deleteTitle'),
+      text: t('profiles.deleteConfirm', { name: profile.name }),
+      confirmLabel: t('btn.delete'),
+      onConfirm: async () => {
+        await api.profiles.remove(profile.id);
+        await refreshState();
+        showView('profiles');
+      },
+    });
+  }
+
+  // =========================================================================
+  // screenshots
+  //
+  // The pictures are served over mangoimg://, a scheme the main process backs
+  // with the instance folder; the renderer may not read files itself.
+  // =========================================================================
+
+  function shotHtml(shot, index) {
+    return `<figure class="shot" role="button" tabindex="0" data-i="${index}">
+      <img src="${esc(shot.url)}" alt="${esc(shot.name)}" loading="lazy" />
+      <figcaption>${esc(shot.name)}</figcaption>
+    </figure>`;
+  }
+
+  function bindShots(root) {
+    $$('.shot', root).forEach((el) => {
+      const open = () => openLightbox(Number(el.dataset.i));
+      el.onclick = open;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    });
+  }
+
+  async function renderShots() {
+    const profile = state.profile;
+    if (!profile) return;
+    const panel = $('#itab-shots');
+    panel.innerHTML = `
+      <div class="tab-toolbar">
+        <button class="btn" data-act="refresh" data-icon="refresh"><span>${esc(t('servers.refresh'))}</span></button>
+        <button class="btn" data-act="folder" data-icon="folder"><span>${esc(t('instance.openShots'))}</span></button>
+        <span class="spacer"></span>
+        <span class="row-state" id="shot-count"></span>
+      </div>
+      <div class="shot-grid" id="shot-grid"></div>`;
+    hydrateIcons(panel);
+
+    $('[data-act="refresh"]', panel).onclick = () => renderShots();
+    $('[data-act="folder"]', panel).onclick = () => api.screenshots.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
+
+    const grid = $('#shot-grid');
+    try {
+      state.shots = await api.screenshots.list(profile.id);
+    } catch (err) {
+      state.shots = [];
+      toast(err.message, 'err');
+    }
+    if (state.instanceTab !== 'shots' || !$('#shot-grid')) return; // tab changed mid-read
+
+    $('#shot-count').textContent = state.shots.length ? t('shots.count', { n: state.shots.length }) : '';
+    if (!state.shots.length) {
+      grid.innerHTML = `<div class="empty"><div class="et">${esc(t('shots.none'))}</div>${esc(t('shots.noneHint'))}</div>`;
+      return;
+    }
+    grid.innerHTML = state.shots.map((s, i) => shotHtml(s, i)).join('');
+    bindShots(grid);
+  }
+
+  // --- lightbox ------------------------------------------------------------
+
+  function openLightbox(index) {
+    const shot = state.shots[index];
+    if (!shot) return;
+    state.shotIndex = index;
+    $('#lb-img').src = shot.url;
+    $('#lb-name').textContent = shot.name;
+    $('#lb-meta').textContent = `${fmtBytes(shot.size)} · ${fmtDateTime(shot.taken)}`;
+    $('#lb-prev').disabled = index === 0;
+    $('#lb-next').disabled = index >= state.shots.length - 1;
+    $('#lightbox').hidden = false;
+  }
+
+  function closeLightbox() {
+    $('#lightbox').hidden = true;
+    $('#lb-img').src = '';
+  }
+
+  function stepLightbox(delta) {
+    const next = state.shotIndex + delta;
+    if (next < 0 || next >= state.shots.length) return;
+    openLightbox(next);
+  }
+
+  $('#lb-close').onclick = closeLightbox;
+  $('#lb-prev').onclick = () => stepLightbox(-1);
+  $('#lb-next').onclick = () => stepLightbox(1);
+
+  $('#lb-copy').onclick = async () => {
+    const shot = state.shots[state.shotIndex];
+    if (!shot) return;
+    try {
+      await api.screenshots.copy(state.profile.id, shot.name);
+      toast(t('shots.copied'), 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#lb-reveal').onclick = () => {
+    const shot = state.shots[state.shotIndex];
+    if (shot) api.screenshots.reveal(state.profile.id, shot.name).catch((err) => toast(err.message, 'err'));
+  };
+
+  $('#lb-del').onclick = () => {
+    const shot = state.shots[state.shotIndex];
+    if (!shot) return;
+    confirmDialog({
+      title: t('btn.delete'),
+      text: t('shots.deleteConfirm', { name: shot.name }),
+      confirmLabel: t('btn.delete'),
+      onConfirm: async () => {
+        try {
+          await api.screenshots.remove(state.profile.id, shot.name);
+          closeLightbox();
+          toast(t('shots.deleted'), 'ok');
+          if (state.instanceTab === 'shots') renderShots();
+          else renderInstanceOverview();
+        } catch (err) { toast(err.message, 'err'); }
+      },
+    });
+  };
+
+  document.addEventListener('keydown', (e) => {
+    if ($('#lightbox').hidden) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') stepLightbox(-1);
+    if (e.key === 'ArrowRight') stepLightbox(1);
+  });
+
+  // =========================================================================
+  // logs
+  //
+  // What the game wrote, what it crashed with, and what the launcher captured,
+  // with a one-click share through mclo.gs the way OneLauncher offers it.
+  // =========================================================================
+
+  function renderInstanceLogs() {
+    const profile = state.profile;
+    if (!profile) return;
+    const panel = $('#itab-logs');
+    panel.innerHTML = `
+      <div class="tab-toolbar">
+        <button class="btn" data-act="refresh" data-icon="refresh"><span>${esc(t('servers.refresh'))}</span></button>
+        <button class="btn" data-act="folder" data-icon="folder"><span>${esc(t('logs.openFolder'))}</span></button>
+      </div>
+      <div class="log-shell">
+        <div class="log-list" id="log-list"></div>
+        <div class="log-view">
+          <pre class="log-out" id="log-out">${esc(t('logs.select'))}</pre>
+          <div class="log-share" id="log-share" hidden></div>
+        </div>
+      </div>`;
+    hydrateIcons(panel);
+
+    $('[data-act="refresh"]', panel).onclick = () => renderInstanceLogs();
+    $('[data-act="folder"]', panel).onclick = () => api.logs.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
+
+    loadLogList(profile.id);
+  }
+
+  async function loadLogList(profileId) {
+    let list = [];
+    try {
+      list = await api.logs.list(profileId);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+    const box = $('#log-list');
+    if (!box) return;
+    state.logs = list;
+
+    if (!list.length) {
+      box.innerHTML = `<div class="empty"><div class="et">${esc(t('logs.none'))}</div>${esc(t('logs.noneHint'))}</div>`;
+      return;
+    }
+    box.innerHTML = list.map((l) => `
+      <button class="log-item" data-id="${esc(l.id)}">
+        <div class="li-name">${esc(l.name)}</div>
+        <div class="li-sub">${esc(t(`logs.kind.${l.kind}`))} · ${esc(fmtBytes(l.size))} · ${esc(fmtDateTime(l.modified))}</div>
+      </button>`).join('');
+
+    $$('.log-item', box).forEach((btn) => { btn.onclick = () => openLog(profileId, btn.dataset.id); });
+    openLog(profileId, list[0].id); // the newest run is what a player came for
+  }
+
+  /** Colour the levels the way the console drawer does, line by line. */
+  function logHtml(text) {
+    const lines = text.split(/\r?\n/);
+    // A full log can run to hundreds of thousands of lines; the tail is the
+    // part that explains a crash, and the file itself stays on disk.
+    const shown = lines.length > 4000 ? lines.slice(-4000) : lines;
+    return shown.map((line) => {
+      const cls = /\bERROR\b|Exception|Caused by:|^\s+at /.test(line) ? 'err'
+        : /\bWARN\b/.test(line) ? 'warn' : '';
+      return cls ? `<span class="${cls}">${esc(line)}</span>` : esc(line);
+    }).join('\n');
+  }
+
+  async function openLog(profileId, id) {
+    $$('#log-list .log-item').forEach((b) => b.classList.toggle('active', b.dataset.id === id));
+    const out = $('#log-out');
+    const share = $('#log-share');
+    if (!out) return;
+    out.textContent = '…';
+    share.hidden = true;
+    state.logId = id;
+
+    let log;
+    try {
+      log = await api.logs.read(profileId, id);
+    } catch (err) {
+      out.textContent = err.message;
+      return;
+    }
+    if (state.logId !== id || !$('#log-out')) return; // a different log was picked
+
+    $('#log-out').innerHTML = logHtml(log.text);
+    $('#log-out').scrollTop = $('#log-out').scrollHeight;
+
+    share.hidden = false;
+    share.innerHTML = `
+      <button class="btn sm" data-act="upload" data-icon="upload"><span>${esc(t('logs.upload'))}</span></button>
+      <span id="log-share-out">${log.truncated ? esc(t('logs.truncated', { size: fmtBytes(log.bytes) })) : ''}</span>`;
+    hydrateIcons(share);
+
+    $('[data-act="upload"]', share).onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      $('#log-share-out').textContent = t('logs.uploading');
+      try {
+        const res = await api.logs.upload(profileId, id);
+        $('#log-share-out').innerHTML =
+          `<a href="#" data-url="${esc(res.url)}">${esc(res.url)}</a>`;
+        $('#log-share-out a').onclick = (ev) => { ev.preventDefault(); api.openExternal(res.url); };
+        await navigator.clipboard.writeText(res.url).catch(() => {});
+        toast(t('logs.uploaded'), 'ok');
+      } catch (err) {
+        $('#log-share-out').textContent = '';
+        toast(err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  }
+
+  // =========================================================================
+  // statistics
+  // =========================================================================
+
+  async function renderStats() {
+    const days = state.statsDays || 14;
+    $$('#stats-range .seg').forEach((b) => b.classList.toggle('active', Number(b.dataset.days) === days));
+
+    let data;
+    try {
+      data = await api.stats.summary(days);
+    } catch (err) {
+      toast(err.message, 'err');
+      return;
+    }
+    state.stats = data;
+
+    const tile = (glyph, key, value, sub) => `
+      <div class="stat-tile">
+        <div class="st-k"><span data-icon="${glyph}"></span>${esc(key)}</div>
+        <div class="st-v">${esc(value)}</div>
+        <div class="st-s">${esc(sub || '')}</div>
+      </div>`;
+
+    const longest = data.longest
+      ? `${fmtDuration(data.longest.ms)}`
+      : fmtDuration(0);
+
+    $('#stat-tiles').innerHTML = [
+      tile('clock', t('stats.total'), fmtDuration(data.totalMs), t('stats.totalSub')),
+      tile('chart', t('stats.window', { n: days }), fmtDuration(data.windowMs), ''),
+      tile('heart', t('stats.longest'), longest, data.longest?.name || ''),
+      tile('layers', t('stats.mostPlayed'), data.mostPlayed?.name || '—',
+        data.mostPlayed ? fmtDuration(data.mostPlayed.totalMs) : t('stats.noProfiles')),
+    ].join('');
+    hydrateIcons($('#stat-tiles'));
+
+    $('#stat-chart-sum').textContent = t('stats.windowSum', { time: fmtDuration(data.windowMs) });
+
+    const chart = $('#stat-chart');
+    chart.classList.toggle('dense', data.days.length > 14);
+    const peak = Math.max(...data.days.map((d) => d.ms), 1);
+    chart.innerHTML = data.days.map((d) => {
+      const pct = Math.round((d.ms / peak) * 100);
+      const label = d.date.slice(8) + '.' + d.date.slice(5, 7);
+      return `<div class="chart-col ${d.ms ? 'has-play' : ''}" data-tip-text="${esc(`${label} · ${fmtDuration(d.ms)}`)}">
+        <div class="chart-bar" style="height:${d.ms ? Math.max(pct, 3) : 0}%"></div>
+        <div class="chart-label">${esc(label)}</div>
+      </div>`;
+    }).join('');
+
+    const rows = $('#stat-profiles');
+    if (!data.perProfile.length) {
+      rows.innerHTML = `<div class="empty"><div class="et">${esc(t('stats.none'))}</div>${esc(t('stats.noneHint'))}</div>`;
+      return;
+    }
+    const top = Math.max(...data.perProfile.map((p) => p.totalMs), 1);
+    rows.innerHTML = data.perProfile.map((p) => {
+      const profile = state.profiles.find((x) => x.id === p.id) || p;
+      return `<div class="row" data-id="${esc(p.id)}">
+        ${coverHtml(profile, 'sm')}
+        <div class="row-meta">
+          <div class="row-name">${esc(p.name)}</div>
+          <div class="row-sub">${esc(p.mcVersion)} · ${esc(LOADER_LABEL[p.loader] || p.loader)} · ${esc(fmtDate(p.lastPlayed))}</div>
+          <div class="bar-row" style="margin-top:6px">
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.totalMs / top) * 100)}%"></div></div>
+          </div>
+        </div>
+        <span class="row-state">${esc(fmtDuration(p.totalMs))}</span>
+      </div>`;
+    }).join('');
+
+    $$('.row', rows).forEach((row) => { row.onclick = () => openInstance(row.dataset.id); });
+  }
+
+  $$('#stats-range .seg').forEach((btn) => {
+    btn.onclick = () => { state.statsDays = Number(btn.dataset.days); renderStats(); };
+  });
+
+  // =========================================================================
+  // onboarding
+  //
+  // Shown once, on the very first start. Everything it asks has a working
+  // default, so skipping it leaves a usable launcher behind.
+  // =========================================================================
+
+  const OB_STEPS = ['welcome', 'language', 'account', 'prefs', 'done'];
+  const ob = { step: 0, language: 'de', ram: null };
+
+  function startOnboarding() {
+    ob.step = 0;
+    ob.language = state.config.language || 'de';
+    ob.ram = state.config.ram;
+    $('#onboarding').hidden = false;
+    renderOnboarding();
+  }
+
+  async function finishOnboarding() {
+    $('#onboarding').hidden = true;
+    state.config = await api.app.setConfig({
+      firstRunDone: true,
+      language: ob.language,
+      ram: ob.ram || state.config.ram,
+    });
+    window.i18n.setLanguage(state.config.language);
+    await refreshState();
+  }
+
+  function renderOnboarding() {
+    const step = OB_STEPS[ob.step];
+    $('#ob-steps').innerHTML = OB_STEPS
+      .map((_, i) => `<span class="${i < ob.step ? 'done' : i === ob.step ? 'now' : ''}"></span>`).join('');
+
+    const body = $('#ob-body');
+    if (step === 'welcome') {
+      body.innerHTML = `<span class="ob-mark">${logoMark(64)}</span>
+        <h2>${esc(t('onboarding.welcomeTitle'))}</h2>
+        <p>${esc(t('onboarding.welcomeText'))}</p>`;
+    }
+
+    if (step === 'language') {
+      body.innerHTML = `<h2>${esc(t('onboarding.langTitle'))}</h2>
+        <p>${esc(t('onboarding.langText'))}</p>
+        <div class="ob-choice" id="ob-langs">
+          ${[['de', 'Deutsch'], ['en', 'English']].map(([code, name]) => `
+            <button class="${ob.language === code ? 'active' : ''}" data-lang="${code}">
+              <span><span class="oc-t">${esc(name)}</span></span>
+            </button>`).join('')}
+        </div>`;
+      $$('#ob-langs button', body).forEach((btn) => {
+        btn.onclick = () => {
+          ob.language = btn.dataset.lang;
+          window.i18n.setLanguage(ob.language);
+          renderOnboarding();
+        };
+      });
+    }
+
+    if (step === 'account') {
+      const signed = state.account;
+      body.innerHTML = `<h2>${esc(t('onboarding.accountTitle'))}</h2>
+        <p>${esc(signed ? t('onboarding.accountDone', { name: signed.name }) : t('onboarding.accountText'))}</p>
+        <div class="ob-choice">
+          <button data-act="msa">
+            <span data-icon="user"></span>
+            <span><span class="oc-t">${esc(t('accounts.addMs'))}</span>
+                  <span class="oc-d">${esc(t('accounts.sub'))}</span></span>
+          </button>
+          <button data-act="offline">
+            <span data-icon="plus"></span>
+            <span><span class="oc-t">${esc(t('accounts.addOffline'))}</span>
+                  <span class="oc-d">${esc(t('accounts.offlineHint'))}</span></span>
+          </button>
+        </div>`;
+      hydrateIcons(body);
+      $('[data-act="msa"]', body).onclick = async () => {
+        try {
+          const account = await api.auth.signIn();
+          if (account) { await refreshState(); renderOnboarding(); }
+        } catch (err) { toast(err.message, 'err'); }
+      };
+      $('[data-act="offline"]', body).onclick = () => {
+        // The overlay sits above the modal layer, so step aside while it asks.
+        $('#onboarding').hidden = true;
+        openOfflineDialog(async () => {
+          $('#onboarding').hidden = false;
+          renderOnboarding();
+        });
+      };
+    }
+
+    if (step === 'prefs') {
+      const ram = ob.ram || state.config.ram || 4096;
+      body.innerHTML = `<h2>${esc(t('onboarding.prefsTitle'))}</h2>
+        <p>${esc(t('onboarding.prefsText'))}</p>
+        <div class="field">
+          <div class="range-head"><label>${esc(t('settings.ram'))}</label><b id="ob-ram-label">${esc(fmtGB(ram))}</b></div>
+          <input type="range" id="ob-ram" min="1024" max="${state.totalRam}" step="512" value="${ram}" />
+          <div class="hint">${esc(t('settings.ramHint', { total: fmtGB(state.totalRam) }))}</div>
+        </div>`;
+      const slider = $('#ob-ram', body);
+      slider.oninput = () => {
+        ob.ram = Number(slider.value);
+        $('#ob-ram-label').textContent = fmtGB(slider.value);
+      };
+    }
+
+    if (step === 'done') {
+      body.innerHTML = `<span class="ob-mark">${logoMark(64)}</span>
+        <h2>${esc(t('onboarding.doneTitle'))}</h2>
+        <p>${esc(t('onboarding.doneText'))}</p>`;
+    }
+
+    $('#ob-back').hidden = ob.step === 0;
+    $('#ob-skip').hidden = ob.step === OB_STEPS.length - 1;
+    $('#ob-next').textContent = ob.step === OB_STEPS.length - 1 ? t('onboarding.finish') : t('onboarding.next');
+  }
+
+  $('#ob-next').onclick = () => {
+    if (ob.step === OB_STEPS.length - 1) { finishOnboarding(); return; }
+    ob.step++;
+    renderOnboarding();
+  };
+  $('#ob-back').onclick = () => { if (ob.step > 0) { ob.step--; renderOnboarding(); } };
+  $('#ob-skip').onclick = () => finishOnboarding();
 
   // =========================================================================
   // console
@@ -1507,6 +2290,7 @@
     updatePlayButton();
     renderStart();
     if ($('#view-profiles').classList.contains('active')) renderProfiles();
+    if ($('#view-instance').classList.contains('active')) renderInstance();
   });
 
   api.on.skinUpdated(async (payload) => { await applySkin(payload.uuid, payload); });
@@ -1538,6 +2322,8 @@
     if ($('#view-settings').classList.contains('active')) renderSettings();
     if ($('#view-servers').classList.contains('active')) renderServerGrid();
     if ($('#view-mods').classList.contains('active') && !$('#mods-installed').hidden) renderInstalledMods();
+    if ($('#view-instance').classList.contains('active')) renderInstance();
+    if ($('#view-stats').classList.contains('active')) renderStats();
     renderServerList();
   }
 
@@ -1569,6 +2355,9 @@
     });
 
     renderAll();
+
+    // Last, so the overlay opens over a launcher that is already up to date.
+    if (!state.config.firstRunDone) startOnboarding();
   }
 
   init().catch((err) => {

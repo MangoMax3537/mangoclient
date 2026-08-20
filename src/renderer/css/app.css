@@ -860,3 +860,257 @@ body.sidebar-off #sidebar { display: none; }
 .toast.info .ic { color: var(--text-3); }
 .toast .tt { color: var(--text); font-weight: 500; }
 .toast .td { color: var(--text-2); margin-top: 1px; }
+
+/* ============================= instance page =============================
+   The per-instance shell: hero, a tab bar, and one panel per tab. Ported
+   from OneLauncher's cluster view, dressed in our own tokens.
+   ========================================================================= */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0 14px;
+  padding: 4px;
+  background: var(--surface-3);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.tabbar .tab { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.tabbar .tab .ic { color: var(--text-3); }
+.tabbar .tab.active .ic { color: var(--brand); }
+
+.tabpanel { display: none; }
+.tabpanel.active { display: block; }
+.tabpanel > .panel + .panel { margin-top: 14px; }
+.tabpanel .rows { padding: 0 16px 16px; }
+
+.tab-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tab-toolbar .spacer { flex: 1; }
+
+/* ============================== screenshots ==============================
+   A dense grid of thumbnails; the picture itself is served over mangoimg://
+   because the renderer may not touch file://.
+   ========================================================================= */
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.shot {
+  position: relative;
+  border: 0;
+  padding: 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-3);
+  aspect-ratio: 16 / 9;
+}
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot figcaption {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 16px 10px 7px;
+  font-size: 11.5px;
+  color: #fff;
+  text-align: left;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .75));
+  opacity: 0;
+  transition: opacity .15s;
+}
+.shot:hover figcaption, .shot:focus-visible figcaption { opacity: 1; }
+.shot:hover { outline: 2px solid var(--brand); outline-offset: -2px; }
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  background: rgba(10, 11, 13, .93);
+  display: flex;
+  flex-direction: column;
+}
+.lb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+}
+.lb-title { min-width: 0; font-size: 13px; color: var(--text); }
+.lb-meta { margin-left: 10px; font-size: 11.5px; color: var(--text-3); }
+.lb-stage { flex: 1; min-height: 0; display: flex; align-items: center; gap: 10px; padding: 18px; }
+.lb-stage img { flex: 1; min-width: 0; max-height: 100%; object-fit: contain; }
+.lb-nav {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.lb-nav:hover { background: var(--surface-4); color: var(--text); }
+.lb-nav:disabled { opacity: .3; cursor: default; }
+
+/* ============================== log viewer ==============================
+   The run's log files beside the file itself, with the levels coloured the
+   way the console drawer already colours them.
+   ========================================================================= */
+.log-shell { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.log-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
+.log-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.log-item:hover { background: var(--surface-4); color: var(--text); }
+.log-item.active { background: var(--brand-quiet); color: var(--text); box-shadow: inset 2px 0 0 var(--brand); }
+.log-item .li-name { font-size: 12.5px; }
+.log-item .li-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+.log-view { background: var(--surface-3); border-radius: var(--r-lg); overflow: hidden; }
+.log-out {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 56vh;
+  overflow: auto;
+  font-family: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-2);
+}
+.log-out .warn { color: var(--warn); }
+.log-out .err { color: var(--danger); }
+.log-share { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--btn-border); font-size: 12px; }
+.log-share a { word-break: break-all; }
+
+@media (max-width: 900px) {
+  .log-shell { grid-template-columns: minmax(0, 1fr); }
+  .log-list { max-height: 200px; }
+}
+
+/* ============================== statistics ==============================
+   Tiles for the numbers, one bar per day for the shape of a habit.
+   ========================================================================= */
+.segmented { display: flex; gap: 2px; padding: 3px; background: var(--surface-3); border-radius: var(--r-sm); }
+.seg { padding: 6px 14px; border-radius: var(--r-xs); font-size: 12.5px; color: var(--text-2); }
+.seg:hover { color: var(--text); }
+.seg.active { background: var(--surface-4); color: var(--text); }
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-tile { padding: 16px 18px; background: var(--surface-3); border-radius: var(--r-lg); }
+.stat-tile .st-k { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-3); }
+.stat-tile .st-k .ic { color: var(--brand); }
+.stat-tile .st-v { font-size: 24px; font-weight: 600; color: var(--text); margin-top: 8px; }
+.stat-tile .st-s { font-size: 11.5px; color: var(--text-3); margin-top: 3px; }
+
+.chart { display: flex; align-items: flex-end; gap: 4px; height: 170px; padding: 0 16px 16px; }
+.chart-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 6px; min-width: 0; }
+.chart-bar {
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+  background: var(--surface-4);
+  min-height: 2px;
+  transition: background .12s;
+}
+.chart-col.has-play .chart-bar { background: var(--brand); }
+.chart-col:hover .chart-bar { background: var(--brand-hover); }
+.chart-label { font-size: 10px; color: var(--text-3); text-align: center; overflow: hidden; white-space: nowrap; }
+/* Past a fortnight the day labels stop fitting, so only the ends are named. */
+.chart.dense .chart-label { visibility: hidden; }
+.chart.dense .chart-col:first-child .chart-label,
+.chart.dense .chart-col:last-child .chart-label { visibility: visible; }
+
+.bar-row { display: flex; align-items: center; gap: 12px; }
+.bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-4); overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; background: var(--brand); }
+
+/* ========================== settings, sectioned ==========================
+   One rail of sections instead of one long grid, as OneLauncher splits its
+   settings into pages.
+   ========================================================================= */
+.settings-shell { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+}
+.settings-nav button .ic { color: var(--text-3); }
+.settings-nav button:hover { background: var(--surface-3); color: var(--text); }
+.settings-nav button.active { background: var(--surface-3); color: var(--text); box-shadow: inset 2px 0 0 var(--brand); }
+.settings-nav button.active .ic { color: var(--brand); }
+.settings-grid.sectioned { grid-template-columns: minmax(0, 1fr); max-width: 720px; }
+
+.storage-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+.storage-row + .storage-row { border-top: 1px solid var(--btn-border); }
+.storage-name { flex: 1; min-width: 0; font-size: 13px; color: var(--text); }
+.storage-name small { display: block; font-size: 11px; color: var(--text-3); }
+.storage-size { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 860px) {
+  .settings-shell { grid-template-columns: minmax(0, 1fr); }
+  .settings-nav { position: static; flex-direction: row; overflow-x: auto; }
+}
+
+/* ============================== onboarding ==============================
+   Shown once, on the very first start, before the shell is any use.
+   ========================================================================= */
+#onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: var(--surface-1);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  -webkit-app-region: drag;
+}
+.ob-box {
+  width: min(520px, 100%);
+  background: var(--surface-3);
+  border-radius: var(--r-lg);
+  padding: 26px 26px 20px;
+  -webkit-app-region: no-drag;
+}
+.ob-steps { display: flex; gap: 6px; margin-bottom: 22px; }
+.ob-steps span { flex: 1; height: 3px; border-radius: 2px; background: var(--surface-4); }
+.ob-steps span.done { background: var(--brand-quiet); }
+.ob-steps span.now { background: var(--brand); }
+.ob-mark { display: block; margin: 0 auto 16px; width: 64px; height: 64px; }
+.ob-body h2 { font-size: 19px; text-align: center; }
+.ob-body > p { font-size: 13px; color: var(--text-3); text-align: center; margin: 6px auto 20px; max-width: 46ch; }
+.ob-body .field + .field { margin-top: 14px; }
+.ob-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 24px; }
+.ob-foot-right { display: flex; gap: 8px; }
+
+.ob-choice { display: flex; flex-direction: column; gap: 8px; }
+.ob-choice button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--surface-4);
+  text-align: left;
+  color: var(--text-2);
+}
+.ob-choice button:hover { border-color: var(--btn-border); color: var(--text); }
+.ob-choice button.active { border-color: var(--brand); color: var(--text); }
+.ob-choice .oc-t { font-size: 13.5px; color: var(--text); }
+.ob-choice .oc-d { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
