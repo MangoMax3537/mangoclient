@@ -107,6 +107,31 @@ contextBridge.exposeInMainWorld('mango', {
     installModpack: (profileId, versionId) => call('modrinth:installModpack', profileId, versionId),
   },
 
+  screenshots: {
+    list: (profileId) => call('shots:list', profileId),
+    remove: (profileId, name) => call('shots:delete', profileId, name),
+    reveal: (profileId, name) => call('shots:reveal', profileId, name),
+    copy: (profileId, name) => call('shots:copy', profileId, name),
+    openFolder: (profileId) => call('shots:folder', profileId),
+  },
+
+  logs: {
+    list: (profileId) => call('logs:list', profileId),
+    read: (profileId, id) => call('logs:read', profileId, id),
+    upload: (profileId, id) => call('logs:upload', profileId, id),
+    remove: (profileId, id) => call('logs:delete', profileId, id),
+    openFolder: (profileId) => call('logs:folder', profileId),
+  },
+
+  stats: {
+    summary: (days) => call('stats:summary', days),
+  },
+
+  storage: {
+    usage: () => call('storage:usage'),
+    clear: (key) => call('storage:clear', key),
+  },
+
   servers: {
     partners: () => call('servers:partners'),
     ping: (address) => call('servers:ping', address),

@@ -13,6 +13,7 @@ const { installVersion, resolveVersionJson, rulesAllow } = require('./installer'
 const { ensureLoader } = require('./loaders');
 const { resolveJava } = require('./java');
 const { ensureFreshAccount } = require('./auth');
+const stats = require('./stats');
 
 const CP_SEP = process.platform === 'win32' ? ';' : ':';
 
@@ -416,6 +417,9 @@ async function launch({
       lastPlayed: Date.now(),
       playTimeMs: (store.getProfile(profile.id)?.playTimeMs || 0) + played,
     });
+    // The profile keeps the running total; the journal keeps *when* the time
+    // was spent, which is what the statistics view charts.
+    stats.record(profile.id, played);
   };
 
   let sawWindow = false;
@@ -462,4 +466,4 @@ async function launch({
   return instance;
 }
 
-module.exports = { launch, PRESETS, GameInstance, followLog, isGameAlive };
+module.exports = { launch, PRESETS, GameInstance, followLog, isGameAlive, logFileFor };

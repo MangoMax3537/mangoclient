@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data: blob: https://cdn.modrinth.com https://api.modrinth.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:;" />
+        content="default-src 'self'; img-src 'self' data: blob: mangoimg: https://cdn.modrinth.com https://api.modrinth.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:;" />
   <title>MangoClient</title>
   <link rel="stylesheet" href="css/app.css" />
 </head>
@@ -38,6 +38,7 @@
       <button class="rail-btn" data-view="mods" data-icon="compass" data-tip="nav.mods"></button>
       <button class="rail-btn" data-view="profiles" data-icon="layers" data-tip="nav.profiles"></button>
       <button class="rail-btn" data-view="servers" data-icon="server" data-tip="nav.servers"></button>
+      <button class="rail-btn" data-view="stats" data-icon="chart" data-tip="nav.stats"></button>
       <div class="rail-sep"></div>
       <div id="rail-instances"></div>
       <button class="rail-btn" id="rail-new" data-icon="plus" data-tip="profiles.new"></button>
@@ -101,6 +102,64 @@
           <button class="btn brand" id="btn-new-profile" data-icon="plus"><span data-i18n="profiles.new">Neues Profil</span></button>
         </div>
         <div class="instance-grid" id="profile-grid"></div>
+      </section>
+
+      <!-- =========================== INSTANCE =========================== -->
+      <section class="view" id="view-instance">
+        <section class="panel instance-hero">
+          <span class="cover lg" id="ins-tile"></span>
+          <div class="hero-body">
+            <h1 id="ins-name"></h1>
+            <p id="ins-sub"></p>
+            <div class="facts" id="ins-facts"></div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn brand lg" id="ins-play">
+              <span data-icon="play"></span>
+              <span id="ins-play-label">Spielen</span>
+            </button>
+            <button class="btn" id="ins-edit" data-icon="pencil"><span data-i18n="profiles.edit">Bearbeiten</span></button>
+            <button class="btn" id="ins-folder" data-icon="folder"><span data-i18n="profiles.folder">Ordner</span></button>
+          </div>
+        </section>
+
+        <div class="tabbar" id="ins-tabs">
+          <button class="tab active" data-itab="overview" data-icon="home"><span data-i18n="instance.overview">Übersicht</span></button>
+          <button class="tab" data-itab="mods" data-icon="package"><span data-i18n="instance.mods">Mods</span></button>
+          <button class="tab" data-itab="shots" data-icon="image"><span data-i18n="instance.shots">Screenshots</span></button>
+          <button class="tab" data-itab="logs" data-icon="file"><span data-i18n="instance.logs">Logs</span></button>
+          <button class="tab" data-itab="settings" data-icon="sliders"><span data-i18n="instance.settings">Einstellungen</span></button>
+        </div>
+
+        <div class="tabpanel active" id="itab-overview"></div>
+        <div class="tabpanel" id="itab-mods"></div>
+        <div class="tabpanel" id="itab-shots"></div>
+        <div class="tabpanel" id="itab-logs"></div>
+        <div class="tabpanel" id="itab-settings"></div>
+      </section>
+
+      <!-- ============================ STATS ============================ -->
+      <section class="view" id="view-stats">
+        <div class="view-head">
+          <div>
+            <h1 data-i18n="stats.title">Statistik</h1>
+            <p class="view-sub" data-i18n="stats.sub">Wie viel gespielt wurde, wann, und auf welchem Profil.</p>
+          </div>
+          <div class="segmented" id="stats-range">
+            <button class="seg active" data-days="14">14</button>
+            <button class="seg" data-days="30">30</button>
+            <button class="seg" data-days="90">90</button>
+          </div>
+        </div>
+        <div class="stat-tiles" id="stat-tiles"></div>
+        <section class="panel">
+          <div class="panel-head"><h2 data-i18n="stats.daily">Spielzeit pro Tag</h2><span class="count" id="stat-chart-sum"></span></div>
+          <div class="chart" id="stat-chart"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2 data-i18n="stats.perProfile">Nach Profil</h2></div>
+          <div class="rows" id="stat-profiles"></div>
+        </section>
       </section>
 
       <!-- =========================== ACCOUNTS =========================== -->
@@ -198,7 +257,10 @@
             <p class="view-sub" data-i18n="settings.sub">Gilt für alle Profile, sofern ein Profil nichts eigenes vorgibt.</p>
           </div>
         </div>
-        <div class="settings-grid" id="settings-grid"></div>
+        <div class="settings-shell">
+          <nav class="settings-nav" id="settings-nav"></nav>
+          <div class="settings-grid" id="settings-grid"></div>
+        </div>
       </section>
     </main>
 
@@ -254,6 +316,39 @@
       <h2 data-i18n="update.applyingTitle">MangoClient wird aktualisiert</h2>
       <p id="uo-text"></p>
       <div class="progress-track"><div class="progress-fill" id="uo-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- ============================ LIGHTBOX ============================ -->
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lb-bar">
+      <div class="lb-title"><span id="lb-name"></span><span class="lb-meta" id="lb-meta"></span></div>
+      <div class="panel-actions">
+        <button class="btn sm" id="lb-copy" data-icon="copy"><span data-i18n="shots.copy">Kopieren</span></button>
+        <button class="btn sm" id="lb-reveal" data-icon="folder"><span data-i18n="shots.reveal">Im Ordner zeigen</span></button>
+        <button class="btn sm danger" id="lb-del" data-icon="trash"><span data-i18n="btn.delete">Löschen</span></button>
+        <button class="btn sm icon-only" id="lb-close" data-icon="close" aria-label="Schließen"></button>
+      </div>
+    </div>
+    <div class="lb-stage">
+      <button class="lb-nav" id="lb-prev" data-icon="arrowLeft" aria-label="Vorheriges"></button>
+      <img id="lb-img" alt="" />
+      <button class="lb-nav" id="lb-next" data-icon="arrowRight" aria-label="Nächstes"></button>
+    </div>
+  </div>
+
+  <!-- =========================== ONBOARDING =========================== -->
+  <div id="onboarding" hidden>
+    <div class="ob-box">
+      <div class="ob-steps" id="ob-steps"></div>
+      <div class="ob-body" id="ob-body"></div>
+      <div class="ob-foot">
+        <button class="btn" id="ob-skip" data-i18n="onboarding.skip">Überspringen</button>
+        <div class="ob-foot-right">
+          <button class="btn" id="ob-back" data-i18n="onboarding.back">Zurück</button>
+          <button class="btn brand" id="ob-next" data-i18n="onboarding.next">Weiter</button>
+        </div>
+      </div>
     </div>
   </div>
 
