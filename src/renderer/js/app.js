@@ -1146,6 +1146,7 @@
           <div class="row-name">${esc(m.title)}
             ${m.dependency ? `<span class="badge">${esc(t('mods.dependency'))}</span>` : ''}
             ${m.local ? `<span class="badge" data-tip-text="${esc(t('mods.localHint'))}">${esc(t('mods.local'))}</span>` : ''}
+            ${m.mangoConfig ? `<span class="badge">${esc(t('mangoconfig.badge'))}</span>` : ''}
             ${m.update ? `<span class="badge warn">${esc(t('mods.updateAvailable'))}</span>` : ''}
           </div>
           <div class="row-sub">${m.versionNumber ? `${esc(m.versionNumber)} · ` : ''}${esc(m.filename)}</div>
@@ -1328,6 +1329,21 @@
     { key: 'updates', glyph: 'download' },
   ];
 
+  /**
+   * MangoConfig is OneConfig underneath, and says so wherever it is named -
+   * Polyfrost's licence asks for the attribution and it costs us one line.
+   */
+  function renderMangoConfigCredit() {
+    api.mangoConfig.info().then((info) => {
+      const box = $('#mangoconfig-credit');
+      if (!box) return; // the player left the section while we asked
+      box.innerHTML = `${esc(t('mangoconfig.credit', { credit: info.credit }))}
+        <a href="#" data-act="home">${esc(info.homepage)}</a><br>
+        ${esc(t('mangoconfig.loaders', { loaders: info.loaders.join(', ') }))}`;
+      $('[data-act="home"]', box).onclick = (e) => { e.preventDefault(); api.openExternal(info.homepage); };
+    }).catch(() => {});
+  }
+
   function renderSettingsNav() {
     const nav = $('#settings-nav');
     nav.innerHTML = SETTINGS_SECTIONS.map((s) => `
@@ -1472,6 +1488,11 @@
           <div><div class="toggle-label">${esc(t('settings.snapshots'))}</div><div class="toggle-desc">${esc(t('settings.snapshotsDesc'))}</div></div>
           <label class="switch"><input type="checkbox" id="set-snap" ${c.showSnapshots ? 'checked' : ''} /><span class="slider"></span></label>
         </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">${esc(t('mangoconfig.title'))}</div><div class="toggle-desc">${esc(t('mangoconfig.desc'))}</div></div>
+          <label class="switch"><input type="checkbox" id="set-mangoconfig" ${c.mangoConfig !== false ? 'checked' : ''} /><span class="slider"></span></label>
+        </div>
+        <div class="hint" id="mangoconfig-credit"></div>
       </div>
 
       <div class="settings-card" data-section="storage">
@@ -1522,6 +1543,8 @@
     $('#set-keep').onchange = (e) => save({ keepLauncherOpen: e.target.checked });
     $('#set-hide').onchange = (e) => save({ hideOnLaunch: e.target.checked });
     $('#set-snap').onchange = (e) => save({ showSnapshots: e.target.checked });
+    $('#set-mangoconfig').onchange = (e) => save({ mangoConfig: e.target.checked });
+    renderMangoConfigCredit();
     $('#set-lang').onchange = async (e) => {
       window.i18n.setLanguage(e.target.value);
       await save({ language: e.target.value });
@@ -1746,6 +1769,20 @@
         </div>
 
         <div class="settings-card">
+          <h2><span data-icon="sliders"></span>${esc(t('mangoconfig.title'))}</h2>
+          <div class="sc-sub">${esc(t('mangoconfig.instanceSub'))}</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${esc(t('mangoconfig.perInstance'))}</div>
+              <div class="toggle-desc">${esc(t(state.config.mangoConfig === false ? 'mangoconfig.globalOff' : 'mangoconfig.globalOn'))}</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="ins-mangoconfig" ${profile.mangoConfig === false ? '' : 'checked'} /><span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-card">
           <h2><span data-icon="layers"></span>${esc(t('profiles.title'))}</h2>
           <div class="sc-sub">${esc(t('instance.dangerSub'))}</div>
           <div class="field-row">
@@ -1767,6 +1804,8 @@
     ram.oninput = () => { $('#ins-ram-label').textContent = fmtGB(ram.value); };
     ram.onchange = () => save({ ram: Number(ram.value) });
     $('#ins-args').onchange = (e) => save({ javaArgs: e.target.value });
+    // null rather than true, so the instance goes back to following the global setting.
+    $('#ins-mangoconfig').onchange = (e) => save({ mangoConfig: e.target.checked ? null : false });
 
     $('#ins-set-edit').onclick = () => openProfileDialog(profile);
     $('#ins-set-dup').onclick = async () => { await api.profiles.duplicate(profile.id); await refreshState(); };

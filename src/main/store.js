@@ -27,6 +27,7 @@ const DEFAULT_CONFIG = {
   keepLauncherOpen: true,
   hideOnLaunch: false,
   showSnapshots: false,
+  mangoConfig: true,      // load MangoConfig into every instance on launch
   sidebarOpen: true,
   concurrentDownloads: 12,
   performancePreset: 'balanced', // potato | balanced | quality
@@ -98,6 +99,7 @@ class Store {
       ram: data.ram || null,                  // null = inherit global
       javaArgs: data.javaArgs || '',
       mods: data.mods || [],                  // installed Modrinth mods
+      mangoConfig: null,                      // null = follow the global setting
       session: null,                          // {pid} while the game is playing
       lastPlayed: null,
       playTimeMs: 0,
