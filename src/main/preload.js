@@ -107,6 +107,10 @@ contextBridge.exposeInMainWorld('mango', {
     installModpack: (profileId, versionId) => call('modrinth:installModpack', profileId, versionId),
   },
 
+  mangoConfig: {
+    info: () => call('mangoconfig:info'),
+  },
+
   screenshots: {
     list: (profileId) => call('shots:list', profileId),
     remove: (profileId, name) => call('shots:delete', profileId, name),

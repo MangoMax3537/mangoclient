@@ -15,6 +15,7 @@ const modrinth = require('./modrinth');
 const localmods = require('./localmods');
 const servers = require('./servers');
 const skins = require('./skins');
+const mangoconfig = require('./mangoconfig');
 const screenshots = require('./screenshots');
 const gamelogs = require('./gamelogs');
 const stats = require('./stats');
@@ -441,6 +442,25 @@ function registerIpc() {
     const account = store.selectedAccount;
     if (!account) throw new Error('Add a Minecraft account first.');
 
+    // MangoConfig rides along on every launch, so the in-game settings layer is
+    // there whether or not the player thought to install it. It never throws:
+    // starting without it beats refusing to start.
+    const mc = await mangoconfig.ensure({
+      profile,
+      config: store.config,
+      onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
+    });
+    if (mc.mods) store.updateProfile(profileId, { mods: mc.mods });
+    if (mc.error) {
+      send('launch:log', { profileId, line: `${mangoconfig.NAME} skipped: ${mc.error}`, level: 'warn' });
+    }
+    if (['installed', 'updated', 'current'].includes(mc.state)) {
+      const themed = await mangoconfig.applyTheme(profileId).catch(() => false);
+      if (themed) {
+        send('launch:log', { profileId, line: `${mangoconfig.NAME} themed in MangoClient's colours`, level: 'info' });
+      }
+    }
+
     const instance = await launch({
       profile,
       account,
@@ -564,6 +584,16 @@ function registerIpc() {
     });
     return info;
   });
+
+  // --- MangoConfig
+  handle('mangoconfig:info', async () => ({
+    name: mangoconfig.NAME,
+    credit: mangoconfig.CREDIT,
+    homepage: mangoconfig.HOMEPAGE,
+    project: mangoconfig.PROJECT,
+    loaders: Object.keys(mangoconfig.LOADER_BUILD),
+    enabled: store.config.mangoConfig !== false,
+  }));
 
   // --- screenshots
   handle('shots:list', async (profileId) => {
