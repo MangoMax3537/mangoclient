@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const P = require('./paths');
+const mangoconfig = require('./mangoconfig');
 
 /**
  * Mods the player dropped into the instance's `mods` folder by hand.
@@ -162,6 +163,9 @@ function scanModsDir(dir) {
   const found = new Map();
   for (const entry of entries) {
     if (!entry.isFile() || !JAR_RE.test(entry.name)) continue;
+    // MangoConfig is put there by the launcher, not by the player, and is
+    // managed by its own switch. It has no business in the mod list.
+    if (mangoconfig.isOwnJar(entry.name)) continue;
     const key = jarName(entry.name);
     const enabled = !/\.disabled$/i.test(entry.name);
     // If both `foo.jar` and `foo.jar.disabled` exist, the live one wins.

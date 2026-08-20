@@ -442,23 +442,22 @@ function registerIpc() {
     const account = store.selectedAccount;
     if (!account) throw new Error('Add a Minecraft account first.');
 
-    // MangoConfig rides along on every launch, so the in-game settings layer is
-    // there whether or not the player thought to install it. It never throws:
-    // starting without it beats refusing to start.
+    // MangoConfig rides along on every launch, so the in-game HUD is there
+    // whether or not the player thought about it. It never throws: starting
+    // without it beats refusing to start.
     const mc = await mangoconfig.ensure({
       profile,
       config: store.config,
       onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
     });
-    if (mc.mods) store.updateProfile(profileId, { mods: mc.mods });
     if (mc.error) {
       send('launch:log', { profileId, line: `${mangoconfig.NAME} skipped: ${mc.error}`, level: 'warn' });
-    }
-    if (['installed', 'updated', 'current'].includes(mc.state)) {
-      const themed = await mangoconfig.applyTheme(profileId).catch(() => false);
-      if (themed) {
-        send('launch:log', { profileId, line: `${mangoconfig.NAME} themed in MangoClient's colours`, level: 'info' });
-      }
+    } else if (mc.state === 'unsupported') {
+      send('launch:log', {
+        profileId,
+        line: `${mangoconfig.NAME} has no build for ${mc.reason}, starting without it`,
+        level: 'warn',
+      });
     }
 
     const instance = await launch({
@@ -586,14 +585,18 @@ function registerIpc() {
   });
 
   // --- MangoConfig
-  handle('mangoconfig:info', async () => ({
-    name: mangoconfig.NAME,
-    credit: mangoconfig.CREDIT,
-    homepage: mangoconfig.HOMEPAGE,
-    project: mangoconfig.PROJECT,
-    loaders: Object.keys(mangoconfig.LOADER_BUILD),
-    enabled: store.config.mangoConfig !== false,
-  }));
+  handle('mangoconfig:info', async (profileId) => {
+    const profile = profileId ? store.getProfile(profileId) : store.selectedProfile;
+    return {
+      name: mangoconfig.NAME,
+      loaders: mangoconfig.LOADERS,
+      gameVersions: mangoconfig.GAME_VERSIONS,
+      globalEnabled: store.config.mangoConfig !== false,
+      enabled: profile ? mangoconfig.enabledFor(profile, store.config) : false,
+      supported: profile ? mangoconfig.supports(profile) : false,
+      installed: profile ? mangoconfig.present(profile.id) : false,
+    };
+  });
 
   // --- screenshots
   handle('shots:list', async (profileId) => {

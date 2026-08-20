@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('mango', {
   },
 
   mangoConfig: {
-    info: () => call('mangoconfig:info'),
+    info: (profileId) => call('mangoconfig:info', profileId),
   },
 
   screenshots: {
