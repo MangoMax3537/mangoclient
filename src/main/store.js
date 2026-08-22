@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
   hideOnLaunch: false,
   showSnapshots: false,
   mangoConfig: true,      // load MangoConfig into every instance on launch
+  performanceMods: true,  // put Sodium/Lithium/FerriteCore into Fabric instances
   sidebarOpen: true,
   concurrentDownloads: 12,
   performancePreset: 'balanced', // potato | balanced | quality

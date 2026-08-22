@@ -10,14 +10,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CoordinatesModule extends HudModule {
-	private static final String[] COMPASS = {"Süd", "Südwest", "West", "Nordwest", "Nord", "Nordost", "Ost", "Südost"};
+	private static final String[] COMPASS = {"South", "South-west", "West", "North-west", "North", "North-east", "East", "South-east"};
 
-	private final Option.Bool decimals = new Option.Bool("decimals", "Nachkommastellen", false);
-	private final Option.Bool facing = new Option.Bool("facing", "Blickrichtung", true);
-	private final Option.Choice layout = new Option.Choice("layout", "Anordnung", 0, "Untereinander", "Nebeneinander");
+	private final Option.Bool decimals = new Option.Bool("decimals", "Decimals", false);
+	private final Option.Bool facing = new Option.Bool("facing", "Facing", true);
+	private final Option.Choice layout = new Option.Choice("layout", "Layout", 0, "Stacked", "One line");
 
 	public CoordinatesModule() {
-		super("coords", "Koordinaten", "Position und Blickrichtung.", true, 0.01f, 0.06f);
+		super("coords", "Coordinates", "Position and facing.", true, 0.01f, 0.06f);
 		options.add(decimals);
 		options.add(facing);
 		options.add(layout);
@@ -36,7 +36,7 @@ public class CoordinatesModule extends HudModule {
 		String x = "X " + num(mc.player.getX());
 		String y = "Y " + num(mc.player.getY());
 		String z = "Z " + num(mc.player.getZ());
-		if (layout.is("Nebeneinander")) {
+		if (layout.is("One line")) {
 			out.add(x + "  " + y + "  " + z);
 		} else {
 			out.add(x);

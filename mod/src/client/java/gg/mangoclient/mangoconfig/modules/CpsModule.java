@@ -8,11 +8,11 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
 public class CpsModule extends HudModule {
-	private final Option.Bool rightButton = new Option.Bool("right", "Rechte Taste mitzählen", true);
-	private final Option.Bool label = new Option.Bool("label", "\"CPS\" anzeigen", true);
+	private final Option.Bool rightButton = new Option.Bool("right", "Count right button", true);
+	private final Option.Bool label = new Option.Bool("label", "Show \"CPS\"", true);
 
 	public CpsModule() {
-		super("cps", "Klicks", "Klicks pro Sekunde.", false, 0.01f, 0.10f);
+		super("cps", "Clicks", "Clicks per second.", false, 0.01f, 0.10f);
 		options.add(rightButton);
 		options.add(label);
 	}

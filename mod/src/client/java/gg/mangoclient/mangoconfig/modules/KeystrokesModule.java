@@ -19,12 +19,12 @@ public class KeystrokesModule extends HudModule {
 	private static final int KEY = 20;
 	private static final int GAP = 2;
 
-	private final Option.Bool showMouse = new Option.Bool("mouse", "Maustasten anzeigen", true);
-	private final Option.Bool showSpace = new Option.Bool("space", "Leertaste anzeigen", true);
-	private final Option.Colour pressed = new Option.Colour("pressed", "Farbe gedrückt", Theme.BRAND);
+	private final Option.Bool showMouse = new Option.Bool("mouse", "Show mouse buttons", true);
+	private final Option.Bool showSpace = new Option.Bool("space", "Show space bar", true);
+	private final Option.Colour pressed = new Option.Colour("pressed", "Pressed colour", Theme.BRAND);
 
 	public KeystrokesModule() {
-		super("keystrokes", "Tasten", "WASD, Maus und Leertaste.", false, 0.02f, 0.62f);
+		super("keystrokes", "Keys", "WASD, mouse and space.", false, 0.02f, 0.62f);
 		options.add(showMouse);
 		options.add(showSpace);
 		options.add(pressed);

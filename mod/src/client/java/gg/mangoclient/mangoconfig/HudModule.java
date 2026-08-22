@@ -25,11 +25,11 @@ public abstract class HudModule {
 	public float y;
 
 	/** Settings every module has. Module-specific ones go in {@link #options}. */
-	public final Option.Range scale = new Option.Range("scale", "Größe", 100, 50, 200, "%");
-	public final Option.Colour colour = new Option.Colour("colour", "Textfarbe", Theme.TEXT);
-	public final Option.Bool shadow = new Option.Bool("shadow", "Schatten", true);
-	public final Option.Bool background = new Option.Bool("background", "Hintergrund", true);
-	public final Option.Colour backgroundColour = new Option.Colour("bgColour", "Hintergrundfarbe", Theme.HUD_BG);
+	public final Option.Range scale = new Option.Range("scale", "Size", 100, 50, 200, "%");
+	public final Option.Colour colour = new Option.Colour("colour", "Text colour", Theme.TEXT);
+	public final Option.Bool shadow = new Option.Bool("shadow", "Shadow", true);
+	public final Option.Bool background = new Option.Bool("background", "Background", true);
+	public final Option.Colour backgroundColour = new Option.Colour("bgColour", "Background colour", Theme.HUD_BG);
 
 	public final List<Option> options = new ArrayList<>();
 
@@ -56,6 +56,15 @@ public abstract class HudModule {
 	 * has to draw something there, or it cannot be dragged.
 	 */
 	public abstract void render(DrawContext ctx, MinecraftClient mc, TextRenderer font, boolean preview);
+
+	/**
+	 * False when the module has nothing to say right now, so an empty box with
+	 * a background plate is not left sitting on screen. The editor ignores
+	 * this, or an idle module could never be found and dragged.
+	 */
+	public boolean visible(MinecraftClient mc) {
+		return true;
+	}
 
 	public int padding() {
 		return background.value ? 3 : 0;

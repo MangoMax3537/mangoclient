@@ -1466,6 +1466,10 @@
               <span class="pd">${esc(t(`settings.preset.${key}D`))}</span>
             </button>`).join('')}
         </div>
+        <div class="toggle-row" style="margin-top:12px">
+          <div><div class="toggle-label">${esc(t('settings.perfMods'))}</div><div class="toggle-desc">${esc(t('settings.perfModsDesc'))}</div></div>
+          <label class="switch"><input type="checkbox" id="set-perfmods" ${c.performanceMods !== false ? 'checked' : ''} /><span class="slider"></span></label>
+        </div>
         <div class="field" style="margin-top:16px">
           <label>${esc(t('settings.downloads'))}</label>
           <input type="number" id="set-dl" value="${c.concurrentDownloads}" min="1" max="32" />
@@ -1566,6 +1570,7 @@
     $('#set-keep').onchange = (e) => save({ keepLauncherOpen: e.target.checked });
     $('#set-hide').onchange = (e) => save({ hideOnLaunch: e.target.checked });
     $('#set-snap').onchange = (e) => save({ showSnapshots: e.target.checked });
+    $('#set-perfmods').onchange = (e) => save({ performanceMods: e.target.checked });
     $('#set-mangoconfig').onchange = async (e) => {
       await save({ mangoConfig: e.target.checked });
       renderMangoConfigPill();

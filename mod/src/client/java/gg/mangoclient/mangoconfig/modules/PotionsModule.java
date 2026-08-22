@@ -13,11 +13,11 @@ import java.util.List;
 public class PotionsModule extends HudModule {
 	private static final String[] ROMAN = {"", " II", " III", " IV", " V", " VI", " VII", " VIII"};
 
-	private final Option.Bool showDuration = new Option.Bool("duration", "Restzeit anzeigen", true);
-	private final Option.Range warnAt = new Option.Range("warn", "Warnen ab", 10, 0, 60, " s");
+	private final Option.Bool showDuration = new Option.Bool("duration", "Show remaining time", true);
+	private final Option.Range warnAt = new Option.Range("warn", "Warn below", 10, 0, 60, " s");
 
 	public PotionsModule() {
-		super("potions", "Effekte", "Aktive Statuseffekte.", false, 0.86f, 0.10f);
+		super("potions", "Effects", "Active status effects.", false, 0.86f, 0.18f);
 		options.add(showDuration);
 		options.add(warnAt);
 	}
@@ -63,7 +63,7 @@ public class PotionsModule extends HudModule {
 	public void render(DrawContext ctx, MinecraftClient mc, TextRenderer font, boolean preview) {
 		List<StatusEffectInstance> list = effects(mc, preview);
 		if (list.isEmpty()) {
-			if (preview) text(ctx, font, "Keine Effekte", 0, 0);
+			if (preview) text(ctx, font, "No effects", 0, 0);
 			return;
 		}
 		for (int i = 0; i < list.size(); i++) {

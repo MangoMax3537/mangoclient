@@ -1,7 +1,7 @@
 {
   "name": "mangoclient",
   "productName": "MangoClient",
-  "version": "1.1.1",
+  "version": "1.2.3",
   "description": "A fast Minecraft launcher with Modrinth mods, Fabric/Forge support and one-click performance profiles.",
   "main": "src/main/index.js",
   "author": "mangomax",
@@ -29,6 +29,9 @@
       "output": "dist",
       "buildResources": "build"
     },
+    "asarUnpack": [
+      "src/main/assets/**"
+    ],
     "files": [
       "src/**/*",
       "package.json"

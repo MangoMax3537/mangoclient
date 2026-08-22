@@ -13,10 +13,10 @@ public class ClockModule extends HudModule {
 	private static final DateTimeFormatter WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss");
 	private static final DateTimeFormatter WITHOUT = DateTimeFormatter.ofPattern("HH:mm");
 
-	private final Option.Bool seconds = new Option.Bool("seconds", "Sekunden anzeigen", false);
+	private final Option.Bool seconds = new Option.Bool("seconds", "Show seconds", false);
 
 	public ClockModule() {
-		super("clock", "Uhr", "Die echte Uhrzeit.", false, 0.90f, 0.02f);
+		super("clock", "Clock", "The real-world time.", false, 0.90f, 0.02f);
 		options.add(seconds);
 	}
 

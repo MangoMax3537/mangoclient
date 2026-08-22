@@ -4,6 +4,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const P = require('./paths');
 const mangoconfig = require('./mangoconfig');
+const performancemods = require('./performancemods');
 
 /**
  * Mods the player dropped into the instance's `mods` folder by hand.
@@ -161,11 +162,13 @@ function scanModsDir(dir) {
     return new Map(); // folder not created yet
   }
   const found = new Map();
+  // Jars the launcher itself manages - MangoConfig and the performance set -
+  // are run by their own switches and have no business in the mod list.
+  const managed = performancemods.managedNamesSync(dir);
   for (const entry of entries) {
     if (!entry.isFile() || !JAR_RE.test(entry.name)) continue;
-    // MangoConfig is put there by the launcher, not by the player, and is
-    // managed by its own switch. It has no business in the mod list.
     if (mangoconfig.isOwnJar(entry.name)) continue;
+    if (managed.has(entry.name)) continue;
     const key = jarName(entry.name);
     const enabled = !/\.disabled$/i.test(entry.name);
     // If both `foo.jar` and `foo.jar.disabled` exist, the live one wins.

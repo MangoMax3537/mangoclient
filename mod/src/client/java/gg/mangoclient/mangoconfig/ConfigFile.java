@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.fabricmc.loader.api.FabricLoader;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,7 +20,6 @@ public class ConfigFile {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
 	public boolean hudEnabled = true;
-	public int openKey = GLFW.GLFW_KEY_RIGHT_SHIFT;
 
 	private final Path file;
 
@@ -40,7 +38,19 @@ public class ConfigFile {
 		if (root == null) return;
 
 		if (root.has("hudEnabled")) hudEnabled = root.get("hudEnabled").getAsBoolean();
-		if (root.has("openKey")) openKey = root.get("openKey").getAsInt();
+		// Older files kept the open key at the top level.
+		if (root.has("openKey")) Mods.openKey.value = root.get("openKey").getAsInt();
+
+		JsonObject settings = root.getAsJsonObject("mods");
+		if (settings != null) {
+			for (Option option : Mods.all()) option.load(settings);
+			for (Option option : Pvp.all()) option.load(settings);
+			// Older files sized both crosshair axes with one slider.
+			if (settings.has("crosshairSize") && !settings.has("crosshairWidth")) {
+				Mods.crosshairWidth.set(settings.get("crosshairSize").getAsInt());
+				Mods.crosshairHeight.set(settings.get("crosshairSize").getAsInt());
+			}
+		}
 
 		JsonObject mods = root.getAsJsonObject("modules");
 		if (mods == null) return;
@@ -53,7 +63,11 @@ public class ConfigFile {
 	public void save(List<HudModule> modules) {
 		JsonObject root = new JsonObject();
 		root.addProperty("hudEnabled", hudEnabled);
-		root.addProperty("openKey", openKey);
+
+		JsonObject settings = new JsonObject();
+		for (Option option : Mods.all()) option.save(settings);
+		for (Option option : Pvp.all()) option.save(settings);
+		root.add("mods", settings);
 
 		JsonObject mods = new JsonObject();
 		for (HudModule module : modules) {

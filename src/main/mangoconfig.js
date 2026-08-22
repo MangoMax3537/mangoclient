@@ -19,8 +19,10 @@ const P = require('./paths');
 
 const NAME = 'MangoConfig';
 /** Bundled with the app; `src/**` is what electron-builder packs. */
-const JAR = path.join(__dirname, 'assets', 'MangoConfig-1.0.0.jar');
+const JAR = path.join(__dirname, 'assets', 'MangoConfig-1.5.1.jar');
 const JAR_NAME = path.basename(JAR);
+/** Any build of ours, so an older one can be recognised and cleared out. */
+const OWN_JAR_RE = /^MangoConfig-.*\.jar(\.disabled)?$/i;
 
 /**
  * The mod is compiled against one Minecraft version and needs a Fabric-style
@@ -64,25 +66,26 @@ async function ensure({ profile, config, onLog = () => {} }) {
 	const wanted = enabledFor(profile, config);
 
 	if (!wanted) {
-		try {
-			await fsp.unlink(target);
-			onLog(`${NAME} removed from this profile`);
-			return { state: 'removed' };
-		} catch {
-			return { state: 'off' };
-		}
+		const removed = await removeOurJars(profile.id);
+		if (removed) onLog(`${NAME} removed from this profile`);
+		return { state: removed ? 'removed' : 'off' };
 	}
 
 	if (!supports(profile)) {
-		// Leave nothing behind if the profile was switched to a version we
-		// have no build for, or the game would refuse to start.
-		await fsp.unlink(target).catch(() => {});
+		// Leave nothing behind if the profile was switched to a version we have
+		// no build for, or the game would refuse to start.
+		await removeOurJars(profile.id);
 		return { state: 'unsupported', reason: `${profile.loader} ${profile.mcVersion}` };
 	}
 
 	try {
-		if (await upToDate(target)) return { state: 'current' };
+		if (await upToDate(target)) {
+			await removeOurJars(profile.id, { except: JAR_NAME });
+			return { state: 'current' };
+		}
 		await fsp.mkdir(path.dirname(target), { recursive: true });
+		// An older build has to go first: two jars, one mod id, no launch.
+		await removeOurJars(profile.id, { except: JAR_NAME });
 		await fsp.copyFile(JAR, target);
 		onLog(`${NAME} added to this profile`);
 		return { state: 'installed' };
@@ -91,9 +94,34 @@ async function ensure({ profile, config, onLog = () => {} }) {
 	}
 }
 
-/** True for the jar the launcher manages, so the mod list can skip it. */
+/** True for any build of ours, so the mod list can skip it. */
 function isOwnJar(filename) {
-	return path.basename(filename || '') === JAR_NAME;
+	return OWN_JAR_RE.test(path.basename(filename || ''));
+}
+
+/**
+ * Clear out builds that are not the current one.
+ *
+ * Two jars declaring the same mod id stop Fabric from starting, so an upgrade
+ * that changes the file name has to take the old file with it.
+ */
+async function removeOurJars(profileId, { except = null } = {}) {
+	const dir = path.join(P.instanceDir(profileId), 'mods');
+	let names;
+	try {
+		names = await fsp.readdir(dir);
+	} catch {
+		return 0;
+	}
+	let removed = 0;
+	for (const name of names) {
+		if (!isOwnJar(name) || name === except) continue;
+		try {
+			await fsp.unlink(path.join(dir, name));
+			removed++;
+		} catch { /* in use; the next launch tries again */ }
+	}
+	return removed;
 }
 
 function present(profileId) {
@@ -102,6 +130,7 @@ function present(profileId) {
 
 module.exports = {
 	ensure,
+	removeOurJars,
 	enabledFor,
 	supports,
 	isOwnJar,

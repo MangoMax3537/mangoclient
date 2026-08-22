@@ -7,10 +7,10 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
 public class FpsModule extends HudModule {
-	private final Option.Bool label = new Option.Bool("label", "\"FPS\" anzeigen", true);
+	private final Option.Bool label = new Option.Bool("label", "Show \"FPS\"", true);
 
 	public FpsModule() {
-		super("fps", "FPS", "Bilder pro Sekunde.", true, 0.01f, 0.02f);
+		super("fps", "FPS", "Frames per second.", true, 0.01f, 0.02f);
 		options.add(label);
 	}
 

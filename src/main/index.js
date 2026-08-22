@@ -16,6 +16,7 @@ const localmods = require('./localmods');
 const servers = require('./servers');
 const skins = require('./skins');
 const mangoconfig = require('./mangoconfig');
+const performancemods = require('./performancemods');
 const screenshots = require('./screenshots');
 const gamelogs = require('./gamelogs');
 const stats = require('./stats');
@@ -459,6 +460,13 @@ function registerIpc() {
         level: 'warn',
       });
     }
+
+    // Sodium and friends ride along the same way: best-effort, never blocking.
+    await performancemods.ensure({
+      profile,
+      config: store.config,
+      onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
+    });
 
     const instance = await launch({
       profile,

@@ -23,14 +23,14 @@ public class ArmourModule extends HudModule {
 	};
 
 	private final Option.Choice direction =
-		new Option.Choice("direction", "Ausrichtung", 0, "Senkrecht", "Waagerecht");
-	private final Option.Bool showHeld = new Option.Bool("held", "Hand mit anzeigen", true);
-	private final Option.Bool showDurability = new Option.Bool("durability", "Haltbarkeit als Zahl", true);
-	private final Option.Bool hideEmpty = new Option.Bool("hideEmpty", "Leere Plätze ausblenden", true);
-	private final Option.Bool warnLow = new Option.Bool("warnLow", "Niedrige Haltbarkeit färben", true);
+		new Option.Choice("direction", "Orientation", 0, "Vertical", "Horizontal");
+	private final Option.Bool showHeld = new Option.Bool("held", "Include held item", true);
+	private final Option.Bool showDurability = new Option.Bool("durability", "Durability as a number", true);
+	private final Option.Bool hideEmpty = new Option.Bool("hideEmpty", "Hide empty slots", true);
+	private final Option.Bool warnLow = new Option.Bool("warnLow", "Colour low durability", true);
 
 	public ArmourModule() {
-		super("armour", "Rüstung", "Getragene Rüstung samt Haltbarkeit.", true, 0.01f, 0.35f);
+		super("armour", "Armour", "Worn armour and what is left of it.", true, 0.01f, 0.35f);
 		options.add(direction);
 		options.add(showHeld);
 		options.add(showDurability);
@@ -80,14 +80,14 @@ public class ArmourModule extends HudModule {
 	@Override
 	public int width(MinecraftClient mc, TextRenderer font) {
 		int count = Math.max(1, stacks(mc, false).size());
-		if (direction.is("Waagerecht")) return count * 18;
+		if (direction.is("Horizontal")) return count * 18;
 		return 18 + labelWidth(mc, font, false);
 	}
 
 	@Override
 	public int height(MinecraftClient mc, TextRenderer font) {
 		int count = Math.max(1, stacks(mc, false).size());
-		return direction.is("Waagerecht") ? 18 : count * 18;
+		return direction.is("Horizontal") ? 18 : count * 18;
 	}
 
 	@Override
@@ -97,14 +97,14 @@ public class ArmourModule extends HudModule {
 
 		for (int i = 0; i < items.size(); i++) {
 			ItemStack stack = items.get(i);
-			int px = direction.is("Waagerecht") ? i * 18 : 0;
-			int py = direction.is("Waagerecht") ? 0 : i * 18;
+			int px = direction.is("Horizontal") ? i * 18 : 0;
+			int py = direction.is("Horizontal") ? 0 : i * 18;
 
 			if (!stack.isEmpty()) {
 				ctx.drawItem(stack, px, py);
 				ctx.drawStackOverlay(font, stack, px, py);
 			}
-			if (showDurability.value && !direction.is("Waagerecht")) {
+			if (showDurability.value && !direction.is("Horizontal")) {
 				String label = durability(stack);
 				if (!label.isEmpty()) {
 					ctx.drawText(font, label, px + 18, py + textOffset, durabilityColour(stack), shadow.value);
