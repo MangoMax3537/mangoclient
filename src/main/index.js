@@ -174,7 +174,7 @@ function createWindow() {
     minWidth: 1040,
     minHeight: 680,
     show: false,
-    backgroundColor: '#131316',
+    backgroundColor: '#191614',
     frame: false,
     titleBarStyle: 'hidden',
     icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
@@ -691,7 +691,7 @@ function openSignInWindow() {
       show: false,
       autoHideMenuBar: true,
       title: 'Microsoft',
-      backgroundColor: '#131316',
+      backgroundColor: '#191614',
       webPreferences: {
         // An in-memory partition: no launcher cookies leak in, none linger after.
         partition: 'msa-login',

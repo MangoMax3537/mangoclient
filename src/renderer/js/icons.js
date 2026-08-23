@@ -75,12 +75,16 @@
    * The app mark: a mango, drawn in its own colours rather than currentColor.
    * Kept out of PATHS because it is filled artwork, not a line icon.
    */
+  /**
+   * The app mark.
+   *
+   * This used to be three ellipses drawn here, standing in for a logo we did
+   * not have. It is the real one now, and one file answers for all of it: the
+   * window icon, the taskbar and the corner of the statusbar are the same PNG,
+   * so the mark can never drift from the icon on the desktop.
+   */
   function logoMark(size = 22) {
-    return `<svg class="logo-mark" width="${size}" height="${size}" viewBox="0 0 81 82" aria-hidden="true">`
-      + '<ellipse cx="49" cy="14" rx="12.5" ry="7.5" fill="#28bf5e"/>'
-      + '<ellipse cx="41" cy="41.5" rx="27.5" ry="23" fill="#f39d14"/>'
-      + '<ellipse cx="34.5" cy="34" rx="11" ry="8.5" fill="#f9cf4d"/>'
-      + '</svg>';
+    return `<img class="logo-mark" src="assets/icon.png" width="${size}" height="${size}" alt="" aria-hidden="true" />`;
   }
 
   function icon(name, { size = 16, cls = '' } = {}) {

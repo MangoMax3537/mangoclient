@@ -6,6 +6,7 @@ import com.jagrosh.discordipc.entities.RichPresence;
 import com.jagrosh.discordipc.entities.pipe.PipeStatus;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ServerInfo;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.time.OffsetDateTime;
@@ -34,6 +35,10 @@ public final class RPCManager {
 
 	/** The top line never changes; only the state below it does. */
 	private static final String DETAILS = "Playing Minecraft";
+
+	/** The button under the presence. Everyone who sees the profile can click it. */
+	private static final String BUTTON_LABEL = "mangoclient.com";
+	private static final String BUTTON_URL = "https://mangoclient.com";
 
 	private static final String MENU = "In the menu";
 	private static final String SINGLEPLAYER = "Singleplayer";
@@ -114,14 +119,7 @@ public final class RPCManager {
 		IPCClient live = client;
 		if (live == null || live.getStatus() != PipeStatus.CONNECTED) return;
 
-		RichPresence presence = new RichPresence.Builder()
-			.setDetails(details)
-			.setState(state)
-			.setStartTimestamp(start)
-			.setLargeImage(LARGE_IMAGE, LARGE_IMAGE_TEXT)
-			.build();
-
-		live.sendRichPresence(presence);
+		live.sendRichPresence(new Linked(details, state));
 		sent = key(details, state);
 		lastSendMs = System.currentTimeMillis();
 	}
@@ -239,6 +237,31 @@ public final class RPCManager {
 
 	private static String key(String details, String state) {
 		return details + ' ' + state;
+	}
+
+	/**
+	 * The presence, plus the button the library cannot build.
+	 *
+	 * DiscordIPC predates Discord's `buttons` field and its builder has no way
+	 * to set one. Everything else about the payload it produces is right, so
+	 * rather than hand-rolling the whole activity JSON, this lets the library
+	 * build it and adds the one key it has never heard of. `secrets` goes: it
+	 * is an empty object here anyway, and Discord treats an activity with
+	 * join/spectate secrets as one that cannot carry buttons.
+	 */
+	private static final class Linked extends RichPresence {
+		Linked(String details, String state) {
+			super(state, details, start, null, LARGE_IMAGE, LARGE_IMAGE_TEXT, null, null,
+				null, 0, 0, null, null, null, false);
+		}
+
+		@Override
+		public JSONObject toJson() {
+			JSONObject json = super.toJson();
+			json.remove("secrets");
+			return json.put("buttons", new JSONArray()
+				.put(new JSONObject().put("label", BUTTON_LABEL).put("url", BUTTON_URL)));
+		}
 	}
 
 	private static void sleep(long ms) {

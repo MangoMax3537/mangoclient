@@ -17,7 +17,7 @@ public class CoordinatesModule extends HudModule {
 	private final Option.Choice layout = new Option.Choice("layout", "Layout", 0, "Stacked", "One line");
 
 	public CoordinatesModule() {
-		super("coords", "Coordinates", "Position and facing.", true, 0.01f, 0.06f);
+		super("coords", "Coordinates", "Position and facing.", false, 0.01f, 0.06f);
 		options.add(decimals);
 		options.add(facing);
 		options.add(layout);
