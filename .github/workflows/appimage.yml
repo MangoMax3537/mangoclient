@@ -1,0 +1,56 @@
+# The AppImage, built where it can be.
+#
+# Every other target comes off the Windows machine, but the AppImage cannot:
+# its root icon is a symlink into usr/share/icons, and Windows refuses to
+# create one without Developer Mode - and even with it, the mksquashfs that
+# electron-builder ships is a Linux binary. So this builds that one target on
+# a runner and uploads it into the release that already exists, next to the
+# installer and the tarball.
+name: AppImage
+
+on:
+  # Normal path: a release is published from the Windows machine with the
+  # Windows and tarball artifacts, and this fills in the missing one.
+  release:
+    types: [published]
+  # For filling in a release after the fact, or re-running a failed build.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to build, e.g. v1.2.8"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The lockfile still carries the version this project started at, so
+      # `npm ci` can refuse it; the fallback keeps that from being a chore.
+      - run: npm ci || npm install --no-audit --no-fund
+
+      # Uploads into the existing release rather than opening a draft, and
+      # writes latest-linux.yml so the AppImage can update itself.
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux AppImage --publish always -c.publish.releaseType=release
+
+      # Kept whatever happens to the upload, so a failed publish still leaves
+      # something to download.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appimage
+          path: dist/*.AppImage
+          if-no-files-found: warn
