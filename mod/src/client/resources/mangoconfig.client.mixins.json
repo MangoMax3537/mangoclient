@@ -11,6 +11,7 @@
 		"HeldItemRendererMixin",
 		"HudOverlayMixin",
 		"InteractionMixin",
+		"MinecraftClientMixin",
 		"ParticleManagerMixin",
 		"PlayerListHudMixin"
 	],

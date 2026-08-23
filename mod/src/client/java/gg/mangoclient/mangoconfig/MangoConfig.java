@@ -58,6 +58,13 @@ public class MangoConfig implements ClientModInitializer {
 		config = new ConfigFile();
 		config.load(MODULES);
 
+		// Wrapped, because the presence rides on a third-party library nested in
+		// this jar: if it is ever missing, the HUD still has to come up.
+		try {
+			RPCManager.start();
+		} catch (Throwable ignored) {
+		}
+
 		Presence.init();
 	}
 

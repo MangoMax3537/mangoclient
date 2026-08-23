@@ -26,7 +26,7 @@ const NAME = 'MangoConfig';
 const ASSETS = path.join(__dirname, 'assets');
 /** Any build of ours, so an older one can be recognised and cleared out. */
 const OWN_JAR_RE = /^MangoConfig-.*\.jar(\.disabled)?$/i;
-/** The per-version builds: MangoConfig-1.7.0+mc1.21.4.jar and friends. */
+/** The per-version builds: MangoConfig-1.8.0+mc1.21.4.jar and friends. */
 const VERSIONED_RE = /^MangoConfig-.+\+mc(.+)\.jar$/i;
 
 /** Game version -> absolute path of the matching bundled jar. */

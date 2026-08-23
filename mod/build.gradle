@@ -79,6 +79,21 @@ sourceSets {
 	}
 }
 
+repositories {
+	// The only home DiscordIPC has; see the dependency below.
+	maven {
+		name = 'JitPack'
+		url = 'https://jitpack.io'
+	}
+}
+
+// Discord Rich Presence. jagrosh never cut a tag or a release, so there is no
+// `v0.4` to depend on and nothing on Maven Central either - JitPack can only
+// build a commit, and this is master's head, pinned so the build stays the
+// same tomorrow.
+def discordIpc = 'com.github.jagrosh:DiscordIPC:a8d6631cc90b25f1ede2178b99ad19d016f002a0'
+def junixsocket = '2.6.2'
+
 dependencies {
 	minecraft "com.mojang:minecraft:${mcVer}"
 	mappings "net.fabricmc:yarn:${yarnVer}:v2"
@@ -86,7 +101,24 @@ dependencies {
 	// No Fabric API on purpose: the launcher drops this jar into every instance
 	// it starts, so the one thing it must not do is fail to load because a
 	// profile happens not to carry the API. One mixin covers what it needs.
+
+	// slf4j is excluded on purpose: Minecraft already carries it, and a second
+	// copy on the classpath is how a logging framework stops logging.
+	implementation(discordIpc) {
+		exclude group: 'org.slf4j'
+	}
+
+	// Nested into the jar, because that jar is dropped into instances we do not
+	// control: whatever DiscordIPC needs has to travel with it, or the first
+	// thing the player sees is a NoClassDefFoundError. Each one is listed by
+	// hand - `include` does not follow transitives - and non-transitively, so
+	// slf4j cannot come back in through junixsocket.
+	include(discordIpc) { transitive = false }
+	include('org.json:json:20230227') { transitive = false }
+	include("com.kohlschutter.junixsocket:junixsocket-common:${junixsocket}") { transitive = false }
+	include("com.kohlschutter.junixsocket:junixsocket-native-common:${junixsocket}") { transitive = false }
 }
+
 
 processResources {
 	inputs.property 'version', project.mod_version
