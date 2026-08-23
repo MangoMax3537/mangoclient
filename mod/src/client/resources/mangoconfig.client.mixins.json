@@ -4,12 +4,14 @@
 	"package": "gg.mangoclient.mangoconfig.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"EntityRendererMixin",
 		"GameRendererMixin",
 		"GuiMixin",
 		"HeldItemRendererMixin",
 		"HudOverlayMixin",
 		"InteractionMixin",
-		"ParticleManagerMixin"
+		"ParticleManagerMixin",
+		"PlayerListHudMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -1,0 +1,11 @@
+{
+	"providers": [
+		{
+			"type": "bitmap",
+			"file": "mangoconfig:font/mango_icon.png",
+			"ascent": 7,
+			"height": 8,
+			"chars": [""]
+		}
+	]
+}

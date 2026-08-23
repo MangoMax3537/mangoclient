@@ -61,6 +61,7 @@ public final class Icons {
 		put("Crosshair", Icon.sprite("hud/crosshair", 15, 15));
 		put("No Hurt Cam", Icon.item(Items.CACTUS));
 		put("Fullbright", Icon.item(Items.GLOWSTONE));
+		put("Mango Badge", Icon.item(Items.PLAYER_HEAD));
 
 		put("Lower Shield", Icon.item(Items.SHIELD));
 		put("No Explosions", Icon.item(Items.END_CRYSTAL));

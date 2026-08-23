@@ -38,6 +38,9 @@ public final class Mods {
 
 	public static final Option.Bool noHurtCam = new Option.Bool("noHurtCam", "No hurt camera", false);
 
+	/** The grey mango next to MangoClient players, in tab and over the head. */
+	public static final Option.Bool mangoBadge = new Option.Bool("mangoBadge", "Mango badge", true);
+
 	public static final Option.Bool crosshair = new Option.Bool("crosshair", "Custom crosshair", false);
 	public static final Option.Choice crosshairStyle =
 		new Option.Choice("crosshairStyle", "Crosshair style", 0, "Cross", "Dot", "Cross + dot");
@@ -66,6 +69,7 @@ public final class Mods {
 
 	static {
 		zoom.hint = "Hold the key to zoom in.";
+		mangoBadge.hint = "Off hides the mangos for you; others still see yours.";
 		noHurtCam.hint = "Keeps the view still when something hits you.";
 		crosshair.hint = "Replaces vanilla's, and its attack indicator with it.";
 		crosshairWidth.hint = "The left and right arms; 0 drops them.";
@@ -90,6 +94,7 @@ public final class Mods {
 		list.add(zoomKey);
 		list.add(zoomLevel);
 		list.add(noHurtCam);
+		list.add(mangoBadge);
 		list.add(crosshair);
 		list.add(crosshairStyle);
 		list.add(crosshairWidth);

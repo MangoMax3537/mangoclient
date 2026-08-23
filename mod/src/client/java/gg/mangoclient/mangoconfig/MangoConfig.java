@@ -56,6 +56,8 @@ public class MangoConfig implements ClientModInitializer {
 
 		config = new ConfigFile();
 		config.load(MODULES);
+
+		Presence.init();
 	}
 
 	public static List<HudModule> modules() {
@@ -80,6 +82,8 @@ public class MangoConfig implements ClientModInitializer {
 				Mods.crosshairHideThirdPerson));
 			mods.add(ModEntry.of("Fullbright", "Pins brightness to its maximum.",
 				GameSettings.fullbright()));
+			mods.add(ModEntry.of("Mango Badge", "A grey mango next to everyone on MangoClient.",
+				Mods.mangoBadge));
 			CATEGORIES.add(new Category("mods", "Mods", "The HUD and everything else the client adds.")
 				.withEntries(mods));
 			CATEGORIES.add(new Category("pvp", "PvP", "Client-side tweaks for the fight.")

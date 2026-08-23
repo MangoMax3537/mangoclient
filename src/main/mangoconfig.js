@@ -19,7 +19,7 @@ const P = require('./paths');
 
 const NAME = 'MangoConfig';
 /** Bundled with the app; `src/**` is what electron-builder packs. */
-const JAR = path.join(__dirname, 'assets', 'MangoConfig-1.5.1.jar');
+const JAR = path.join(__dirname, 'assets', 'MangoConfig-1.6.1.jar');
 const JAR_NAME = path.basename(JAR);
 /** Any build of ours, so an older one can be recognised and cleared out. */
 const OWN_JAR_RE = /^MangoConfig-.*\.jar(\.disabled)?$/i;
