@@ -122,9 +122,28 @@ function nativeVariantKey(name, info) {
 
 // ---- version json ----------------------------------------------------------
 
+/**
+ * Everything but the version: `group:artifact[:classifier]`. Two entries with
+ * the same key are the same library at different versions - exactly the
+ * duplicate the JVM must not see twice (Fabric refuses to boot on two ASMs).
+ */
+function libraryKey(name) {
+  const parts = String(name || '').split(':');
+  return [parts[0], parts[1], ...parts.slice(3)].join(':');
+}
+
 function mergeVersionJson(child, parent) {
   const merged = { ...parent, ...child };
-  merged.libraries = [...(child.libraries || []), ...(parent.libraries || [])];
+  // The loader's libraries win: vanilla 1.21.8 ships ASM 9.6 while Fabric
+  // brings 9.10.1, and both on the classpath is a refused launch. Parent
+  // entries whose artifact the child already carries are dropped; the
+  // parent's own list is left alone (its internal repeats carry OS rules).
+  const childLibs = child.libraries || [];
+  const childKeys = new Set(childLibs.map((lib) => libraryKey(lib.name)));
+  merged.libraries = [
+    ...childLibs,
+    ...(parent.libraries || []).filter((lib) => !childKeys.has(libraryKey(lib.name))),
+  ];
 
   if (parent.arguments || child.arguments) {
     merged.arguments = {
