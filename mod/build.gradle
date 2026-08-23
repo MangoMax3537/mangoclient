@@ -2,7 +2,56 @@ plugins {
 	id 'fabric-loom' version "${loom_version}"
 }
 
-version = project.mod_version
+// One source tree, many Minecrafts: `-PmcVer=1.21.5` compiles against that
+// version's mappings and picks the matching compat layer below. Without the
+// property the build is the plain, newest-version build it always was.
+def mcVer = project.hasProperty('mcVer') ? project.mcVer : project.minecraft_version
+
+// Latest yarn build per supported Minecraft version (meta.fabricmc.net).
+def yarnBuilds = [
+	'1.20.5' : '1.20.5+build.1',
+	'1.20.6' : '1.20.6+build.3',
+	'1.21'   : '1.21+build.9',
+	'1.21.1' : '1.21.1+build.3',
+	'1.21.2' : '1.21.2+build.1',
+	'1.21.3' : '1.21.3+build.2',
+	'1.21.4' : '1.21.4+build.8',
+	'1.21.5' : '1.21.5+build.1',
+	'1.21.6' : '1.21.6+build.1',
+	'1.21.7' : '1.21.7+build.8',
+	'1.21.8' : '1.21.8+build.1',
+	'1.21.9' : '1.21.9+build.1',
+	'1.21.10': '1.21.10+build.3',
+	'1.21.11': '1.21.11+build.6',
+]
+def yarnVer = yarnBuilds[mcVer]
+if (yarnVer == null) throw new GradleException("No yarn mapping known for Minecraft ${mcVer}")
+
+// The API families the code has to bridge:
+//   v12111 - 1.21.11+  : like v1219, plus the vignette toggle in GameOptions
+//   v1219  - 1.21.9-10 : StyleSpriteSource fonts, authlib 7 (GameProfile.id())
+//   v1216  - 1.21.6-8  : withFont(Identifier), authlib 6 (getId()), 2D matrix stack
+//   v1215  - 1.21.5    : 3D MatrixStack in DrawContext, but already getMainStacks()
+//   v1212  - 1.21.2-4  : like v1215, with the inventory still a bare `main` field
+def family
+def (maj, min, pat) = (mcVer.split('\\.') + ['0']).take(3).collect { it as int }
+if (min > 21 || (min == 21 && pat >= 11)) family = 'v12111'
+else if (min == 21 && pat >= 9) family = 'v1219'
+else if (min == 21 && pat >= 6) family = 'v1216'
+else if (min == 21 && pat == 5) family = 'v1215'
+else if (min == 21 && pat >= 2) family = 'v1212'
+else if (min == 21) family = 'v121'
+else family = 'v1206'
+
+// Nametags render through EntityRenderState from 1.21.2; before that the
+// label text is still an argument to renderLabelIfPresent.
+def nametag = (family == 'v121' || family == 'v1206') ? 'label' : 'state'
+
+// The HUD hooks drift twice: 1.21.2 turned getFov into a float and added the
+// nausea overlay; before 1.21 the HUD render methods took a float tick delta.
+def hud = family == 'v1206' ? 'c' : (family == 'v121' ? 'b' : 'a')
+
+version = "${project.mod_version}+mc${mcVer}"
 group = project.maven_group
 
 base {
@@ -20,9 +69,19 @@ loom {
 	}
 }
 
+sourceSets {
+	client {
+		java {
+			srcDir "src/compat/${family}/java"
+			srcDir "src/nametag/${nametag}/java"
+			srcDir "src/hud/${hud}/java"
+		}
+	}
+}
+
 dependencies {
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	minecraft "com.mojang:minecraft:${mcVer}"
+	mappings "net.fabricmc:yarn:${yarnVer}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	// No Fabric API on purpose: the launcher drops this jar into every instance
 	// it starts, so the one thing it must not do is fail to load because a
@@ -31,9 +90,10 @@ dependencies {
 
 processResources {
 	inputs.property 'version', project.mod_version
+	inputs.property 'minecraft', mcVer
 
 	filesMatching('fabric.mod.json') {
-		expand 'version': project.mod_version
+		expand 'version': project.mod_version, 'minecraft': mcVer
 	}
 }
 

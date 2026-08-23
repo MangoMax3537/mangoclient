@@ -438,10 +438,26 @@ function registerIpc() {
       // Two JVMs on one instance folder fight over the same world files.
       throw new Error('This profile is still running from before the launcher was restarted. Close the game first.');
     }
-    const profile = store.getProfile(profileId);
+    let profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
     const account = store.selectedAccount;
     if (!account) throw new Error('Add a Minecraft account first.');
+
+    // A vanilla profile cannot load mods, so any profile MangoConfig has a
+    // build for is quietly moved onto Fabric first - otherwise the game would
+    // start without it every time. Forge, NeoForge and Quilt profiles are
+    // left exactly as they are: switching those would break their own mods.
+    if ((!profile.loader || profile.loader === 'vanilla')
+      && mangoconfig.enabledFor(profile, store.config)
+      && mangoconfig.hasBuildFor(profile.mcVersion)) {
+      store.updateProfile(profileId, { loader: 'fabric', loaderVersion: '' });
+      profile = store.getProfile(profileId);
+      send('launch:log', {
+        profileId,
+        line: `${mangoconfig.NAME} needs a mod loader: this profile now uses Fabric`,
+        level: 'info',
+      });
+    }
 
     // MangoConfig rides along on every launch, so the in-game HUD is there
     // whether or not the player thought about it. It never throws: starting

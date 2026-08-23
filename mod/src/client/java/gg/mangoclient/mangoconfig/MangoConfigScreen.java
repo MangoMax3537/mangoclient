@@ -1,12 +1,10 @@
 package gg.mangoclient.mangoconfig;
 
+import gg.mangoclient.mangoconfig.compat.Compat;
+import gg.mangoclient.mangoconfig.compat.CompatScreen;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -29,7 +27,7 @@ import java.util.Map;
  * it needs, and the label is trimmed to whatever is left. That is what keeps a
  * long name from running out of the panel, whatever the window size.
  */
-public class MangoConfigScreen extends Screen {
+public class MangoConfigScreen extends CompatScreen {
 	private static final int RAIL_W = 96;
 	private static final int HEADER_H = 40;
 	private static final int FOOTER_H = 30;
@@ -263,12 +261,11 @@ public class MangoConfigScreen extends Screen {
 		float open = ease(Math.min(1f, (now - openedAt) / 200f));
 		ctx.fill(0, 0, this.width, this.height, Theme.withAlpha(Theme.SCRIM, Math.round(0xC0 * open)));
 
-		var matrices = ctx.getMatrices();
-		matrices.pushMatrix();
+		Compat.push(ctx);
 		float grow = 0.92f + 0.08f * open;
-		matrices.translate(this.width / 2f, this.height / 2f);
-		matrices.scale(grow, grow);
-		matrices.translate(-this.width / 2f, -this.height / 2f);
+		Compat.translate(ctx, this.width / 2f, this.height / 2f);
+		Compat.scale(ctx, grow, grow);
+		Compat.translate(ctx, -this.width / 2f, -this.height / 2f);
 
 		ctx.fill(left, top, left + panelW, top + panelH, Theme.SURFACE_1);
 		ctx.fill(left, top, left + RAIL_W, top + panelH, Theme.SURFACE_2);
@@ -280,8 +277,8 @@ public class MangoConfigScreen extends Screen {
 		float in = ease(Math.min(1f, (now - contentSince) / 160f));
 		String hover = null;
 		ctx.enableScissor(contentX(), viewTop(), left + panelW, viewBottom());
-		matrices.pushMatrix();
-		matrices.translate(Math.round((1f - in) * 14f), 0f);
+		Compat.push(ctx);
+		Compat.translate(ctx, Math.round((1f - in) * 14f), 0f);
 		if (gridShowing()) {
 			hover = drawGrid(ctx, mouseX, mouseY);
 		} else {
@@ -291,13 +288,13 @@ public class MangoConfigScreen extends Screen {
 				else drawOptionRow(ctx, row, mouseX, mouseY);
 			}
 		}
-		matrices.popMatrix();
+		Compat.pop(ctx);
 		ctx.disableScissor();
 
 		drawScrollbar(ctx);
 		drawFooter(ctx, mouseX, mouseY, hover);
 
-		matrices.popMatrix();
+		Compat.pop(ctx);
 		super.render(ctx, mouseX, mouseY, delta);
 	}
 
@@ -473,7 +470,7 @@ public class MangoConfigScreen extends Screen {
 		ctx.fill(px, py, px + plate, py + plate, on ? Theme.BRAND_QUIET : Theme.SURFACE_4);
 		Icons.Icon icon = entry.icon;
 		if (icon != null && icon.sprite() != null) {
-			ctx.drawGuiTexture(RenderPipelines.GUI_TEXTURED, icon.sprite(),
+			Compat.drawGuiTexture(ctx, icon.sprite(),
 				px + (plate - icon.width()) / 2, py + (plate - icon.height()) / 2, icon.width(), icon.height());
 		} else if (icon != null) {
 			ctx.drawItem(icon.stack(), px + 2, py + 2);
@@ -638,9 +635,7 @@ public class MangoConfigScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(Click click, boolean doubled) {
-		double mx = click.x();
-		double my = click.y();
+	protected boolean onMouseDown(double mx, double my) {
 
 		// A click anywhere gives up on a key that was being listened for; the
 		// row itself starts listening again below if that is what was clicked.
@@ -683,7 +678,7 @@ public class MangoConfigScreen extends Screen {
 		}
 
 		if (my < viewTop() || my > viewBottom() || mx < contentX()) {
-			return super.mouseClicked(click, doubled);
+			return false;
 		}
 
 		if (gridShowing()) {
@@ -700,7 +695,7 @@ public class MangoConfigScreen extends Screen {
 			}
 			return clickOption(row, mx);
 		}
-		return super.mouseClicked(click, doubled);
+		return false;
 	}
 
 	private boolean clickGrid(double mx, double my) {
@@ -795,24 +790,24 @@ public class MangoConfigScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseDragged(Click click, double dx, double dy) {
+	protected boolean onMouseDrag(double mx, double my, double dx, double dy) {
 		if (draggingRange != null) {
 			int right = contentX() + contentW() - PAD;
 			int trackX = right - VALUE_W - TRACK_W;
-			draggingRange.setFraction((click.x() - trackX) / (double) TRACK_W);
+			draggingRange.setFraction((mx - trackX) / (double) TRACK_W);
 			return true;
 		}
-		return super.mouseDragged(click, dx, dy);
+		return false;
 	}
 
 	@Override
-	public boolean mouseReleased(Click click) {
+	protected boolean onMouseUp(double mx, double my) {
 		if (draggingRange != null) {
 			draggingRange = null;
 			MangoConfig.save();
 			return true;
 		}
-		return super.mouseReleased(click);
+		return false;
 	}
 
 	@Override
@@ -825,20 +820,20 @@ public class MangoConfigScreen extends Screen {
 	}
 
 	@Override
-	public boolean charTyped(CharInput input) {
-		if (searchFocused && input.isValidChar() && query.length() < QUERY_MAX) {
-			query.append(input.asString());
+	protected boolean onCharTyped(char chr) {
+		if (searchFocused && query.length() < QUERY_MAX) {
+			query.append(chr);
 			detail = null;
 			scroll = 0;
 			return true;
 		}
-		return super.charTyped(input);
+		return false;
 	}
 
 	@Override
-	public boolean keyPressed(KeyInput input) {
+	protected boolean onKeyDown(int key) {
 		if (searchFocused) {
-			switch (input.key()) {
+			switch (key) {
 				case GLFW.GLFW_KEY_BACKSPACE -> {
 					if (query.length() > 0) query.setLength(query.length() - 1);
 					scroll = 0;
@@ -858,14 +853,14 @@ public class MangoConfigScreen extends Screen {
 		if (listeningKey != null) {
 			// Escape backs out of rebinding rather than closing the screen,
 			// which is the one press nobody means as a binding.
-			if (input.key() != GLFW.GLFW_KEY_ESCAPE) {
-				listeningKey.value = input.key();
+			if (key != GLFW.GLFW_KEY_ESCAPE) {
+				listeningKey.value = key;
 				MangoConfig.save();
 			}
 			stopListening();
 			return true;
 		}
-		if (input.key() == GLFW.GLFW_KEY_ESCAPE) {
+		if (key == GLFW.GLFW_KEY_ESCAPE) {
 			// Escape peels back one layer at a time: settings, then the screen.
 			if (detail != null) {
 				closeDetail();
@@ -874,7 +869,7 @@ public class MangoConfigScreen extends Screen {
 			this.close();
 			return true;
 		}
-		return super.keyPressed(input);
+		return false;
 	}
 
 	@Override

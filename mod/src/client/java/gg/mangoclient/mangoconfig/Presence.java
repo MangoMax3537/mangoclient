@@ -3,11 +3,11 @@ package gg.mangoclient.mangoconfig;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;
-import net.minecraft.text.StyleSpriteSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
@@ -44,8 +44,8 @@ public final class Presence {
 	 * texture already carries its grey; italic off so /nick styles and team
 	 * formatting cannot lean the mango over.
 	 */
-	private static final Style BADGE_STYLE = Style.EMPTY
-		.withFont(new StyleSpriteSource.Font(Identifier.of("mangoconfig", "mango")))
+	private static final Style BADGE_STYLE = Compat
+		.withFont(Style.EMPTY, Identifier.of("mangoconfig", "mango"))
 		.withColor(Formatting.WHITE)
 		.withItalic(false)
 		.withBold(false);
@@ -118,7 +118,7 @@ public final class Presence {
 			List<UUID> list = new ArrayList<>();
 			if (mc.getNetworkHandler() != null) {
 				for (PlayerListEntry entry : mc.getNetworkHandler().getPlayerList()) {
-					list.add(entry.getProfile().id());
+					list.add(Compat.profileId(entry.getProfile()));
 				}
 			}
 			return list;

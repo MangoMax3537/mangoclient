@@ -1,5 +1,6 @@
 package gg.mangoclient.mangoconfig;
 
+import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.GameOptions;
 
@@ -66,8 +67,12 @@ public final class GameSettings {
 		rows.add(new Option.Bool("entityShadows", "Entity shadows", true)
 			.bind(() -> o.getEntityShadows().getValue(), v -> o.getEntityShadows().setValue(v)));
 
-		rows.add(new Option.Bool("vignette", "Vignette", true)
-			.bind(() -> o.getVignette().getValue(), v -> o.getVignette().setValue(v)));
+		// The vignette toggle only exists from 1.21.11 on; older versions skip the row.
+		var vignette = Compat.vignette(o);
+		if (vignette != null) {
+			rows.add(new Option.Bool("vignette", "Vignette", true)
+				.bind(() -> vignette.getValue(), v -> vignette.setValue(v)));
+		}
 
 		rows.add(new Option.Range("distortion", "Distortion effects", 100, 0, 100, "%")
 			.bind(() -> percent(o.getDistortionEffectScale().getValue()),

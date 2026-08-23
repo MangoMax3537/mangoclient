@@ -1,5 +1,6 @@
 package gg.mangoclient.mangoconfig;
 
+import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -26,7 +27,7 @@ public final class Icons {
 		}
 
 		static Icon sprite(String id, int width, int height) {
-			return new Icon(null, Identifier.ofVanilla(id), width, height);
+			return new Icon(null, Compat.vanillaId(id), width, height);
 		}
 	}
 

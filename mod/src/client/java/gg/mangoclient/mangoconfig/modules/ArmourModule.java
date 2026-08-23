@@ -2,6 +2,7 @@ package gg.mangoclient.mangoconfig.modules;
 
 import gg.mangoclient.mangoconfig.HudModule;
 import gg.mangoclient.mangoconfig.Option;
+import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -102,7 +103,7 @@ public class ArmourModule extends HudModule {
 
 			if (!stack.isEmpty()) {
 				ctx.drawItem(stack, px, py);
-				ctx.drawStackOverlay(font, stack, px, py);
+				Compat.drawStackOverlay(ctx, font, stack, px, py);
 			}
 			if (showDurability.value && !direction.is("Horizontal")) {
 				String label = durability(stack);

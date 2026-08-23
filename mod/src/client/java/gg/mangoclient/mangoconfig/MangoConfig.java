@@ -1,6 +1,7 @@
 package gg.mangoclient.mangoconfig;
 
 import com.google.gson.JsonObject;
+import gg.mangoclient.mangoconfig.compat.Compat;
 import gg.mangoclient.mangoconfig.modules.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
@@ -177,17 +178,17 @@ public class MangoConfig implements ClientModInitializer {
 		int[] b = bounds(mc, module);
 		int inset = Math.round(module.padding() * s);
 
-		ctx.getMatrices().pushMatrix();
-		ctx.getMatrices().translate((float) (b[0] + inset), (float) (b[1] + inset));
-		ctx.getMatrices().scale(s, s);
+		Compat.push(ctx);
+		Compat.translate(ctx, (float) (b[0] + inset), (float) (b[1] + inset));
+		Compat.scale(ctx, s, s);
 		module.renderBackground(ctx, w, h);
 		module.render(ctx, mc, font, preview);
-		ctx.getMatrices().popMatrix();
+		Compat.pop(ctx);
 	}
 
 	private static void pollOpenKey(MinecraftClient mc) {
 		if (config == null) return;
-		boolean down = InputUtil.isKeyPressed(mc.getWindow(), Mods.openKey.value);
+		boolean down = Compat.isKeyPressed(mc.getWindow(), Mods.openKey.value);
 		if (down && !openKeyWasDown && mc.currentScreen == null) {
 			mc.setScreen(new MangoConfigScreen());
 		}
@@ -201,7 +202,7 @@ public class MangoConfig implements ClientModInitializer {
 	private static void pollZoomKey(MinecraftClient mc) {
 		Mods.zoomActive = Mods.zoom.value
 			&& mc.currentScreen == null
-			&& InputUtil.isKeyPressed(mc.getWindow(), Mods.zoomKey.value);
+			&& Compat.isKeyPressed(mc.getWindow(), Mods.zoomKey.value);
 	}
 
 	/** Bounds of a module on screen, used by the editor for hit testing. */

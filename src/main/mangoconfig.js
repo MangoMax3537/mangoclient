@@ -12,6 +12,10 @@ const P = require('./paths');
  * On every launch the jar is either put into the instance's mods folder or
  * taken back out of it, depending on whether the profile wants it.
  *
+ * One jar per Minecraft version: the mod is compiled once per game version it
+ * supports (`MangoConfig-<mod>+mc<game>.jar`), and the launch picks the build
+ * that matches the profile. A version with no build simply starts without.
+ *
  * It is deliberately absent from the launcher's mod list: the player did not
  * install it, cannot update it separately, and should not have to scroll past
  * it. The switch in the statusbar is the whole interface it needs.
@@ -19,17 +23,27 @@ const P = require('./paths');
 
 const NAME = 'MangoConfig';
 /** Bundled with the app; `src/**` is what electron-builder packs. */
-const JAR = path.join(__dirname, 'assets', 'MangoConfig-1.6.1.jar');
-const JAR_NAME = path.basename(JAR);
+const ASSETS = path.join(__dirname, 'assets');
 /** Any build of ours, so an older one can be recognised and cleared out. */
 const OWN_JAR_RE = /^MangoConfig-.*\.jar(\.disabled)?$/i;
+/** The per-version builds: MangoConfig-1.7.0+mc1.21.4.jar and friends. */
+const VERSIONED_RE = /^MangoConfig-.+\+mc(.+)\.jar$/i;
 
-/**
- * The mod is compiled against one Minecraft version and needs a Fabric-style
- * loader. Quilt loads Fabric mods natively; the rest get nothing rather than a
- * jar that would stop the game from starting.
- */
-const GAME_VERSIONS = ['1.21.11'];
+/** Game version -> absolute path of the matching bundled jar. */
+const JARS = (() => {
+	const map = {};
+	try {
+		for (const name of fs.readdirSync(ASSETS)) {
+			const m = VERSIONED_RE.exec(name);
+			if (m) map[m[1]] = path.join(ASSETS, name);
+		}
+	} catch { /* a build without assets ships no mod */ }
+	return map;
+})();
+
+/** The mod needs a Fabric-style loader; Quilt loads Fabric mods natively. */
+const GAME_VERSIONS = Object.keys(JARS).sort((a, b) =>
+	a.localeCompare(b, undefined, { numeric: true }));
 const LOADERS = ['fabric', 'quilt'];
 
 function enabledFor(profile, config) {
@@ -38,17 +52,22 @@ function enabledFor(profile, config) {
 }
 
 function supports(profile) {
-	return LOADERS.includes(profile.loader) && GAME_VERSIONS.includes(profile.mcVersion);
+	return LOADERS.includes(profile.loader) && JARS[profile.mcVersion] != null;
 }
 
-function jarIn(profileId) {
-	return path.join(P.instanceDir(profileId), 'mods', JAR_NAME);
+/** Whether a build exists for the version at all, whatever the loader. */
+function hasBuildFor(mcVersion) {
+	return JARS[mcVersion] != null;
+}
+
+function jarIn(profileId, jarName) {
+	return path.join(P.instanceDir(profileId), 'mods', jarName);
 }
 
 /** Same jar already there? Compare size; the file is ours and never edited. */
-async function upToDate(target) {
+async function upToDate(target, source) {
 	try {
-		const [a, b] = await Promise.all([fsp.stat(target), fsp.stat(JAR)]);
+		const [a, b] = await Promise.all([fsp.stat(target), fsp.stat(source)]);
 		return a.size === b.size;
 	} catch {
 		return false;
@@ -62,7 +81,6 @@ async function upToDate(target) {
  * without one, so every failure is reported and stepped over.
  */
 async function ensure({ profile, config, onLog = () => {} }) {
-	const target = jarIn(profile.id);
 	const wanted = enabledFor(profile, config);
 
 	if (!wanted) {
@@ -78,15 +96,19 @@ async function ensure({ profile, config, onLog = () => {} }) {
 		return { state: 'unsupported', reason: `${profile.loader} ${profile.mcVersion}` };
 	}
 
+	const source = JARS[profile.mcVersion];
+	const jarName = path.basename(source);
+	const target = jarIn(profile.id, jarName);
+
 	try {
-		if (await upToDate(target)) {
-			await removeOurJars(profile.id, { except: JAR_NAME });
+		if (await upToDate(target, source)) {
+			await removeOurJars(profile.id, { except: jarName });
 			return { state: 'current' };
 		}
 		await fsp.mkdir(path.dirname(target), { recursive: true });
 		// An older build has to go first: two jars, one mod id, no launch.
-		await removeOurJars(profile.id, { except: JAR_NAME });
-		await fsp.copyFile(JAR, target);
+		await removeOurJars(profile.id, { except: jarName });
+		await fsp.copyFile(source, target);
 		onLog(`${NAME} added to this profile`);
 		return { state: 'installed' };
 	} catch (err) {
@@ -125,7 +147,12 @@ async function removeOurJars(profileId, { except = null } = {}) {
 }
 
 function present(profileId) {
-	return fs.existsSync(jarIn(profileId));
+	const dir = path.join(P.instanceDir(profileId), 'mods');
+	try {
+		return fs.readdirSync(dir).some((name) => VERSIONED_RE.test(name));
+	} catch {
+		return false;
+	}
 }
 
 module.exports = {
@@ -133,10 +160,10 @@ module.exports = {
 	removeOurJars,
 	enabledFor,
 	supports,
+	hasBuildFor,
 	isOwnJar,
 	present,
 	NAME,
-	JAR_NAME,
 	GAME_VERSIONS,
 	LOADERS,
 };

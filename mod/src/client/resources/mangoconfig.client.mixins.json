@@ -4,6 +4,7 @@
 	"package": "gg.mangoclient.mangoconfig.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"BossBarHudMixin",
 		"EntityRendererMixin",
 		"GameRendererMixin",
 		"GuiMixin",

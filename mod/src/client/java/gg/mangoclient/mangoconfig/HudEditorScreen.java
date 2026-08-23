@@ -1,10 +1,9 @@
 package gg.mangoclient.mangoconfig;
 
+import gg.mangoclient.mangoconfig.compat.CompatScreen;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -19,7 +18,7 @@ import java.util.List;
  * module offers a small settings button straight into its options, and the
  * scroll wheel resizes it on the spot.
  */
-public class HudEditorScreen extends Screen {
+public class HudEditorScreen extends CompatScreen {
 	/** How close to an edge, in pixels, before it sticks. */
 	private static final int SNAP = 6;
 	/** The settings button hovering over a module's corner. */
@@ -111,38 +110,38 @@ public class HudEditorScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(Click click, boolean doubled) {
+	protected boolean onMouseDown(double mx, double my) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 
 		// The gear outranks a drag: it may hang over a neighbouring module.
-		HudModule hover = hovered(mc, click.x(), click.y());
-		if (hover != null && inside(click.x(), click.y(), gearRect(MangoConfig.bounds(mc, hover)))) {
+		HudModule hover = hovered(mc, mx, my);
+		if (hover != null && inside(mx, my, gearRect(MangoConfig.bounds(mc, hover)))) {
 			MangoConfig.save();
 			mc.setScreen(new MangoConfigScreen(hover));
 			return true;
 		}
 
-		if (hover != null && inside(click.x(), click.y(), MangoConfig.bounds(mc, hover))) {
+		if (hover != null && inside(mx, my, MangoConfig.bounds(mc, hover))) {
 			int[] b = MangoConfig.bounds(mc, hover);
 			dragging = hover;
-			grabX = (int) click.x() - b[0];
-			grabY = (int) click.y() - b[1];
+			grabX = (int) mx - b[0];
+			grabY = (int) my - b[1];
 			return true;
 		}
-		return super.mouseClicked(click, doubled);
+		return false;
 	}
 
 	@Override
-	public boolean mouseDragged(Click click, double dx, double dy) {
-		if (dragging == null) return super.mouseDragged(click, dx, dy);
+	protected boolean onMouseDrag(double mx, double my, double dx, double dy) {
+		if (dragging == null) return false;
 
 		MinecraftClient mc = MinecraftClient.getInstance();
 		int[] b = MangoConfig.bounds(mc, dragging);
 		int screenW = mc.getWindow().getScaledWidth();
 		int screenH = mc.getWindow().getScaledHeight();
 
-		int px = (int) click.x() - grabX;
-		int py = (int) click.y() - grabY;
+		int px = (int) mx - grabX;
+		int py = (int) my - grabY;
 
 		px = snap(px, b[2], screenW);
 		py = snap(py, b[3], screenH);
@@ -176,22 +175,22 @@ public class HudEditorScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseReleased(Click click) {
+	protected boolean onMouseUp(double mx, double my) {
 		if (dragging != null) {
 			dragging = null;
 			MangoConfig.save();
 			return true;
 		}
-		return super.mouseReleased(click);
+		return false;
 	}
 
 	@Override
-	public boolean keyPressed(KeyInput input) {
-		if (input.key() == GLFW.GLFW_KEY_ESCAPE) {
+	protected boolean onKeyDown(int key) {
+		if (key == GLFW.GLFW_KEY_ESCAPE) {
 			this.close();
 			return true;
 		}
-		return super.keyPressed(input);
+		return false;
 	}
 
 	@Override

@@ -1,7 +1,7 @@
 package gg.mangoclient.mangoconfig;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
+import gg.mangoclient.mangoconfig.compat.Compat;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayDeque;
@@ -57,6 +57,6 @@ public final class ClickCounter {
 
 	/** Whether a key is held, for the keystrokes module. */
 	public static boolean isDown(MinecraftClient mc, int key) {
-		return InputUtil.isKeyPressed(mc.getWindow(), key);
+		return Compat.isKeyPressed(mc.getWindow(), key);
 	}
 }

@@ -2,6 +2,7 @@ package gg.mangoclient.mangoconfig.modules;
 
 import gg.mangoclient.mangoconfig.Option;
 import gg.mangoclient.mangoconfig.TextModule;
+import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.ArrowItem;
@@ -30,7 +31,7 @@ public class ItemsModule extends TextModule {
 
 	private int arrowCount(ClientPlayerEntity player) {
 		int total = 0;
-		for (ItemStack stack : player.getInventory().getMainStacks()) {
+		for (ItemStack stack : Compat.mainStacks(player.getInventory())) {
 			if (stack.getItem() instanceof ArrowItem) total += stack.getCount();
 		}
 		ItemStack off = player.getOffHandStack();

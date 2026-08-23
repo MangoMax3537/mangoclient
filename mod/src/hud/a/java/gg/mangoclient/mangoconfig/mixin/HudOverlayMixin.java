@@ -44,11 +44,6 @@ public class HudOverlayMixin {
 		if (Mods.hideScoreboard.value) ci.cancel();
 	}
 
-	@Inject(method = "renderBossBarHud", at = @At("HEAD"), cancellable = true)
-	private void mangoconfig$bossBar(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-		if (Mods.hideBossBar.value) ci.cancel();
-	}
-
 	@Inject(method = "renderStatusEffectOverlay", at = @At("HEAD"), cancellable = true)
 	private void mangoconfig$effectIcons(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
 		if (Mods.hideEffectIcons.value) ci.cancel();

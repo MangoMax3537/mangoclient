@@ -414,9 +414,13 @@
     $('#mc-state').textContent = info.enabled
       ? (info.supported ? t('mangoconfig.on') : t('mangoconfig.na'))
       : t('mangoconfig.off');
+    // Fourteen versions would burst the tooltip, so a span reads better.
+    const versions = info.gameVersions.length > 3
+      ? `${info.gameVersions[0]} – ${info.gameVersions[info.gameVersions.length - 1]}`
+      : info.gameVersions.join(', ');
     pill.dataset.tipText = info.supported
       ? t('mangoconfig.tip')
-      : t('mangoconfig.unsupported', { versions: info.gameVersions.join(', ') });
+      : t('mangoconfig.unsupported', { versions });
   }
 
   $('#mc-pill').onclick = async () => {
