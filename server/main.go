@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 /*
@@ -27,7 +29,8 @@ itself. It answers three different audiences from one process -
   - the website, showing both of those to anyone who visits.
 
 Ports: 8880 is the API the shipped mods already point at and must never move;
-80 is the same handler again, so the site is just http://<host>/.
+80 and 443 are the same handler again, so the site is just the host name - with
+a Let's Encrypt certificate of its own once MANGO_DOMAIN names one.
 */
 
 //go:embed web
@@ -79,9 +82,58 @@ func main() {
 	mux.HandleFunc("/", handleSite)
 
 	// 8880 is the port the mods in the wild already know; losing it would blind
-	// every copy of MangoConfig ever shipped.
+	// every copy of MangoConfig ever shipped. It stays plain HTTP for exactly
+	// that reason: the shipped mods ask for http://<ip>:8880 and always will.
 	go listen(":8880", mux)
-	listen(":80", mux)
+
+	domain := os.Getenv("MANGO_DOMAIN")
+	if domain == "" {
+		// No name yet: the site is the bare IP on port 80.
+		listen(":80", mux)
+		return
+	}
+
+	// With a name, Let's Encrypt issues and renews the certificate on its own,
+	// cached in the state directory so a restart does not ask for a new one.
+	manager := &autocert.Manager{
+		Cache:      autocert.DirCache(filepath.Join(dir, "acme")),
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(domain, "www."+domain),
+	}
+	go listenTLS(":443", mux, manager)
+	// Port 80 answers the ACME challenge first, then sends anyone who came by
+	// the name up to the encrypted site. Anyone who came by the bare IP is
+	// served in place: there can be no certificate for an address, and the
+	// site answered on that address long before it had a name.
+	listen(":80", manager.HTTPHandler(upgradeByName(domain, mux)))
+}
+
+func upgradeByName(domain string, plain http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if i := strings.IndexByte(host, ':'); i >= 0 {
+			host = host[:i]
+		}
+		if !strings.EqualFold(host, domain) && !strings.EqualFold(host, "www."+domain) {
+			plain.ServeHTTP(w, r)
+			return
+		}
+		http.Redirect(w, r, "https://"+host+r.URL.RequestURI(), http.StatusMovedPermanently)
+	})
+}
+
+func listenTLS(addr string, handler http.Handler, manager *autocert.Manager) {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		TLSConfig:         manager.TLSConfig(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       20 * time.Second,
+		WriteTimeout:      20 * time.Second,
+		IdleTimeout:       90 * time.Second,
+	}
+	log.Printf("listening on %s (tls)", addr)
+	log.Printf("%s: %v", addr, server.ListenAndServeTLS("", ""))
 }
 
 func listen(addr string, handler http.Handler) {
