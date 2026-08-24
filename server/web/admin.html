@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MangoClient staff</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="mark" href="/"><img src="icon.png" alt=""><span>MangoClient</span></a>
+  <nav><a href="/">Back to the site</a></nav>
+</header>
+
+<main>
+  <section class="gate" id="gate" hidden>
+    <h1>Staff sign in</h1>
+    <p>The password lives on the server. Nobody else needs an account.</p>
+    <form id="login" autocomplete="off">
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+      <div class="row"><button type="submit">Sign in</button></div>
+      <p class="note" id="login-note"></p>
+    </form>
+  </section>
+
+  <section id="panel" hidden>
+    <div class="admin-head">
+      <h1>Ranks</h1>
+      <button class="linkish" id="logout" type="button">Sign out</button>
+    </div>
+    <div id="ranks"></div>
+    <p class="note" id="note"></p>
+  </section>
+</main>
+
+<script src="admin.js"></script>
+</body>
+</html>

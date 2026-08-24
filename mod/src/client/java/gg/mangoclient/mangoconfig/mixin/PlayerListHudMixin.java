@@ -20,7 +20,7 @@ public abstract class PlayerListHudMixin {
 	@Inject(method = "getPlayerName", at = @At("RETURN"), cancellable = true)
 	private void mangoconfig$badge(PlayerListEntry entry, CallbackInfoReturnable<Text> cir) {
 		if (Presence.badgeEnabled() && Presence.isMango(Compat.profileId(entry.getProfile()))) {
-			cir.setReturnValue(Presence.withBadge(cir.getReturnValue()));
+			cir.setReturnValue(Presence.withBadge(cir.getReturnValue(), Compat.profileId(entry.getProfile())));
 		}
 	}
 }

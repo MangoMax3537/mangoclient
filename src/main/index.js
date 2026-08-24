@@ -20,6 +20,7 @@ const performancemods = require('./performancemods');
 const screenshots = require('./screenshots');
 const gamelogs = require('./gamelogs');
 const stats = require('./stats');
+const telemetry = require('./telemetry');
 const storage = require('./storage');
 const { launch, isGameAlive, logFileFor } = require('./launcher');
 const { createUpdater } = require('./updater');
@@ -785,6 +786,8 @@ if (!gotLock) {
     registerIpc();
     syncAllMods();
     refreshModWatchers();
+    // What the website counts: an anonymous id per copy, beaten while we run.
+    telemetry.start(() => store.config.telemetry !== false);
     adoptDetachedSessions().catch((err) => console.error('[sessions]', err));
     createWindow();
 

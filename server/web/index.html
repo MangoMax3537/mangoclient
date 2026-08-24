@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MangoClient</title>
+<meta name="description" content="How many people run MangoClient, who is playing right now, and who keeps it running.">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="mark" href="/"><img src="icon.png" alt=""><span>MangoClient</span></a>
+  <nav>
+    <span class="pulse" id="pulse">live</span>
+    <a href="https://github.com/MangoMax3537/mangoclient">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="lede reveal">
+    <p class="say">
+      <span class="n hero" id="installs">&mdash;</span>
+      <span id="installs-word">people have installed MangoClient.</span>
+    </p>
+    <p class="now">
+      <span class="n" id="open">&mdash;</span> <span id="open-word">have it open right now</span>,
+      <span class="n" id="ingame">&mdash;</span> <span id="ingame-word">of them in a world</span>.
+    </p>
+  </section>
+
+  <dl class="strip reveal" style="animation-delay:.08s">
+    <div class="fact">
+      <dt>Opened this month</dt>
+      <dd id="active">&mdash;</dd>
+    </div>
+    <div class="fact">
+      <dt>Launches counted</dt>
+      <dd id="sessions">&mdash;</dd>
+    </div>
+    <div class="fact">
+      <dt>Players seen in&nbsp;game</dt>
+      <dd id="players">&mdash;</dd>
+    </div>
+    <div class="fact split">
+      <dt>Where it runs</dt>
+      <dd>
+        <div class="bar" id="os-bar"></div>
+        <div class="keys" id="os-keys"><span style="color:var(--text-4)">nothing reported yet</span></div>
+      </dd>
+    </div>
+  </dl>
+
+  <section class="staff reveal" style="animation-delay:.16s">
+    <h2>The people behind it</h2>
+    <p>Owners and support carry a coloured mango in game: everyone on MangoClient sees it next to their name, in the tab list and over their head.</p>
+    <div id="ranks"></div>
+  </section>
+
+  <div class="legend">
+    <div><span class="mango" style="--rank-color:var(--owner)"></span> <b>Owner</b> <span>golden</span></div>
+    <div><span class="mango" style="--rank-color:var(--support)"></span> <b>Support</b> <span>blue</span></div>
+    <div><span class="mango" style="--rank-color:var(--mangoplus)"></span> <b>Mango+</b> <span>orange</span></div>
+    <div><span class="mango" style="--rank-color:var(--member)"></span> <b>Everyone else</b> <span>grey</span></div>
+  </div>
+
+  <footer class="foot">
+    <span>Counts refresh every ten seconds. Installs are anonymous: one random id per copy, no accounts, nothing about the machine.</span>
+    <a href="/admin">Staff sign in</a>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

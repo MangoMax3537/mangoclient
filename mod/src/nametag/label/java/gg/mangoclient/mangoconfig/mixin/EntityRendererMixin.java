@@ -26,7 +26,7 @@ public abstract class EntityRendererMixin {
 			&& entity instanceof AbstractClientPlayerEntity player
 			&& Presence.badgeEnabled()
 			&& Presence.isMango(player.getUuid())) {
-			return Presence.withBadge(text);
+			return Presence.withBadge(text, player.getUuid());
 		}
 		return text;
 	}

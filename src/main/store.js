@@ -35,6 +35,7 @@ const DEFAULT_CONFIG = {
   selectedProfile: null,
   selectedAccount: null,
   firstRunDone: false,
+  telemetry: true,        // count this copy on the website (anonymous id only)
 };
 
 function readJSON(file, fallback) {
