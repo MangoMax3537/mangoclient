@@ -19,6 +19,12 @@ function rootDir() {
 }
 
 const ROOT = rootDir();
+const PROFILE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateProfileId(value) {
+  if (typeof value !== 'string' || !PROFILE_ID_RE.test(value)) throw new Error('Invalid profile ID');
+  return value;
+}
 
 const P = {
   root: ROOT,
@@ -46,12 +52,12 @@ function ensureDirs() {
 
 /** A profile's user-chosen picture, if it has one. */
 function coverFile(profileId) {
-  return path.join(P.covers, `${profileId}.png`);
+  return path.join(P.covers, `${validateProfileId(profileId)}.png`);
 }
 
 /** Directory holding a profile's own saves/mods/options, like a MultiMC instance. */
 function instanceDir(profileId) {
-  return path.join(P.instances, profileId);
+  return path.join(P.instances, validateProfileId(profileId));
 }
 
 module.exports = { ...P, ensureDirs, instanceDir, coverFile };

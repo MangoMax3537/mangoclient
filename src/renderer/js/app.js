@@ -33,6 +33,15 @@
   };
 
   let viewer = null;
+  let viewerSkin = null;
+  let viewerUnavailable = false;
+  let versionsPromise = null;
+  const loadingSkins = new Set();
+  const loadingCovers = new Set();
+  const CONSOLE_LIMIT = 800;
+  const CONSOLE_TRIM = 200;
+  const CONSOLE_BYTE_LIMIT = 512 * 1024;
+  let consoleBytes = 0;
 
   // =========================================================================
   // helpers
@@ -156,6 +165,24 @@
     return `<span class="cover ${size}" style="${coverStyle(profile)}">${coverLetter(profile)}</span>`;
   }
 
+  async function ensureCovers(ids, { rerender = true } = {}) {
+    const wanted = ids
+      .map((id) => state.profiles.find((p) => p.id === id))
+      .filter((p) => p?.cover && !state.covers.has(p.id) && !loadingCovers.has(p.id));
+    if (!wanted.length) return;
+
+    wanted.forEach((p) => loadingCovers.add(p.id));
+    try {
+      const entries = await Promise.all(wanted.map(async (p) => [p.id, await api.profiles.cover(p.id).catch(() => null)]));
+      for (const [id, url] of entries) {
+        if (url) state.covers.set(id, url);
+      }
+    } finally {
+      wanted.forEach((p) => loadingCovers.delete(p.id));
+    }
+    if (rerender) renderAll();
+  }
+
   // =========================================================================
   // modal
   // =========================================================================
@@ -206,6 +233,13 @@
 
   function renderView(name) {
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
+    if (name !== 'instance') {
+      $$('#view-instance .tabpanel').forEach((panel) => panel.replaceChildren());
+      state.shots = [];
+      state.logs = [];
+      state.logId = null;
+      if (!$('#lightbox').hidden) closeLightbox();
+    }
     $$('.rail-btn').forEach((n) => n.classList.toggle('active', n.dataset.view === name));
     // An instance page is about one instance, so it says which one.
     $('#breadcrumb').textContent = name === 'instance'
@@ -217,10 +251,11 @@
     if (name === 'mods') { renderMods(); syncLocalMods(); }
     if (name === 'servers') renderServerGrid();
     if (name === 'settings') renderSettings();
-    if (name === 'profiles') renderProfiles();
+    if (name === 'profiles') { renderProfiles(); ensureCovers(state.profiles.map((p) => p.id)); }
     if (name === 'accounts') renderAccounts();
     if (name === 'instance') renderInstance();
     if (name === 'stats') renderStats();
+    syncViewer();
   }
 
   function showView(name) {
@@ -473,6 +508,7 @@
     e.stopPropagation();
     const menu = $('#account-menu');
     if (!menu.hidden) { menu.hidden = true; return; }
+    state.accounts.slice(0, 8).forEach((a) => loadSkin(a.uuid));
 
     const rows = state.accounts.map((a) => {
       const skin = state.skins.get(a.uuid);
@@ -502,7 +538,11 @@
   $('#btn-start-mods-folder').onclick = () => state.profile && api.app.openFolder(state.profile.id);
   $('#btn-console').onclick = () => { $('#console-drawer').hidden = false; scrollConsole(); };
   $('#btn-close-console').onclick = () => { $('#console-drawer').hidden = true; };
-  $('#btn-clear-console').onclick = () => { state.consoleLines = []; $('#console-out').innerHTML = ''; };
+  $('#btn-clear-console').onclick = () => {
+    state.consoleLines = [];
+    consoleBytes = 0;
+    $('#console-out').innerHTML = '';
+  };
   $('#btn-kill').onclick = async () => {
     for (const id of state.running) await api.game.stop(id).catch(() => {});
   };
@@ -548,17 +588,47 @@
   // =========================================================================
 
   function ensureViewer() {
+    if (viewerUnavailable) return null;
     if (viewer) return viewer;
+    const canvas = $('#skin-canvas');
+    if (!canvas) return null;
     try {
-      viewer = new window.SkinViewer($('#skin-canvas'), { slim: false });
+      viewer = new window.SkinViewer(canvas, { slim: false });
     } catch (err) {
       console.warn('SkinViewer unavailable:', err);
-      $('#skin-canvas').replaceWith(Object.assign(document.createElement('div'), {
+      viewerUnavailable = true;
+      canvas.replaceWith(Object.assign(document.createElement('div'), {
         className: 'empty', textContent: t('skin.noWebgl'),
       }));
     }
     return viewer;
   }
+
+  function destroyViewer() {
+    if (!viewer) return;
+    const canvas = viewer.canvas;
+    viewer.destroy();
+    viewer = null;
+    viewerSkin = null;
+    // A WebGL context belongs to its canvas for life. Replace the hidden canvas
+    // so reopening Accounts receives a fresh context instead of a lost one.
+    if (canvas?.isConnected) canvas.replaceWith(canvas.cloneNode(false));
+  }
+
+  function syncViewer() {
+    const visible = !document.hidden && $('#view-accounts').classList.contains('active');
+    if (!visible) { destroyViewer(); return; }
+
+    const skin = state.account ? state.skins.get(state.account.uuid) : state.defaultSkin;
+    if (!skin) return;
+    const activeViewer = ensureViewer();
+    if (activeViewer && viewerSkin !== skin) {
+      activeViewer.setSkin(skin.skin, skin.slim);
+      viewerSkin = skin;
+    }
+  }
+
+  document.addEventListener('visibilitychange', syncViewer);
 
   /** Crop the 8x8 face (+ hat overlay) out of a skin for list avatars. */
   function makeHead(skinDataUrl) {
@@ -582,27 +652,31 @@
   async function loadDefaultSkin() {
     try {
       const skin = await api.skins.default();
+      state.defaultSkin = skin;
       state.defaultHead = await makeHead(skin.skin);
       if (!state.account) {
-        ensureViewer()?.setSkin(skin.skin, false);
+        syncViewer();
         renderAccountChip();
       }
     } catch { /* WebGL or IPC unavailable, the stage just stays empty */ }
   }
 
   async function loadSkin(uuid) {
-    if (!uuid) return;
+    if (!uuid || state.skins.has(uuid) || loadingSkins.has(uuid)) return;
+    loadingSkins.add(uuid);
     try {
       await applySkin(uuid, await api.skins.get(uuid));
     } catch (err) {
       console.warn('skin load failed', err);
+    } finally {
+      loadingSkins.delete(uuid);
     }
   }
 
   async function applySkin(uuid, skin) {
     skin.head = await makeHead(skin.skin);
     state.skins.set(uuid, skin);
-    if (state.account?.uuid === uuid) ensureViewer()?.setSkin(skin.skin, skin.slim);
+    if (state.account?.uuid === uuid) syncViewer();
     renderAccountChip();
     if ($('#view-accounts').classList.contains('active')) renderAccounts();
   }
@@ -719,6 +793,19 @@
   $('#btn-new-profile').onclick = () => openProfileDialog(null);
 
   async function openProfileDialog(profile) {
+    if (!state.versions.versions.length) {
+      versionsPromise ||= api.versions.manifest().then((manifest) => {
+        state.versions = manifest;
+      }).catch((err) => {
+        console.warn('version manifest failed', err);
+        state.versions = {
+          versions: [{ id: state.profile?.mcVersion || '1.21.11', type: 'release' }],
+          latest: {},
+          installed: [],
+        };
+      });
+      await versionsPromise;
+    }
     const isNew = !profile;
     const data = profile || {
       name: t('profiles.defaultName'),
@@ -889,6 +976,7 @@
       grid.innerHTML = `<div class="empty"><div class="et">${esc(t('accounts.none'))}</div>${esc(t('accounts.noneHint'))}</div>`;
       return;
     }
+    state.accounts.forEach((a) => loadSkin(a.uuid));
     grid.innerHTML = state.accounts.map((a) => {
       const selected = a.uuid === state.account?.uuid;
       const skin = state.skins.get(a.uuid);
@@ -1007,6 +1095,7 @@
   });
 
   let searchTimer = null;
+  let modSearchToken = 0;
   $('#mod-search').oninput = () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { state.modSearch.offset = 0; renderMods(); }, 320);
@@ -1040,6 +1129,7 @@
   }
 
   async function renderMods(append = false) {
+    const token = ++modSearchToken;
     if (!state.profile) {
       $('#mod-grid').innerHTML = `<div class="empty"><div class="et">${esc(t('profiles.none'))}</div>${esc(t('mods.needProfile'))}</div>`;
       return;
@@ -1065,6 +1155,7 @@
         limit: 30,
         offset: state.modSearch.offset,
       });
+      if (token !== modSearchToken || !$('#view-mods').classList.contains('active')) return;
 
       const installedIds = new Set((state.profile.mods || []).map((m) => m.projectId));
       const cards = res.hits.map((hit) => {
@@ -1113,6 +1204,7 @@
         };
       });
     } catch (err) {
+      if (token !== modSearchToken || !$('#view-mods').classList.contains('active')) return;
       grid.innerHTML = `<div class="empty"><div class="et">${esc(t('mods.searchFailed'))}</div>${esc(err.message)}</div>`;
     }
   }
@@ -1664,7 +1756,13 @@
   function showInstanceTab(tab) {
     state.instanceTab = tab;
     $$('#ins-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.itab === tab));
-    $$('#view-instance .tabpanel').forEach((p) => p.classList.toggle('active', p.id === `itab-${tab}`));
+    $$('#view-instance .tabpanel').forEach((p) => {
+      const active = p.id === `itab-${tab}`;
+      p.classList.toggle('active', active);
+      if (!active) p.replaceChildren();
+    });
+    if (tab !== 'shots') state.shots = [];
+    if (tab !== 'logs') { state.logs = []; state.logId = null; }
 
     if (tab === 'overview') renderInstanceOverview();
     if (tab === 'mods') renderInstanceMods();
@@ -2312,15 +2410,20 @@
 
   function pushConsole(line, level = 'info') {
     const cls = level === 'error' ? 'err' : /WARN/i.test(line) ? 'warn' : /ERROR|Exception/i.test(line) ? 'err' : '';
-    state.consoleLines.push({ line, cls });
-    if (state.consoleLines.length > 3000) state.consoleLines.splice(0, 500);
+    const bytes = line.length * 2;
+    state.consoleLines.push({ line, cls, bytes });
+    consoleBytes += bytes;
 
     const out = $('#console-out');
     const span = document.createElement('span');
     span.className = cls;
     span.textContent = `${line}\n`;
     out.appendChild(span);
-    while (out.childNodes.length > 3000) out.removeChild(out.firstChild);
+    while (state.consoleLines.length > CONSOLE_LIMIT || consoleBytes > CONSOLE_BYTE_LIMIT) {
+      const removed = state.consoleLines.shift();
+      consoleBytes -= removed?.bytes || 0;
+      out.removeChild(out.firstChild);
+    }
     scrollConsole();
   }
 
@@ -2386,7 +2489,7 @@
     state.paths = s.paths;
     state.running = new Set(s.running || []);
     state.version = s.version;
-    state.covers = new Map(Object.entries(await api.profiles.covers().catch(() => ({}))));
+    await ensureCovers([state.profile?.id], { rerender: false });
     renderAll();
   }
 
@@ -2413,22 +2516,14 @@
     state.update = await api.update.state().catch(() => null);
     renderUpdate();
     renderView('start');
-    ensureViewer();
-
     await loadDefaultSkin();
     if (state.account) loadSkin(state.account.uuid);
-    for (const a of state.accounts) if (a.uuid !== state.account?.uuid) loadSkin(a.uuid);
 
     pingServers();
 
     // The main process watches every instance's mods folder, so a jar dropped
     // in while the launcher is open appears without a click.
     api.on.modsChanged(({ profileId, mods }) => applyMods(profileId, mods));
-
-    api.versions.manifest().then((m) => { state.versions = m; }).catch((err) => {
-      console.warn('version manifest failed', err);
-      state.versions = { versions: [{ id: state.profile?.mcVersion || '1.21.11', type: 'release' }], latest: {}, installed: [] };
-    });
 
     renderAll();
 

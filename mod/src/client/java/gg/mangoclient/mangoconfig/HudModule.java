@@ -48,6 +48,15 @@ public abstract class HudModule {
 	/** Unscaled height of what {@link #render} draws. */
 	public abstract int height(MinecraftClient mc, TextRenderer font);
 
+	/** Preview-aware bounds; most modules draw the same sample at either size. */
+	public int width(MinecraftClient mc, TextRenderer font, boolean preview) {
+		return width(mc, font);
+	}
+
+	public int height(MinecraftClient mc, TextRenderer font, boolean preview) {
+		return height(mc, font);
+	}
+
 	/**
 	 * Draw at 0,0; the caller has already translated and scaled.
 	 *

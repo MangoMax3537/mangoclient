@@ -5,6 +5,7 @@ const path = require('path');
 const P = require('./paths');
 const { downloadFile } = require('./net');
 const { getVersions, pickVersion } = require('./modrinth');
+const { safeArchivePath } = require('./archive');
 
 /**
  * Performance mods - Sodium, Lithium and FerriteCore, put into every Fabric
@@ -55,7 +56,10 @@ function modsDirOf(profileId) {
 async function readManifest(modsDir) {
   try {
     const data = JSON.parse(await fsp.readFile(path.join(modsDir, MANIFEST), 'utf8'));
-    return data && typeof data.files === 'object' ? data : { files: {} };
+    if (!data || typeof data.files !== 'object') return { files: {} };
+    data.files = Object.fromEntries(Object.entries(data.files)
+      .filter(([, name]) => typeof name === 'string' && path.basename(name) === name && /\.jar$/i.test(name)));
+    return data;
   } catch {
     return { files: {} };
   }
@@ -97,6 +101,7 @@ async function resolve(slug, gameVersion) {
   const entry = {
     filename: file.filename,
     url: file.url,
+    sha512: file.hashes?.sha512 || null,
     sha1: file.hashes?.sha1 || null,
     size: file.size || null,
   };
@@ -174,13 +179,14 @@ async function ensure({ profile, config, onLog = () => {} }) {
         continue;
       }
 
-      const dest = path.join(modsDir, file.filename);
+      if (path.basename(file.filename) !== file.filename || !/\.jar$/i.test(file.filename)) throw new Error('invalid filename');
+      const dest = safeArchivePath(modsDir, file.filename);
       if (manifest.files[mod.slug] === file.filename && fs.existsSync(dest)) continue;
 
-      const cached = path.join(CACHE_DIR, file.filename);
+      const cached = safeArchivePath(CACHE_DIR, file.filename);
       if (!fs.existsSync(cached)) {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        await downloadFile(file.url, cached, { sha1: file.sha1, size: file.size });
+        await downloadFile(file.url, cached, { sha512: file.sha512, sha1: file.sha1, size: file.size });
       }
       await fsp.mkdir(modsDir, { recursive: true });
       // An older build has to go first: two jars, one mod id, no launch.

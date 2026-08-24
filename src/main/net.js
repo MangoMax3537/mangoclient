@@ -61,10 +61,11 @@ function hashFile(file, algo = 'sha1') {
 
 const sha1File = (file) => hashFile(file, 'sha1');
 
-async function isValid(file, sha1, size, sha256) {
+async function isValid(file, sha1, size, sha256, sha512) {
   try {
     const stat = await fsp.stat(file);
     if (size != null && stat.size !== size) return false;
+    if (sha512) return (await hashFile(file, 'sha512')) === sha512.toLowerCase();
     if (sha256) return (await hashFile(file, 'sha256')) === sha256.toLowerCase();
     if (!sha1) return stat.size > 0;
     return (await sha1File(file)) === sha1;
@@ -78,8 +79,8 @@ async function isValid(file, sha1, size, sha256) {
  * exists. Writes through a temp file so an interrupted run never leaves a
  * truncated jar behind that would later be treated as complete.
  */
-async function downloadFile(url, dest, { sha1, sha256, size, onBytes } = {}) {
-  if (await isValid(dest, sha1, size, sha256)) {
+async function downloadFile(url, dest, { sha1, sha256, sha512, size, onBytes } = {}) {
+  if (await isValid(dest, sha1, size, sha256, sha512)) {
     if (onBytes && size) onBytes(size);
     return { skipped: true, dest };
   }
@@ -87,6 +88,14 @@ async function downloadFile(url, dest, { sha1, sha256, size, onBytes } = {}) {
   const tmp = `${dest}.part-${process.pid}-${Math.floor(performance.now() * 1000) % 1e6}`;
   const res = await fetchWithRetry(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  const advertised = Number(res.headers.get('content-length'));
+  // Some Mojang CDN responses expose a placeholder Content-Length of zero
+  // even though the GET body is streamed normally. Treat only a positive
+  // advertised length as authoritative; the completed file is always checked
+  // against the exact expected size below.
+  if (size != null && Number.isFinite(advertised) && advertised > 0 && advertised !== size) {
+    throw new Error(`Size mismatch for ${url}: expected ${size} bytes, server advertised ${advertised}`);
+  }
 
   let counted = 0;
   // Progress is counted by a Transform *inside* the pipeline. Attaching a
@@ -95,33 +104,39 @@ async function downloadFile(url, dest, { sha1, sha256, size, onBytes } = {}) {
   const meter = new Transform({
     transform(chunk, _enc, cb) {
       counted += chunk.length;
+      if (size != null && counted > size) {
+        cb(new Error(`Oversized download for ${url}: expected ${size} bytes`));
+        return;
+      }
       onBytes?.(chunk.length);
       cb(null, chunk);
     },
   });
 
-  await pipeline(Readable.fromWeb(res.body), meter, fs.createWriteStream(tmp));
+  try {
+    await pipeline(Readable.fromWeb(res.body), meter, fs.createWriteStream(tmp, { flags: 'wx' }));
 
-  const verify = async (algo, expected) => {
-    if (!expected) return;
-    const actual = await hashFile(tmp, algo);
-    if (actual !== expected.toLowerCase()) {
-      await fsp.unlink(tmp).catch(() => {});
-      throw new Error(`Checksum mismatch for ${url}: expected ${expected}, got ${actual}`);
-    }
-  };
-  await verify('sha1', sha1);
-  await verify('sha256', sha256);
+    const verify = async (algo, expected) => {
+      if (!expected) return;
+      const actual = await hashFile(tmp, algo);
+      if (actual !== expected.toLowerCase()) {
+        throw new Error(`Checksum mismatch for ${url}: expected ${expected}, got ${actual}`);
+      }
+    };
+    await verify('sha512', sha512);
+    await verify('sha256', sha256);
+    await verify('sha1', sha1);
 
-  if (size != null && !sha1 && !sha256) {
     const stat = await fsp.stat(tmp);
-    if (stat.size !== size) {
-      await fsp.unlink(tmp).catch(() => {});
-      throw new Error(`Short read for ${url}: expected ${size} bytes, got ${stat.size}`);
+    if (size != null && stat.size !== size) {
+      throw new Error(`Size mismatch for ${url}: expected ${size} bytes, got ${stat.size}`);
     }
-  }
 
-  await fsp.rename(tmp, dest);
+    await fsp.rename(tmp, dest);
+  } catch (err) {
+    await fsp.unlink(tmp).catch(() => {});
+    throw err;
+  }
   return { skipped: false, dest, bytes: counted };
 }
 

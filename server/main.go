@@ -63,33 +63,18 @@ func main() {
 	go store.Maintain()
 	go ranks.RefreshNames()
 
-	mux := http.NewServeMux()
-
-	// --- the mod -------------------------------------------------------------
-	mux.HandleFunc("/v1/heartbeat", handleHeartbeat)
-	mux.HandleFunc("/v1/query", handleQuery)
-
-	// --- the launcher --------------------------------------------------------
-	mux.HandleFunc("/v1/launcher", handleLauncher)
-
-	// --- the website ---------------------------------------------------------
-	mux.HandleFunc("/v1/stats", handleStats)
-	mux.HandleFunc("/v1/ranks", handleRanks)
-	mux.HandleFunc("/admin/login", admin.handleLogin)
-	mux.HandleFunc("/admin/logout", admin.handleLogout)
-	mux.HandleFunc("/admin/session", admin.handleSession)
-	mux.HandleFunc("/admin/ranks", admin.require(handleAdminRanks))
-	mux.HandleFunc("/", handleSite)
+	legacyMux := newLegacyMux()
+	webMux := newWebMux()
 
 	// 8880 is the port the mods in the wild already know; losing it would blind
 	// every copy of MangoConfig ever shipped. It stays plain HTTP for exactly
 	// that reason: the shipped mods ask for http://<ip>:8880 and always will.
-	go listen(":8880", mux)
+	go listen(":8880", legacyMux)
 
 	domain := os.Getenv("MANGO_DOMAIN")
 	if domain == "" {
 		// No name yet: the site is the bare IP on port 80.
-		listen(":80", mux)
+		listen(":80", webMux)
 		return
 	}
 
@@ -100,12 +85,36 @@ func main() {
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(domain, "www."+domain),
 	}
-	go listenTLS(":443", mux, manager)
+	go listenTLS(":443", webMux, manager)
 	// Port 80 answers the ACME challenge first, then sends anyone who came by
 	// the name up to the encrypted site. Anyone who came by the bare IP is
 	// served in place: there can be no certificate for an address, and the
 	// site answered on that address long before it had a name.
-	listen(":80", manager.HTTPHandler(upgradeByName(domain, mux)))
+	listen(":80", manager.HTTPHandler(upgradeByName(domain, webMux)))
+}
+
+func newLegacyMux() http.Handler {
+	mux := http.NewServeMux()
+	public := newIPLimiter(600, 120, 100_000)
+	telemetry := newIPLimiter(120, 30, 100_000)
+	mux.Handle("/v1/heartbeat", public.wrap(method(http.MethodPost, http.HandlerFunc(handleHeartbeat))))
+	mux.Handle("/v1/query", public.wrap(method(http.MethodPost, http.HandlerFunc(handleQuery))))
+	mux.Handle("/v1/launcher", telemetry.wrap(method(http.MethodPost, http.HandlerFunc(handleLauncher))))
+	return securityHeaders(publicCORS(mux))
+}
+
+func newWebMux() http.Handler {
+	mux := http.NewServeMux()
+	public := newIPLimiter(600, 120, 100_000)
+	mux.Handle("/v1/stats", publicCORSGet(public.wrap(method(http.MethodGet, http.HandlerFunc(handleStats)))))
+	mux.Handle("/v1/ranks", publicCORSGet(public.wrap(method(http.MethodGet, http.HandlerFunc(handleRanks)))))
+	mux.Handle("/v1/", http.NotFoundHandler())
+	mux.Handle("/admin/login", admin.secure(method(http.MethodPost, http.HandlerFunc(admin.handleLogin))))
+	mux.Handle("/admin/logout", admin.secure(admin.require(method(http.MethodPost, http.HandlerFunc(admin.handleLogout)))))
+	mux.Handle("/admin/session", admin.secure(method(http.MethodGet, http.HandlerFunc(admin.handleSession))))
+	mux.Handle("/admin/ranks", admin.secure(admin.require(methods([]string{http.MethodGet, http.MethodPost}, http.HandlerFunc(handleAdminRanks)))))
+	mux.Handle("/", methods([]string{http.MethodGet, http.MethodHead}, http.HandlerFunc(handleSite)))
+	return securityHeaders(mux)
 }
 
 func upgradeByName(domain string, plain http.Handler) http.Handler {
@@ -291,6 +300,7 @@ type attempt struct {
 }
 
 const sessionLife = 14 * 24 * time.Hour
+const adminMapCap = 10_000
 
 func NewAdmin(password string) *Admin {
 	if password == "" {
@@ -300,6 +310,10 @@ func NewAdmin(password string) *Admin {
 }
 
 func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		fail(w, http.StatusForbidden, "cross-origin request denied")
+		return
+	}
 	var body struct {
 		Password string `json:"password"`
 	}
@@ -319,6 +333,12 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	token := randomToken()
 	a.mu.Lock()
+	a.pruneLocked(time.Now())
+	if len(a.sessions) >= adminMapCap {
+		a.mu.Unlock()
+		fail(w, http.StatusServiceUnavailable, "too many admin sessions")
+		return
+	}
 	a.sessions[token] = time.Now().Add(sessionLife)
 	delete(a.attempts, ip)
 	for old, expiry := range a.sessions { // sweep, so tokens cannot pile up forever
@@ -333,19 +353,24 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(sessionLife.Seconds()),
 	})
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		fail(w, http.StatusForbidden, "cross-origin request denied")
+		return
+	}
 	if cookie, err := r.Cookie("mango_admin"); err == nil {
 		a.mu.Lock()
 		delete(a.sessions, cookie.Value)
 		a.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: "mango_admin", Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "mango_admin", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -353,14 +378,28 @@ func (a *Admin) handleSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"authed": a.authed(r), "configured": a.password != ""})
 }
 
-func (a *Admin) require(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (a *Admin) require(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.authed(r) {
 			fail(w, http.StatusUnauthorized, "sign in first")
 			return
 		}
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *Admin) secure(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.password == "" || r.TLS == nil {
+			fail(w, http.StatusForbidden, "admin requires configured HTTPS")
+			return
+		}
+		if r.Method == http.MethodPost && !sameOrigin(r) {
+			fail(w, http.StatusForbidden, "cross-origin request denied")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (a *Admin) authed(r *http.Request) bool {
@@ -392,13 +431,30 @@ func (a *Admin) blocked(ip string) (time.Duration, bool) {
 func (a *Admin) miss(ip string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.pruneLocked(time.Now())
 	rec, ok := a.attempts[ip]
+	if !ok && len(a.attempts) >= adminMapCap {
+		return
+	}
 	if !ok || time.Now().After(rec.until) {
 		rec = &attempt{}
 		a.attempts[ip] = rec
 	}
 	rec.count++
 	rec.until = time.Now().Add(time.Duration(rec.count) * time.Minute)
+}
+
+func (a *Admin) pruneLocked(now time.Time) {
+	for token, expiry := range a.sessions {
+		if !expiry.After(now) {
+			delete(a.sessions, token)
+		}
+	}
+	for ip, rec := range a.attempts {
+		if !rec.until.After(now) {
+			delete(a.attempts, ip)
+		}
+	}
 }
 
 func randomToken() string {
@@ -410,17 +466,15 @@ func randomToken() string {
 // --- plumbing ---------------------------------------------------------------
 
 func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
-	if r.Method != http.MethodPost {
-		fail(w, http.StatusMethodNotAllowed, "POST only")
-		return false
-	}
-	data, err := io.ReadAll(io.LimitReader(r.Body, 1<<18))
-	if err != nil {
-		fail(w, http.StatusBadRequest, "unreadable body")
-		return false
-	}
-	if err := json.Unmarshal(data, into); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(into); err != nil {
 		fail(w, http.StatusBadRequest, "bad json")
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		fail(w, http.StatusBadRequest, "one json value only")
 		return false
 	}
 	return true
@@ -428,7 +482,6 @@ func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 
 func writeJSON(w http.ResponseWriter, value any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	_ = json.NewEncoder(w).Encode(value)
 }
 
@@ -452,4 +505,119 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+func method(want string, next http.Handler) http.Handler { return methods([]string{want}, next) }
+
+func methods(allowed []string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, candidate := range allowed {
+			if r.Method == candidate {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		w.Header().Set("Allow", strings.Join(allowed, ", "))
+		fail(w, http.StatusMethodNotAllowed, "method not allowed")
+	})
+}
+
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return false
+	}
+	want := "https://" + r.Host
+	return subtle.ConstantTimeCompare([]byte(strings.ToLower(origin)), []byte(strings.ToLower(want))) == 1
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if r.TLS != nil {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func publicCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func publicCORSGet(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type rateRecord struct {
+	tokens     float64
+	last, seen time.Time
+}
+type ipLimiter struct {
+	mu          sync.Mutex
+	rate, burst float64
+	cap         int
+	entries     map[string]*rateRecord
+}
+
+func newIPLimiter(perMinute, burst, cap int) *ipLimiter {
+	return &ipLimiter{rate: float64(perMinute) / 60, burst: float64(burst), cap: cap, entries: map[string]*rateRecord{}}
+}
+
+func (l *ipLimiter) allow(ip string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	rec := l.entries[ip]
+	if rec == nil {
+		if len(l.entries) >= l.cap {
+			for key, old := range l.entries {
+				if now.Sub(old.seen) > 10*time.Minute {
+					delete(l.entries, key)
+				}
+			}
+			if len(l.entries) >= l.cap {
+				return false
+			}
+		}
+		rec = &rateRecord{tokens: l.burst, last: now}
+		l.entries[ip] = rec
+	}
+	rec.tokens = min(l.burst, rec.tokens+now.Sub(rec.last).Seconds()*l.rate)
+	rec.last, rec.seen = now, now
+	if rec.tokens < 1 {
+		return false
+	}
+	rec.tokens--
+	return true
+}
+
+func (l *ipLimiter) wrap(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !l.allow(clientIP(r), time.Now()) {
+			fail(w, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

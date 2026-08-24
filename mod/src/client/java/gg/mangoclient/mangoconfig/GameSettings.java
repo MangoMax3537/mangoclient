@@ -125,15 +125,16 @@ public final class GameSettings {
 		}
 	}
 
-	/**
-	 * Full brightness without a mixin: gamma is a normal option, and pinning it
-	 * to its maximum is what every "fullbright" toggle ultimately does.
-	 */
 	public static Option.Bool fullbright() {
-		GameOptions o = opts();
 		return (Option.Bool) new Option.Bool("fullbright", "Full brightness", false)
-			.bind(() -> o.getGamma().getValue() >= 0.99,
-				v -> o.getGamma().setValue(v ? 1.0 : 0.5))
-			.hint("Pins brightness to its maximum.");
+			.bind(GameSettings::fullbrightEnabled, v -> {
+				MangoConfig.config().fullbright = v;
+				MangoConfig.save();
+			})
+			.hint("Renders at 150000% without changing Minecraft's brightness setting.");
+	}
+
+	public static boolean fullbrightEnabled() {
+		return MangoConfig.config() != null && MangoConfig.config().fullbright;
 	}
 }

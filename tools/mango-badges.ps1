@@ -11,7 +11,7 @@
 Add-Type -AssemblyName System.Drawing
 
 $root = Split-Path -Parent $PSScriptRoot
-$srcPath = Join-Path $root "src\renderer\assets\icon.png"
+$srcPath = Join-Path $root "src\assets\icon.png"
 $fontDir = Join-Path $root "mod\src\main\resources\assets\mangoconfig\textures\font"
 $webDir  = Join-Path $root "server\web"
 $size = 16

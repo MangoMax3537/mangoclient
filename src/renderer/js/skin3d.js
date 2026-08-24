@@ -156,10 +156,13 @@
       this.walking = false;
       this.time = 0;
       this.destroyed = false;
+      this.active = true;
+      this._frame = null;
+      this._timer = null;
       this._setup();
       this._bindInput();
       this._loop = this._loop.bind(this);
-      requestAnimationFrame(this._loop);
+      this._queueFrame();
     }
 
     _setup() {
@@ -196,6 +199,7 @@
 
     /** Rebuild geometry: arm width differs between classic (4) and slim (3). */
     _buildParts() {
+      this._deleteParts();
       const armW = this.slim ? 3 : 4;
       const armOffset = this.slim ? 0.5 : 0;
 
@@ -231,6 +235,17 @@
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(geo.idx), gl.STATIC_DRAW);
         return { name, buffers, count: geo.idx.length, pivot: [px, py, pz], overlay, size: [w, h, d] };
       });
+    }
+
+    _deleteParts() {
+      if (!this.parts) return;
+      const gl = this.gl;
+      for (const part of this.parts) {
+        for (const buffer of Object.values(part.buffers || {})) {
+          if (buffer) gl.deleteBuffer(buffer);
+        }
+      }
+      this.parts = null;
     }
 
     setSlim(slim) {
@@ -311,11 +326,15 @@
       this.canvas.addEventListener('touchstart', down, { passive: true });
       window.addEventListener('touchmove', move, { passive: true });
       window.addEventListener('touchend', up);
-      this.canvas.addEventListener('dblclick', () => {
+      const reset = () => {
         this.rotation = 0.5; this.pitch = 0; this.autoRotate = true;
-      });
+      };
+      this.canvas.addEventListener('dblclick', reset);
       this.canvas.style.cursor = 'grab';
       this._cleanup = () => {
+        this.canvas.removeEventListener('mousedown', down);
+        this.canvas.removeEventListener('touchstart', down);
+        this.canvas.removeEventListener('dblclick', reset);
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);
         window.removeEventListener('touchmove', move);
@@ -336,9 +355,20 @@
       return true;
     }
 
+    _queueFrame(delay = 0) {
+      if (this.destroyed || !this.active || this._frame || this._timer) return;
+      const request = () => {
+        this._timer = null;
+        this._frame = requestAnimationFrame(this._loop);
+      };
+      if (delay) this._timer = setTimeout(request, delay);
+      else request();
+    }
+
     _loop(now) {
-      if (this.destroyed) return;
-      requestAnimationFrame(this._loop);
+      this._frame = null;
+      if (this.destroyed || !this.active) return;
+      this._queueFrame(1000 / 30);
       if (!this.ready || !this._resize()) return;
 
       const dt = this._last ? (now - this._last) / 1000 : 0;
@@ -417,9 +447,27 @@
 
     setWalking(on) { this.walking = on; }
 
+    setActive(on) {
+      this.active = Boolean(on);
+      if (!this.active) {
+        if (this._frame) cancelAnimationFrame(this._frame);
+        if (this._timer) clearTimeout(this._timer);
+        this._frame = null;
+        this._timer = null;
+        return;
+      }
+      this._last = 0;
+      this._queueFrame();
+    }
+
     destroy() {
       this.destroyed = true;
+      this.setActive(false);
       this._cleanup?.();
+      this._deleteParts();
+      if (this.texture) this.gl.deleteTexture(this.texture);
+      if (this.prog) this.gl.deleteProgram(this.prog);
+      this.gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
   }
 

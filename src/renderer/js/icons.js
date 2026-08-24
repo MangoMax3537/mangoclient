@@ -84,7 +84,7 @@
    * so the mark can never drift from the icon on the desktop.
    */
   function logoMark(size = 22) {
-    return `<img class="logo-mark" src="assets/icon.png" width="${size}" height="${size}" alt="" aria-hidden="true" />`;
+    return `<img class="logo-mark" src="../assets/icon.png" width="${size}" height="${size}" alt="" aria-hidden="true" />`;
   }
 
   function icon(name, { size = 16, cls = '' } = {}) {

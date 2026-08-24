@@ -25,8 +25,8 @@ public class GameRendererMixin {
 	@Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
 	private void mangoconfig$zoom(Camera camera, float tickDelta, boolean changingFov,
 			CallbackInfoReturnable<Double> cir) {
-		if (!Mods.zoomActive) return;
-		cir.setReturnValue(cir.getReturnValue() / Mods.zoomFactor());
+		float factor = Mods.zoomFactor();
+		if (factor > 1.0001f) cir.setReturnValue(cir.getReturnValue() / factor);
 	}
 
 	@Inject(method = "tiltViewWhenHurt", at = @At("HEAD"), cancellable = true)

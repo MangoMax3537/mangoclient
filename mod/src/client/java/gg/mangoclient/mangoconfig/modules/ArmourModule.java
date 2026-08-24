@@ -41,7 +41,10 @@ public class ArmourModule extends HudModule {
 
 	private List<ItemStack> stacks(MinecraftClient mc, boolean preview) {
 		List<ItemStack> out = new ArrayList<>();
-		if (mc.player == null) return out;
+		if (mc.player == null) {
+			if (preview) for (int i = 0; i < 4 + (showHeld.value ? 1 : 0); i++) out.add(ItemStack.EMPTY);
+			return out;
+		}
 		for (EquipmentSlot slot : ARMOUR) {
 			ItemStack stack = mc.player.getEquippedStack(slot);
 			if (stack.isEmpty() && hideEmpty.value && !preview) continue;
@@ -80,15 +83,30 @@ public class ArmourModule extends HudModule {
 
 	@Override
 	public int width(MinecraftClient mc, TextRenderer font) {
-		int count = Math.max(1, stacks(mc, false).size());
+		return width(mc, font, false);
+	}
+
+	@Override
+	public int width(MinecraftClient mc, TextRenderer font, boolean preview) {
+		int count = Math.max(1, stacks(mc, preview).size());
 		if (direction.is("Horizontal")) return count * 18;
-		return 18 + labelWidth(mc, font, false);
+		return 18 + labelWidth(mc, font, preview);
 	}
 
 	@Override
 	public int height(MinecraftClient mc, TextRenderer font) {
-		int count = Math.max(1, stacks(mc, false).size());
+		return height(mc, font, false);
+	}
+
+	@Override
+	public int height(MinecraftClient mc, TextRenderer font, boolean preview) {
+		int count = Math.max(1, stacks(mc, preview).size());
 		return direction.is("Horizontal") ? 18 : count * 18;
+	}
+
+	@Override
+	public boolean visible(MinecraftClient mc) {
+		return !hideEmpty.value || !stacks(mc, false).isEmpty();
 	}
 
 	@Override

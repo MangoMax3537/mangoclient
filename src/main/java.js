@@ -8,6 +8,7 @@ const tar = require('tar');
 const AdmZip = require('adm-zip');
 const P = require('./paths');
 const { downloadFile, getJSON } = require('./net');
+const { safeArchivePath } = require('./archive');
 
 const execFileAsync = promisify(execFile);
 
@@ -101,7 +102,8 @@ async function downloadRuntime(major, onProgress = () => {}, onLog = () => {}) {
   const pkg = assets[0].binary.package;
 
   await fsp.mkdir(dir, { recursive: true });
-  const archive = path.join(P.cache, pkg.name);
+  if (typeof pkg.name !== 'string' || path.basename(pkg.name) !== pkg.name) throw new Error('Java API returned an invalid filename');
+  const archive = safeArchivePath(P.cache, pkg.name);
   let received = 0;
   await downloadFile(pkg.link, archive, {
     sha256: pkg.checksum, // Adoptium publishes sha256 for every binary

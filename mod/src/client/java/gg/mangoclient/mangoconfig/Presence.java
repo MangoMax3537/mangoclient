@@ -35,7 +35,8 @@ import java.util.concurrent.CompletableFuture;
  * the network.
  */
 public final class Presence {
-	private static final String BASE = "http://94.249.184.45:8880";
+	private static final String LEGACY_BASE = "http://94.249.184.45:8880";
+	private static final String BASE = apiBase();
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
 	/** How often we tell the server we are here. */
@@ -79,6 +80,21 @@ public final class Presence {
 	private static volatile String selfRank = "";
 
 	private Presence() {
+	}
+
+	private static String apiBase() {
+		String raw = System.getProperty("mangoconfig.apiBase", LEGACY_BASE).replaceAll("/+$", "");
+		try {
+			URI uri = URI.create(raw);
+			String path = uri.getRawPath();
+			boolean originOnly = uri.getHost() != null && uri.getUserInfo() == null
+				&& uri.getRawQuery() == null && uri.getRawFragment() == null
+				&& (path == null || path.isEmpty());
+			if (originOnly && ("https".equalsIgnoreCase(uri.getScheme()) || LEGACY_BASE.equals(raw))) return raw;
+		} catch (IllegalArgumentException ignored) {
+		}
+		System.err.println("[MangoConfig] mangoconfig.apiBase must be HTTPS; using the legacy presence endpoint");
+		return LEGACY_BASE;
 	}
 
 	public static void init() {

@@ -3,7 +3,6 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
-const AdmZip = require('adm-zip');
 const P = require('./paths');
 const { getJSON, downloadFile, pool, isValid } = require('./net');
 
@@ -20,6 +19,16 @@ let manifestCache = null;
 async function getVersionManifest(force = false) {
   if (manifestCache && !force) return manifestCache;
   const cacheFile = path.join(P.cache, 'version_manifest.json');
+  if (!force) {
+    const cached = await Promise.all([
+      fsp.readFile(cacheFile, 'utf8'),
+      fsp.stat(cacheFile),
+    ]).catch(() => null);
+    if (cached && Date.now() - cached[1].mtimeMs < 6 * 60 * 60 * 1000) {
+      manifestCache = JSON.parse(cached[0]);
+      return manifestCache;
+    }
+  }
   try {
     manifestCache = await getJSON(VERSION_MANIFEST);
     // Caching is a nicety for offline starts, so never let it fail the fetch.
@@ -279,6 +288,7 @@ function collectLibraries(version) {
 
 /** Extract native .so/.dll/.dylib payloads next to the version, once. */
 async function extractNatives(version, natives, onLog) {
+  const AdmZip = require('adm-zip');
   const dir = path.join(P.natives, version.id);
   await fsp.mkdir(dir, { recursive: true });
   const stampFile = path.join(dir, '.mangoclient-stamp');

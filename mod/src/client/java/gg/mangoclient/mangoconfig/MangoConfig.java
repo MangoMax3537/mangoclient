@@ -82,13 +82,13 @@ public class MangoConfig implements ClientModInitializer {
 			// One "Mods" page carries the HUD modules and the standalone mods
 			// alike; PvP keeps everything a fighter reaches for in one place.
 			List<ModEntry> mods = new ArrayList<>(MODULES.stream().map(ModEntry::of).toList());
-			mods.add(ModEntry.of("Zoom", "Hold a key to zoom the view in.",
+			mods.add(ModEntry.of("Zoom", "Hold a key to zoom; scroll to change the amount.",
 				Mods.zoom, Mods.zoomKey, Mods.zoomLevel));
 			mods.add(ModEntry.of("Crosshair", "Replaces vanilla's crosshair with your own.",
 				Mods.crosshair, Mods.crosshairStyle, Mods.crosshairWidth, Mods.crosshairHeight,
 				Mods.crosshairGap, Mods.crosshairThickness, Mods.crosshairColour, Mods.crosshairOutline,
 				Mods.crosshairHideThirdPerson));
-			mods.add(ModEntry.of("Fullbright", "Pins brightness to its maximum.",
+			mods.add(ModEntry.of("Fullbright", "150000% light while preserving your normal brightness.",
 				GameSettings.fullbright()));
 			mods.add(ModEntry.of("Mango Badge", "A grey mango next to everyone on MangoClient.",
 				Mods.mangoBadge));
@@ -180,9 +180,9 @@ public class MangoConfig implements ClientModInitializer {
 		// editor frames - so what is dragged there is exactly what draws here,
 		// padding included, instead of two slightly different boxes.
 		float s = module.scaleFactor();
-		int w = Math.max(1, module.width(mc, font));
-		int h = Math.max(1, module.height(mc, font));
-		int[] b = bounds(mc, module);
+		int w = Math.max(1, module.width(mc, font, preview));
+		int h = Math.max(1, module.height(mc, font, preview));
+		int[] b = bounds(mc, module, preview);
 		int inset = Math.round(module.padding() * s);
 
 		Compat.push(ctx);
@@ -214,13 +214,17 @@ public class MangoConfig implements ClientModInitializer {
 
 	/** Bounds of a module on screen, used by the editor for hit testing. */
 	public static int[] bounds(MinecraftClient mc, HudModule module) {
+		return bounds(mc, module, previewing());
+	}
+
+	public static int[] bounds(MinecraftClient mc, HudModule module, boolean preview) {
 		TextRenderer font = mc.textRenderer;
 		int screenW = mc.getWindow().getScaledWidth();
 		int screenH = mc.getWindow().getScaledHeight();
 		float s = module.scaleFactor();
 		int pad = module.padding();
-		int w = Math.round((Math.max(1, module.width(mc, font)) + pad * 2) * s);
-		int h = Math.round((Math.max(1, module.height(mc, font)) + pad * 2) * s);
+		int w = Math.round((Math.max(1, module.width(mc, font, preview)) + pad * 2) * s);
+		int h = Math.round((Math.max(1, module.height(mc, font, preview)) + pad * 2) * s);
 		return new int[]{module.pixelX(screenW, w), module.pixelY(screenH, h), w, h};
 	}
 

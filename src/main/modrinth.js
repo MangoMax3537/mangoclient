@@ -5,6 +5,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const P = require('./paths');
 const { getJSON, downloadFile, pool } = require('./net');
+const { LIMITS, safeArchivePath, validateArchiveEntries } = require('./archive');
 
 const API = 'https://api.modrinth.com/v2';
 
@@ -86,6 +87,13 @@ function targetDirFor(projectType, profileId) {
   return path.join(base, 'mods');
 }
 
+function safeFilename(name) {
+  if (typeof name !== 'string' || !name || path.basename(name) !== name || name.includes('\0')) {
+    throw new Error('Modrinth returned an invalid filename');
+  }
+  return name;
+}
+
 /**
  * Walk a mod's required dependencies so a one-click install actually boots.
  * Optional deps are skipped; they're usually integrations the user didn't ask for.
@@ -156,9 +164,10 @@ async function installProject({
     const file = primaryFile(item.version);
     if (!file) continue;
     const dir = targetDirFor(item.project.project_type || 'mod', profile.id);
-    const dest = path.join(dir, file.filename);
+    const filename = safeFilename(file.filename);
+    const dest = safeArchivePath(dir, filename);
     onLog(`Downloading ${item.project.title} ${item.version.version_number}…`);
-    await downloadFile(file.url, dest, { sha1: file.hashes?.sha1, size: file.size });
+    await downloadFile(file.url, dest, { sha512: file.hashes?.sha512, sha1: file.hashes?.sha1, size: file.size });
     installed.push({
       projectId: item.project.id,
       slug: item.project.slug,
@@ -167,7 +176,7 @@ async function installProject({
       icon: item.project.icon_url || null,
       versionId: item.version.id,
       versionNumber: item.version.version_number,
-      filename: file.filename,
+      filename,
       file: dest,
       gameVersions: item.version.game_versions,
       loaders: item.version.loaders,
@@ -218,57 +227,67 @@ async function checkUpdates(profile) {
 async function installModpack({ profile, versionId, onLog = () => {}, onProgress = () => {} }) {
   const version = await getVersion(versionId);
   const file = primaryFile(version);
-  const packPath = path.join(P.cache, file.filename);
+  const packPath = safeArchivePath(P.cache, safeFilename(file.filename));
   onLog(`Downloading modpack ${file.filename}…`);
-  await downloadFile(file.url, packPath, { sha1: file.hashes?.sha1, size: file.size });
+  await downloadFile(file.url, packPath, { sha512: file.hashes?.sha512, sha1: file.hashes?.sha1, size: file.size });
 
-  const zip = new AdmZip(packPath);
-  const indexEntry = zip.getEntry('modrinth.index.json');
-  if (!indexEntry) throw new Error('Invalid .mrpack: modrinth.index.json is missing');
-  const index = JSON.parse(indexEntry.getData().toString('utf8'));
+  try {
+    const zip = new AdmZip(packPath);
+    const entries = zip.getEntries();
+    if (entries.length > LIMITS.entries) throw new Error('Invalid .mrpack: too many entries');
+    const indexEntry = zip.getEntry('modrinth.index.json');
+    if (!indexEntry) throw new Error('Invalid .mrpack: modrinth.index.json is missing');
+    if (indexEntry.header.size > LIMITS.index) throw new Error('Invalid .mrpack: index is too large');
+    const index = JSON.parse(indexEntry.getData().toString('utf8'));
 
-  const gameDir = P.instanceDir(profile.id);
-  const files = (index.files || []).filter((f) => {
-    const env = f.env?.client;
-    return env !== 'unsupported';
-  });
+    const gameDir = P.instanceDir(profile.id);
+    const files = (index.files || []).filter((f) => f.env?.client !== 'unsupported');
+    if (files.length > LIMITS.entries) throw new Error('Invalid .mrpack: too many downloads');
 
-  let done = 0;
-  await pool(files, 8, async (f) => {
-    const dest = path.join(gameDir, f.path);
-    // Never let a crafted pack write outside its own instance folder.
-    if (!path.resolve(dest).startsWith(path.resolve(gameDir))) return;
-    await downloadFile(f.downloads[0], dest, { sha1: f.hashes?.sha1, size: f.fileSize }).catch((err) =>
-      onLog(`Failed: ${f.path} (${err.message})`));
-    done++;
-    onProgress({ phase: 'modpack', done, total: files.length, label: path.basename(f.path) });
-  });
+    let done = 0;
+    await pool(files, 8, async (f) => {
+      const dest = safeArchivePath(gameDir, f.path);
+      if (!Array.isArray(f.downloads) || !f.downloads[0]) throw new Error(`No download for ${f.path}`);
+      await downloadFile(f.downloads[0], dest, { sha512: f.hashes?.sha512, sha1: f.hashes?.sha1, size: f.fileSize });
+      done++;
+      onProgress({ phase: 'modpack', done, total: files.length, label: path.basename(f.path) });
+    });
 
-  // Overrides ship configs, resource packs and the like.
-  for (const folder of ['overrides', 'client-overrides']) {
-    for (const entry of zip.getEntries()) {
-      if (!entry.entryName.startsWith(`${folder}/`) || entry.isDirectory) continue;
-      const rel = entry.entryName.slice(folder.length + 1);
-      const dest = path.join(gameDir, rel);
-      if (!path.resolve(dest).startsWith(path.resolve(gameDir))) continue;
-      await fsp.mkdir(path.dirname(dest), { recursive: true });
-      await fsp.writeFile(dest, entry.getData());
+    // Overrides ship configs, resource packs and the like.
+    const overrides = entries.filter((entry) => ['overrides/', 'client-overrides/']
+      .some((prefix) => entry.entryName.startsWith(prefix)));
+    validateArchiveEntries(overrides);
+    for (const folder of ['overrides', 'client-overrides']) {
+      for (const entry of overrides) {
+        if (!entry.entryName.startsWith(`${folder}/`) || entry.isDirectory) continue;
+        const rel = entry.entryName.slice(folder.length + 1);
+        const dest = safeArchivePath(gameDir, rel);
+        await fsp.mkdir(path.dirname(dest), { recursive: true });
+        await fsp.writeFile(dest, entry.getData(), { flag: 'wx' }).catch(async (err) => {
+          if (err.code !== 'EEXIST') throw err;
+          const stat = await fsp.lstat(dest);
+          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`Unsafe override target: ${rel}`);
+          await fsp.writeFile(dest, entry.getData());
+        });
+      }
     }
+
+    const deps = index.dependencies || {};
+    const loader = deps['fabric-loader'] ? 'fabric'
+      : deps['quilt-loader'] ? 'quilt'
+      : deps.neoforge ? 'neoforge'
+      : deps.forge ? 'forge' : 'vanilla';
+
+    return {
+      name: index.name,
+      mcVersion: deps.minecraft,
+      loader,
+      loaderVersion: deps['fabric-loader'] || deps['quilt-loader'] || deps.neoforge || deps.forge || '',
+      fileCount: files.length,
+    };
+  } finally {
+    await fsp.unlink(packPath).catch(() => {});
   }
-
-  const deps = index.dependencies || {};
-  const loader = deps['fabric-loader'] ? 'fabric'
-    : deps['quilt-loader'] ? 'quilt'
-    : deps.neoforge ? 'neoforge'
-    : deps.forge ? 'forge' : 'vanilla';
-
-  return {
-    name: index.name,
-    mcVersion: deps.minecraft,
-    loader,
-    loaderVersion: deps['fabric-loader'] || deps['quilt-loader'] || deps.neoforge || deps.forge || '',
-    fileCount: files.length,
-  };
 }
 
 module.exports = {

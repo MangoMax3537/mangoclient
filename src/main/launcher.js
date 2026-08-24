@@ -175,6 +175,7 @@ function createLogParser(emit) {
  * instead of being pushed to.
  */
 function followLog(file, onText, intervalMs = 300) {
+  const MAX_READ_BYTES = 256 * 1024;
   const decoder = new StringDecoder('utf8'); // a chunk may cut a character in half
   let offset = 0;
   let busy = false;
@@ -188,7 +189,7 @@ function followLog(file, onText, intervalMs = 300) {
       if (size > offset) {
         const handle = await fsp.open(file, 'r');
         try {
-          const buffer = Buffer.alloc(size - offset);
+          const buffer = Buffer.allocUnsafe(Math.min(size - offset, MAX_READ_BYTES));
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
           offset += bytesRead;
           const text = decoder.write(buffer.subarray(0, bytesRead));

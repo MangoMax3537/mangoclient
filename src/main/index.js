@@ -1,31 +1,83 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, protocol, net } = require('electron');
 const path = require('path');
+
+// Chromium and GTK can otherwise share the host's global Fontconfig cache even
+// when their bundled Fontconfig revisions differ. Give this process an
+// equivalent config with an app-local cache, while respecting an explicit user
+// override.
+if (process.platform === 'linux' && !process.env.FONTCONFIG_FILE) {
+  const packaged = __dirname.includes('app.asar');
+  process.env.FONTCONFIG_FILE = packaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'assets', 'fontconfig.conf')
+    : path.join(__dirname, '..', 'assets', 'fontconfig.conf');
+}
+
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, protocol, net, session } = require('electron');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const { pathToFileURL } = require('url');
 
 const P = require('./paths');
 const { Store, totalRamMB } = require('./store');
-const auth = require('./auth');
-const installer = require('./installer');
-const loaders = require('./loaders');
-const javaMod = require('./java');
-const modrinth = require('./modrinth');
-const localmods = require('./localmods');
-const servers = require('./servers');
-const skins = require('./skins');
-const mangoconfig = require('./mangoconfig');
-const performancemods = require('./performancemods');
-const screenshots = require('./screenshots');
-const gamelogs = require('./gamelogs');
-const stats = require('./stats');
-const telemetry = require('./telemetry');
-const storage = require('./storage');
-const { launch, isGameAlive, logFileFor } = require('./launcher');
-const { createUpdater } = require('./updater');
+const {
+  isExactRendererUrl, isAllowedExternalUrl, isTrustedIpcSender, approvedImagePath,
+} = require('./security');
+
+const RENDERER_FILE = path.join(__dirname, '..', 'renderer', 'index.html');
+
+function lazyModule(request) {
+  let loaded = null;
+  return new Proxy(Object.create(null), {
+    get(_target, property) {
+      loaded ||= require(request);
+      return loaded[property];
+    },
+  });
+}
+
+const auth = lazyModule('./auth');
+const installer = lazyModule('./installer');
+const loaders = lazyModule('./loaders');
+const javaMod = lazyModule('./java');
+const modrinth = lazyModule('./modrinth');
+const localmods = lazyModule('./localmods');
+const servers = lazyModule('./servers');
+const skins = lazyModule('./skins');
+const mangoconfig = lazyModule('./mangoconfig');
+const performancemods = lazyModule('./performancemods');
+const screenshots = lazyModule('./screenshots');
+const gamelogs = lazyModule('./gamelogs');
+const stats = lazyModule('./stats');
+const telemetry = lazyModule('./telemetry');
+const storage = lazyModule('./storage');
+const launcher = lazyModule('./launcher');
 
 app.setName('MangoClient');
+
+function appendFeatureSwitch(name, features) {
+  const current = app.commandLine.getSwitchValue(name)
+    .split(',')
+    .map((feature) => feature.trim())
+    .filter(Boolean);
+  app.commandLine.appendSwitch(name, [...new Set([...current, ...features])].join(','));
+}
+
+// Chromium cannot present Vulkan surfaces through native Wayland, and some
+// compositors advertise color-management support that cannot describe sRGB.
+// Both paths already fall back after logging errors, so select the fallback up
+// front. X11/XWayland keeps Chromium's defaults.
+const waylandSession = process.platform === 'linux'
+  && Boolean(process.env.WAYLAND_DISPLAY);
+const useXwayland = waylandSession
+  && Boolean(process.env.DISPLAY)
+  && process.env.MANGO_USE_XWAYLAND === '1';
+if (useXwayland) {
+  app.commandLine.removeSwitch('ozone-platform');
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+} else if (waylandSession) {
+  appendFeatureSwitch('disable-features', ['WaylandWpColorManagerV1']);
+}
+
 // Screenshots sit in the instance folder, which the renderer's CSP will not
 // load over file://. A scheme of our own serves them - and nothing else.
 protocol.registerSchemesAsPrivileged([
@@ -47,6 +99,21 @@ const running = new Map();
 const detached = new Map();
 let detachedTimer = null;
 
+function createUpdaterController(onState) {
+  const disabledReason = !app.isPackaged
+    ? 'dev'
+    : process.platform === 'linux' && !process.env.APPIMAGE ? 'unsupported' : null;
+  if (!disabledReason) return require('./updater').createUpdater({ onState });
+
+  const state = { state: 'disabled', reason: disabledReason, current: app.getVersion() };
+  return {
+    get state() { return state; },
+    async check() { onState(state); return state; },
+    install() { return false; },
+    startPeriodicChecks() { return this; },
+  };
+}
+
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
@@ -66,7 +133,7 @@ async function adoptDetachedSessions() {
   for (const profile of store.profiles) {
     const pid = profile.session?.pid;
     if (!pid) continue;
-    if (await isGameAlive(pid)) detached.set(profile.id, pid);
+    if (await launcher.isGameAlive(pid)) detached.set(profile.id, pid);
     else rememberSession(profile.id, null);
   }
   watchDetachedSessions();
@@ -77,7 +144,7 @@ function watchDetachedSessions() {
   if (detachedTimer || detached.size === 0) return;
   detachedTimer = setInterval(async () => {
     for (const [profileId, pid] of [...detached]) {
-      if (await isGameAlive(pid)) continue;
+      if (await launcher.isGameAlive(pid)) continue;
       detached.delete(profileId);
       rememberSession(profileId, null);
       send('launch:state', { profileId, state: 'stopped' });
@@ -109,19 +176,13 @@ function syncMods(profileId) {
   return { mods, changed };
 }
 
-function syncAllMods() {
-  for (const profile of store.profiles) {
-    try { syncMods(profile.id); } catch (err) { console.error('[mods:sync]', err); }
-  }
-}
-
 /**
  * Watch an instance's mods folder so a jar dropped in while the launcher is
  * open shows up without the player having to click anything.
  */
 function watchMods(profileId) {
   if (modWatchers.has(profileId)) return;
-  const dir = localmods.modsDirFor(profileId);
+  const dir = path.join(P.instanceDir(profileId), 'mods');
   try {
     fs.mkdirSync(dir, { recursive: true });
     const entry = { timer: null, watcher: null };
@@ -150,9 +211,13 @@ function closeModWatcher(profileId) {
   modWatchers.delete(profileId);
 }
 
-/** Keep one watcher per existing profile, and none for deleted ones. */
+/** Watch only profiles whose folder can affect visible or running state. */
 function refreshModWatchers() {
-  const ids = new Set(store.profiles.map((p) => p.id));
+  const ids = new Set([
+    store.selectedProfile?.id,
+    ...running.keys(),
+    ...detached.keys(),
+  ].filter(Boolean));
   for (const id of [...modWatchers.keys()]) if (!ids.has(id)) closeModWatcher(id);
   for (const id of ids) watchMods(id);
 }
@@ -160,8 +225,19 @@ function refreshModWatchers() {
 /** Serve exactly the pictures inside an instance folder, and refuse the rest. */
 function registerImageProtocol() {
   protocol.handle('mangoimg', async (request) => {
-    const file = screenshots.fileFromUrl(request.url);
-    if (!file || !screenshots.isInsideInstances(file)) {
+    const url = new URL(request.url);
+    const coverId = url.hostname === 'cover'
+      ? decodeURIComponent(url.pathname.replace(/^\//, ''))
+      : null;
+    const isCover = Boolean(coverId && /^[a-f0-9-]+$/i.test(coverId) && store.getProfile(coverId)?.cover);
+    const candidate = isCover ? P.coverFile(coverId) : screenshots.fileFromUrl(request.url);
+    const roots = [
+      P.covers,
+      path.join(P.cache, 'mod-icons'),
+      ...store.profiles.map((profile) => path.join(P.instanceDir(profile.id), 'screenshots')),
+    ];
+    const file = await approvedImagePath(candidate, roots);
+    if (!file) {
       return new Response('Not found', { status: 404 });
     }
     return net.fetch(pathToFileURL(file).toString());
@@ -178,29 +254,28 @@ function createWindow() {
     backgroundColor: '#191614',
     frame: false,
     titleBarStyle: 'hidden',
-    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       spellcheck: false,
     },
   });
 
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  win.loadFile(RENDERER_FILE);
   win.once('ready-to-show', () => win.show());
 
   // External links belong in the user's browser, never in the launcher shell.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
+    if (isExactRendererUrl(url, RENDERER_FILE)) return;
+    event.preventDefault();
+    if (isAllowedExternalUrl(url)) shell.openExternal(url);
   });
 
   if (process.argv.includes('--dev')) win.webContents.openDevTools({ mode: 'detach' });
@@ -212,8 +287,9 @@ function createWindow() {
 
 /** Wrap a handler so renderer-side callers always get {ok, data|error}. */
 function handle(channel, fn) {
-  ipcMain.handle(channel, async (_event, ...args) => {
+  ipcMain.handle(channel, async (event, ...args) => {
     try {
+      if (!trustedIpcSender(event)) throw new Error('Unauthorized IPC sender');
       return { ok: true, data: await fn(...args) };
     } catch (err) {
       console.error(`[ipc:${channel}]`, err);
@@ -222,19 +298,29 @@ function handle(channel, fn) {
   });
 }
 
+function trustedIpcSender(event) {
+  return Boolean(win && !win.isDestroyed()
+    && isTrustedIpcSender(event, win.webContents, RENDERER_FILE));
+}
+
+function onTrusted(channel, fn) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!trustedIpcSender(event)) return;
+    fn(...args);
+  });
+}
+
 function registerIpc() {
   // --- window controls
-  ipcMain.on('window:minimize', () => win?.minimize());
-  ipcMain.on('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
-  ipcMain.on('window:close', () => win?.close());
-  ipcMain.on('open:external', (_e, url) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+  onTrusted('window:minimize', () => win?.minimize());
+  onTrusted('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
+  onTrusted('window:close', () => win?.close());
+  onTrusted('open:external', (url) => {
+    if (isAllowedExternalUrl(url)) shell.openExternal(url);
   });
 
   // --- bootstrap
   handle('app:state', async () => {
-    // Pick up jars that were added or removed while the launcher was closed.
-    syncAllMods();
     return {
       config: store.config,
       profiles: store.profiles,
@@ -257,7 +343,7 @@ function registerIpc() {
   handle('app:openFolder', async (which) => {
     const target = which === 'root' ? P.root
       : which === 'logs' ? P.logs
-      : P.instanceDir(which);
+      : P.instanceDir(requireProfile(which).id);
     await fsp.mkdir(target, { recursive: true });
     shell.openPath(target);
     return target;
@@ -339,20 +425,30 @@ function registerIpc() {
     store.deleteProfile(id);
     return store.profiles;
   });
-  handle('profile:select', async (id) => store.setConfig({ selectedProfile: id }));
+  handle('profile:select', async (id) => {
+    const config = store.setConfig({ selectedProfile: id });
+    refreshModWatchers();
+    return config;
+  });
   // --- profile pictures
-  /** Read a profile's picture back as a data URL the renderer can show. */
-  function coverDataUrl(id) {
+  /** Let Chromium stream and cache a cover instead of copying it as base64. */
+  function coverUrl(id, version = '') {
     const file = P.coverFile(id);
     if (!fs.existsSync(file)) return null;
-    const image = nativeImage.createFromPath(file);
-    return image.isEmpty() ? null : image.toDataURL();
+    const suffix = version ? `?v=${encodeURIComponent(version)}` : '';
+    return `mangoimg://cover/${encodeURIComponent(id)}${suffix}`;
   }
 
   handle('profile:covers', async () =>
     Object.fromEntries(store.profiles
-      .map((p) => [p.id, p.cover ? coverDataUrl(p.id) : null])
+      .map((p) => [p.id, p.cover ? coverUrl(p.id) : null])
       .filter(([, url]) => url)));
+
+  handle('profile:cover', async (id) => {
+    const profile = store.getProfile(id);
+    if (!profile?.cover) return null;
+    return coverUrl(id);
+  });
 
   handle('profile:pickCover', async (id) => {
     if (!store.getProfile(id)) throw new Error('Profile not found');
@@ -380,7 +476,7 @@ function registerIpc() {
     await fsp.mkdir(P.covers, { recursive: true });
     await fsp.writeFile(P.coverFile(id), resized.toPNG());
     store.updateProfile(id, { cover: true });
-    return resized.toDataURL();
+    return coverUrl(id, Date.now());
   });
 
   handle('profile:clearCover', async (id) => {
@@ -441,6 +537,8 @@ function registerIpc() {
     }
     let profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
+    syncMods(profileId);
+    profile = store.getProfile(profileId);
     const account = store.selectedAccount;
     if (!account) throw new Error('Add a Minecraft account first.');
 
@@ -485,7 +583,7 @@ function registerIpc() {
       onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
     });
 
-    const instance = await launch({
+    const instance = await launcher.launch({
       profile,
       account,
       config: store.config,
@@ -497,10 +595,12 @@ function registerIpc() {
     });
 
     running.set(profileId, instance);
+    refreshModWatchers();
     // Recorded now, because the launcher may well be closed before the game is.
     rememberSession(profileId, { pid: instance.pid, versionId: instance.versionId, startedAt: Date.now() });
     instance.on('exit', () => {
       running.delete(profileId);
+      refreshModWatchers();
       rememberSession(profileId, null);
       send('launch:state', { profileId, state: 'stopped' });
       if (store.config.hideOnLaunch && win && !win.isVisible()) win.show();
@@ -701,6 +801,9 @@ function openSignInWindow() {
         sandbox: true,
       },
     });
+    authWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    authWin.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    authWin.webContents.session.setPermissionCheckHandler(() => false);
 
     let settled = false;
     const finish = (fn, value) => {
@@ -747,7 +850,7 @@ function requireProfile(id) {
 
 /** The launcher's own capture of a profile's last run, shown beside the game's. */
 function launcherLogFor(profileId) {
-  return logFileFor(requireProfile(profileId));
+  return launcher.logFileFor(requireProfile(profileId));
 }
 
 /** Never hand tokens to the renderer; it only needs identity and cosmetics. */
@@ -780,11 +883,12 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     P.ensureDirs();
+    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
     store = new Store();
-    updater = createUpdater({ onState: (s) => send('update:state', s) });
+    updater = createUpdaterController((s) => send('update:state', s));
     registerImageProtocol();
     registerIpc();
-    syncAllMods();
     refreshModWatchers();
     // What the website counts: an anonymous id per copy, beaten while we run.
     telemetry.start(() => store.config.telemetry !== false);

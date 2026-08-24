@@ -11,9 +11,12 @@
 		"HeldItemRendererMixin",
 		"HudOverlayMixin",
 		"InteractionMixin",
+		"LightmapTextureManagerMixin",
 		"MinecraftClientMixin",
+		"MouseMixin",
 		"ParticleManagerMixin",
-		"PlayerListHudMixin"
+		"PlayerListHudMixin",
+		"SimpleOptionAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

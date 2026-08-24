@@ -29,9 +29,28 @@ public final class Mods {
 
 	/** Set once a frame from the HUD hook; the renderer mixin only reads it. */
 	public static volatile boolean zoomActive;
+	private static float renderedZoom = 1.0f;
+	private static long lastZoomNanos;
+	private static boolean lastZoomActive;
 
 	public static float zoomFactor() {
-		return zoomLevel.value;
+		long now = System.nanoTime();
+		boolean active = zoomActive;
+		if (lastZoomNanos == 0L || active != lastZoomActive) {
+			lastZoomNanos = now;
+			lastZoomActive = active;
+			return renderedZoom;
+		}
+
+		// Exponential easing is frame-rate independent and also smooths wheel
+		// changes to zoomLevel. About 95% of the movement finishes in 250 ms.
+		float seconds = Math.min(0.1f, (now - lastZoomNanos) / 1_000_000_000.0f);
+		lastZoomNanos = now;
+		float target = active ? zoomLevel.get() : 1.0f;
+		float blend = 1.0f - (float) Math.exp(-12.0f * seconds);
+		renderedZoom += (target - renderedZoom) * blend;
+		if (Math.abs(target - renderedZoom) < 0.001f) renderedZoom = target;
+		return renderedZoom;
 	}
 
 	// --- camera and crosshair ------------------------------------------------
@@ -68,7 +87,7 @@ public final class Mods {
 	public static final Option.Bool hideItemName = new Option.Bool("hideItemName", "Hide item name popup", false);
 
 	static {
-		zoom.hint = "Hold the key to zoom in.";
+		zoom.hint = "Hold the key to zoom in; scroll to change the amount.";
 		mangoBadge.hint = "Off hides the mangos for you; others still see yours.";
 		noHurtCam.hint = "Keeps the view still when something hits you.";
 		crosshair.hint = "Replaces vanilla's, and its attack indicator with it.";

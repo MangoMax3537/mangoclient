@@ -1,6 +1,7 @@
 {
   "name": "mangoclient",
   "productName": "MangoClient",
+  "desktopName": "mangoclient",
   "version": "1.2.10",
   "description": "A fast Minecraft launcher with Modrinth mods, Fabric/Forge support and one-click performance profiles.",
   "main": "src/main/index.js",
@@ -8,9 +9,12 @@
   "license": "MIT",
   "repository": "https://github.com/MangoMax3537/mangoclient",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder --linux AppImage tar.gz",
+    "build": "npm run build:mods && electron-builder",
+    "build:mods": "node tools/build-mods.js",
+    "dist": "npm run build",
     "pack": "electron-builder --dir"
   },
   "dependencies": {
@@ -19,18 +23,19 @@
     "tar": "^7.4.3"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "43.4.1",
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "dev.mangomax.mangoclient",
     "productName": "MangoClient",
     "directories": {
       "output": "dist",
-      "buildResources": "build"
+      "buildResources": "src/assets"
     },
     "asarUnpack": [
-      "src/main/assets/**"
+      "src/main/assets/**",
+      "src/assets/fontconfig.conf"
     ],
     "files": [
       "src/**/*",
@@ -42,13 +47,14 @@
         "tar.gz"
       ],
       "category": "Game",
-      "icon": "build/icons"
+      "icon": "src/assets/icons",
+      "syncDesktopName": true
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.png"
+      "icon": "src/assets/icon.png"
     },
     "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}"
@@ -57,15 +63,23 @@
       "target": [
         "dmg"
       ],
-      "icon": "build/icon.png"
+      "icon": "src/assets/icon.png"
     },
     "publish": [
       {
         "provider": "github"
       }
-    ]
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    }
   },
   "allowScripts": {
-    "electron@33.4.11": true
+    "electron@43.4.1": true
   }
 }

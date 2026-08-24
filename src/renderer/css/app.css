@@ -74,6 +74,8 @@ h1, h2, h3 { color: var(--text); font-weight: 600; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--surface-4); border: 3px solid transparent; background-clip: content-box; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #494339; background-clip: content-box; }
+::-webkit-scrollbar-corner,
+::-webkit-resizer { background: transparent; }
 
 [hidden] { display: none !important; }
 

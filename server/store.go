@@ -27,6 +27,8 @@ const onlineTTL = 3 * time.Minute
 // An install is "active" if the launcher was opened in the last month; that is
 // the honest number to put next to a lifetime download count.
 const activeWindow = 30 * 24 * time.Hour
+const maxActivePlayers = 100_000
+const maxSeenPlayers = 1_000_000
 
 // Install is one copy of the launcher on one machine, keyed by a random id the
 // launcher generates on first run. No account, no hardware id, nothing that
@@ -75,13 +77,18 @@ func (s *Store) Beat(uuid string) {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.players[key] = now
-	if _, ok := s.seen[key]; !ok {
-		s.dirty = true
+	if _, exists := s.players[key]; !exists && len(s.players) >= maxActivePlayers {
+		s.sweepLocked(now)
+		if len(s.players) >= maxActivePlayers {
+			return
+		}
 	}
-	s.seen[key] = now
-	if len(s.players) > 50_000 {
-		s.sweepLocked(now) // a flood of junk uuids must not grow without end
+	s.players[key] = now
+	if _, ok := s.seen[key]; !ok && len(s.seen) < maxSeenPlayers {
+		s.dirty = true
+		s.seen[key] = now
+	} else if ok {
+		s.seen[key] = now
 	}
 }
 
@@ -214,6 +221,16 @@ func (s *Store) load() {
 	if data, err := os.ReadFile(filepath.Join(s.dir, "players.json")); err == nil {
 		_ = json.Unmarshal(data, &s.seen)
 	}
+	if len(s.seen) > maxSeenPlayers {
+		bounded := make(map[string]time.Time, maxSeenPlayers)
+		for key, seen := range s.seen {
+			bounded[key] = seen
+			if len(bounded) == maxSeenPlayers {
+				break
+			}
+		}
+		s.seen = bounded
+	}
 }
 
 func writeAtomic(path string, data []byte) {
@@ -221,13 +238,14 @@ func writeAtomic(path string, data []byte) {
 		return
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		log.Printf("cannot write %s: %v", tmp, err)
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		log.Printf("cannot replace %s: %v", path, err)
 	}
+	_ = os.Chmod(path, 0o600)
 }
 
 // normaliseUUID makes "0a1b..." and "0A1B-..." the same key, and rejects

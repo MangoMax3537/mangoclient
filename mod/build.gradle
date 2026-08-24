@@ -114,7 +114,7 @@ dependencies {
 	// hand - `include` does not follow transitives - and non-transitively, so
 	// slf4j cannot come back in through junixsocket.
 	include(discordIpc) { transitive = false }
-	include('org.json:json:20230227') { transitive = false }
+	include('org.json:json:20251224') { transitive = false }
 	include("com.kohlschutter.junixsocket:junixsocket-common:${junixsocket}") { transitive = false }
 	include("com.kohlschutter.junixsocket:junixsocket-native-common:${junixsocket}") { transitive = false }
 }

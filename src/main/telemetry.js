@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
 const P = require('./paths');
+const { validatedApiBase } = require('./security');
 
 /**
  * The two numbers on mangoclient's website: how many copies exist, and how
@@ -15,7 +16,13 @@ const P = require('./paths');
  * deleting MangoClient forgets it too.
  */
 
-const BASE = 'http://94.249.184.45:8880';
+let BASE;
+try {
+  BASE = validatedApiBase(process.env.MANGO_API_BASE);
+} catch (err) {
+  console.warn(`[telemetry] ${err.message}; using the legacy endpoint`);
+  BASE = validatedApiBase();
+}
 const FILE = path.join(P.root, 'install.json');
 const BEAT_MS = 60 * 1000;
 const TIMEOUT_MS = 8000;

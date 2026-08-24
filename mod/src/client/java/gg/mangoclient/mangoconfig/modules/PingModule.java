@@ -7,6 +7,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.client.network.ServerInfo;
 
 /**
  * Latency to the server.
@@ -34,7 +35,18 @@ public class PingModule extends HudModule {
 		if (mc.isInSingleplayer()) return -2;
 
 		PlayerListEntry entry = handler.getPlayerListEntry(mc.player.getUuid());
-		return entry == null ? -1 : entry.getLatency();
+		int tabLatency = entry == null ? -1 : entry.getLatency();
+		if (tabLatency > 0) return tabLatency;
+
+		// The self entry is initially created with latency 0 and some servers do
+		// not replace that placeholder until their next player-list update. The
+		// server browser has already measured the same connection before join,
+		// so use that value until the authoritative tab latency arrives.
+		ServerInfo server = mc.getCurrentServerEntry();
+		if (server != null && server.ping > 0 && server.ping <= Integer.MAX_VALUE) {
+			return (int) server.ping;
+		}
+		return tabLatency == 0 ? -1 : tabLatency;
 	}
 
 	private String line(MinecraftClient mc) {

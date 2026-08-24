@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('mango', {
     select: (id) => call('profile:select', id),
     duplicate: (id) => call('profile:duplicate', id),
     covers: () => call('profile:covers'),
+    cover: (id) => call('profile:cover', id),
     pickCover: (id) => call('profile:pickCover', id),
     clearCover: (id) => call('profile:clearCover', id),
   },

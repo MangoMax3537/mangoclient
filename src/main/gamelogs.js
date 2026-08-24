@@ -1,13 +1,13 @@
 'use strict';
 const fsp = require('fs/promises');
+const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { promisify } = require('util');
+const { Writable } = require('stream');
+const { pipeline } = require('stream/promises');
 const { shell } = require('electron');
 const P = require('./paths');
 const { fetchWithRetry } = require('./net');
-
-const gunzip = promisify(zlib.gunzip);
 
 /**
  * Log files belonging to one instance, the way OneLauncher's log viewer sees
@@ -97,10 +97,41 @@ async function listLogs(profileId, launcherLog) {
   return entries;
 }
 
-async function readRaw(file) {
-  const buf = await fsp.readFile(file);
-  if (file.endsWith('.gz')) return (await gunzip(buf)).toString('utf8');
-  return buf.toString('utf8');
+async function readTail(file) {
+  const stat = await fsp.stat(file);
+  if (!file.endsWith('.gz')) {
+    const length = Math.min(stat.size, MAX_BYTES);
+    const handle = await fsp.open(file, 'r');
+    try {
+      const data = Buffer.allocUnsafe(length);
+      const { bytesRead } = await handle.read(data, 0, length, stat.size - length);
+      return { text: data.subarray(0, bytesRead).toString('utf8'), bytes: stat.size, truncated: stat.size > length };
+    } finally {
+      await handle.close();
+    }
+  }
+
+  const chunks = [];
+  let kept = 0;
+  let total = 0;
+  const tail = new Writable({
+    write(chunk, _encoding, callback) {
+      total += chunk.length;
+      chunks.push(chunk);
+      kept += chunk.length;
+      while (kept > MAX_BYTES && chunks.length) {
+        const excess = kept - MAX_BYTES;
+        if (chunks[0].length <= excess) kept -= chunks.shift().length;
+        else {
+          chunks[0] = chunks[0].subarray(excess);
+          kept -= excess;
+        }
+      }
+      callback();
+    },
+  });
+  await pipeline(fs.createReadStream(file), zlib.createGunzip(), tail);
+  return { text: Buffer.concat(chunks, kept).toString('utf8'), bytes: total, truncated: total > kept };
 }
 
 /**
@@ -109,14 +140,13 @@ async function readRaw(file) {
  */
 async function readLog(profileId, id, launcherLog) {
   const file = fileForId(profileId, id, launcherLog);
-  const text = await readRaw(file);
-  const truncated = text.length > MAX_BYTES;
+  const { text, bytes, truncated } = await readTail(file);
   return {
     id,
     name: path.basename(file),
-    text: truncated ? text.slice(-MAX_BYTES) : text,
+    text,
     truncated,
-    bytes: text.length,
+    bytes,
   };
 }
 

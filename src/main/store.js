@@ -3,7 +3,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { safeStorage } = require('electron');
 const P = require('./paths');
+const { configPatch, profilePatch } = require('./validation');
+const { UUID_RE } = require('./validation');
+const { encryptionAvailable, serializeAccount, deserializeAccount, hasPlaintextCredentials } = require('./credentials');
+const { containsPath } = require('./security');
 
 function totalRamMB() {
   return Math.floor(os.totalmem() / 1024 / 1024);
@@ -48,18 +53,109 @@ function readJSON(file, fallback) {
 
 function writeJSONAtomic(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, file);
+  fs.chmodSync(file, 0o600);
+}
+
+function externalizeInlineIcons(profiles) {
+  let changed = false;
+  const dir = path.join(P.cache, 'mod-icons');
+  for (const profile of profiles) {
+    for (const mod of profile.mods || []) {
+      const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(mod.icon || '');
+      if (!match) continue;
+      try {
+        const data = Buffer.from(match[1], 'base64');
+        const hash = crypto.createHash('sha1').update(data).digest('hex');
+        const file = path.join(dir, `${hash}.png`);
+        fs.mkdirSync(dir, { recursive: true });
+        if (!fs.existsSync(file)) fs.writeFileSync(file, data);
+        mod.icon = `mangoimg://f/${Buffer.from(file, 'utf8').toString('base64url')}`;
+        changed = true;
+      } catch { /* keep malformed legacy data untouched */ }
+    }
+  }
+  return changed;
+}
+
+function safeMods(profileId, mods) {
+  const base = path.resolve(P.instanceDir(profileId));
+  const allowed = new Set(['mods', 'shaderpacks', 'resourcepacks', 'datapacks']);
+  return mods.map((mod) => {
+    if (mod.filename && path.basename(mod.filename) !== mod.filename) throw new Error('Invalid mod filename');
+    if (!mod.file) return mod;
+    const target = path.resolve(mod.file);
+    const rel = path.relative(base, target);
+    if (!containsPath(base, target) || !allowed.has(rel.split(path.sep)[0])) throw new Error('Mod file is outside its profile');
+    try {
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) throw new Error('Mod file cannot be a symlink');
+      const real = fs.realpathSync(target);
+      if (!containsPath(base, real)) throw new Error('Mod file escapes its profile');
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    return { ...mod, file: target };
+  });
+}
+
+function storedProfile(raw) {
+  if (!raw || typeof raw !== 'object' || !UUID_RE.test(raw.id || '')) return null;
+  const defaults = {
+    name: 'New Profile', mcVersion: '1.21.11', loader: 'vanilla', loaderVersion: '', color: null,
+    cover: false, ram: null, javaArgs: '', mods: [], mangoConfig: null, session: null,
+    lastPlayed: null, playTimeMs: 0,
+  };
+  const clean = { id: raw.id, ...defaults };
+  for (const key of Object.keys(defaults)) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) continue;
+    try { clean[key] = profilePatch({ [key]: raw[key] })[key]; } catch { /* retain default */ }
+  }
+  clean.mods = safeMods(clean.id, clean.mods);
+  clean.created = Number.isSafeInteger(raw.created) && raw.created >= 0 ? raw.created : Date.now();
+  return clean;
 }
 
 class Store {
   constructor() {
     P.ensureDirs();
-    this.config = { ...DEFAULT_CONFIG, ...readJSON(P.config, {}) };
+    const savedConfig = readJSON(P.config, {});
+    let cleanConfig = {};
+    for (const key of Object.keys(DEFAULT_CONFIG)) {
+      if (!Object.prototype.hasOwnProperty.call(savedConfig, key)) continue;
+      try { Object.assign(cleanConfig, configPatch({ [key]: savedConfig[key] })); } catch { /* use the safe default */ }
+    }
+    this.config = { ...DEFAULT_CONFIG, ...cleanConfig };
     const acc = readJSON(P.accounts, { accounts: [], profiles: [] });
-    this.accounts = acc.accounts || [];
-    this.profiles = acc.profiles || [];
+    this.accounts = (Array.isArray(acc.accounts) ? acc.accounts : []).flatMap((account) => {
+      try {
+        const restored = deserializeAccount(account, safeStorage);
+        if (restored.credentialsLocked) console.warn('[credentials] Encrypted account tokens are locked until the OS keyring is available or the account signs in again');
+        return [restored];
+      } catch (err) {
+        console.warn(`[credentials] ${err.message}`);
+        return [];
+      }
+    });
+    this.profiles = (Array.isArray(acc.profiles) ? acc.profiles : []).flatMap((profile) => {
+      try {
+        const clean = storedProfile(profile);
+        return clean ? [clean] : [];
+      } catch (err) {
+        console.warn(`[profiles] Ignoring unsafe profile ${profile?.id || ''}: ${err.message}`);
+        return [];
+      }
+    });
+    const plaintext = this.accounts.some(hasPlaintextCredentials);
+    if (plaintext && !encryptionAvailable(safeStorage)) {
+      console.warn('[credentials] OS key storage is unavailable; account tokens remain protected by file mode 0600 only');
+    }
+    if (externalizeInlineIcons(this.profiles)) this.saveAccounts();
+    // Rewriting migrates legacy plaintext credentials to safeStorage whenever
+    // the operating system offers a real credential backend.
+    if (plaintext && encryptionAvailable(safeStorage)) this.saveAccounts();
     if (this.profiles.length === 0) this.createDefaultProfile();
   }
 
@@ -78,11 +174,14 @@ class Store {
   }
 
   saveAccounts() {
-    writeJSONAtomic(P.accounts, { accounts: this.accounts, profiles: this.profiles });
+    writeJSONAtomic(P.accounts, {
+      accounts: this.accounts.map((account) => serializeAccount(account, safeStorage)),
+      profiles: this.profiles,
+    });
   }
 
   setConfig(patch) {
-    Object.assign(this.config, patch);
+    Object.assign(this.config, configPatch(patch));
     this.saveConfig();
     return this.config;
   }
@@ -90,21 +189,23 @@ class Store {
   // ---- profiles -----------------------------------------------------------
 
   addProfile(data) {
+    const { id: _id, created: _created, ...candidate } = data || {};
+    const clean = profilePatch(candidate);
     const profile = {
       id: crypto.randomUUID(),
-      name: data.name || 'New Profile',
-      mcVersion: data.mcVersion || '1.21.11',
-      loader: data.loader || 'vanilla',      // vanilla | fabric | quilt | neoforge
-      loaderVersion: data.loaderVersion || '',
-      color: data.color || null,              // null = derived from the id
-      cover: data.cover || false,             // true = covers/<id>.png exists
-      ram: data.ram || null,                  // null = inherit global
-      javaArgs: data.javaArgs || '',
-      mods: data.mods || [],                  // installed Modrinth mods
-      mangoConfig: null,                      // null = follow the global setting
-      session: null,                          // {pid} while the game is playing
-      lastPlayed: null,
-      playTimeMs: 0,
+      name: clean.name || 'New Profile',
+      mcVersion: clean.mcVersion || '1.21.11',
+      loader: clean.loader || 'vanilla',      // vanilla | fabric | quilt | neoforge
+      loaderVersion: clean.loaderVersion || '',
+      color: clean.color || null,              // null = derived from the id
+      cover: clean.cover || false,             // true = covers/<id>.png exists
+      ram: clean.ram || null,                  // null = inherit global
+      javaArgs: clean.javaArgs || '',
+      mods: clean.mods || [],                  // installed Modrinth mods
+      mangoConfig: clean.mangoConfig ?? null,  // null = follow the global setting
+      session: clean.session || null,          // {pid} while the game is playing
+      lastPlayed: clean.lastPlayed || null,
+      playTimeMs: clean.playTimeMs || 0,
       created: Date.now(),
     };
     this.profiles.push(profile);
@@ -116,7 +217,9 @@ class Store {
   updateProfile(id, patch) {
     const p = this.profiles.find((x) => x.id === id);
     if (!p) return null;
-    Object.assign(p, patch);
+    const clean = profilePatch(patch);
+    if (clean.mods) clean.mods = safeMods(id, clean.mods);
+    Object.assign(p, clean);
     this.saveAccounts();
     return p;
   }

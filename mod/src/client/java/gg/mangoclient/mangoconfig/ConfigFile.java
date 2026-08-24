@@ -20,6 +20,7 @@ public class ConfigFile {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
 	public boolean hudEnabled = true;
+	public boolean fullbright = false;
 
 	private final Path file;
 
@@ -38,6 +39,7 @@ public class ConfigFile {
 		if (root == null) return;
 
 		if (root.has("hudEnabled")) hudEnabled = root.get("hudEnabled").getAsBoolean();
+		if (root.has("fullbright")) fullbright = root.get("fullbright").getAsBoolean();
 		// Older files kept the open key at the top level.
 		if (root.has("openKey")) Mods.openKey.value = root.get("openKey").getAsInt();
 
@@ -63,6 +65,7 @@ public class ConfigFile {
 	public void save(List<HudModule> modules) {
 		JsonObject root = new JsonObject();
 		root.addProperty("hudEnabled", hudEnabled);
+		root.addProperty("fullbright", fullbright);
 
 		JsonObject settings = new JsonObject();
 		for (Option option : Mods.all()) option.save(settings);

@@ -1,10 +1,12 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 const P = require('./paths');
 const mangoconfig = require('./mangoconfig');
 const performancemods = require('./performancemods');
+const { LIMITS } = require('./archive');
 
 /**
  * Mods the player dropped into the instance's `mods` folder by hand.
@@ -25,12 +27,22 @@ function jarName(name) {
   return name.replace(/\.disabled$/i, '');
 }
 
-function iconDataUrl(zip, logoFile) {
+function imageUrl(file) {
+  return `mangoimg://f/${Buffer.from(file, 'utf8').toString('base64url')}`;
+}
+
+function iconFileUrl(zip, logoFile) {
   if (!logoFile || !/\.png$/i.test(logoFile)) return null;
   const entry = zip.getEntry(logoFile.replace(/^\/+/, ''));
   if (!entry || entry.isDirectory || entry.header.size > MAX_ICON_BYTES) return null;
   try {
-    return `data:image/png;base64,${entry.getData().toString('base64')}`;
+    const data = entry.getData();
+    const hash = crypto.createHash('sha1').update(data).digest('hex');
+    const dir = path.join(P.cache, 'mod-icons');
+    const file = path.join(dir, `${hash}.png`);
+    fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(file)) fs.writeFileSync(file, data);
+    return imageUrl(file);
   } catch {
     return null;
   }
@@ -38,7 +50,7 @@ function iconDataUrl(zip, logoFile) {
 
 function readEntry(zip, name) {
   const entry = zip.getEntry(name);
-  if (!entry || entry.isDirectory) return null;
+  if (!entry || entry.isDirectory || entry.header.size > LIMITS.metadata) return null;
   try {
     // Some mods ship their metadata with a byte-order mark, which JSON.parse rejects.
     return entry.getData().toString('utf8').replace(/^﻿/, '');
@@ -109,7 +121,7 @@ function readJarMeta(file) {
       return {
         title: data.name || data.id || fallback.title,
         version: data.version || fallback.version,
-        icon: iconDataUrl(zip, typeof data.icon === 'string' ? data.icon : data.icon?.['64']),
+        icon: iconFileUrl(zip, typeof data.icon === 'string' ? data.icon : data.icon?.['64']),
       };
     }
 
@@ -120,7 +132,7 @@ function readJarMeta(file) {
       return {
         title: meta.name || loader.id || fallback.title,
         version: loader.version || fallback.version,
-        icon: iconDataUrl(zip, typeof meta.icon === 'string' ? meta.icon : meta.icon?.['64']),
+        icon: iconFileUrl(zip, typeof meta.icon === 'string' ? meta.icon : meta.icon?.['64']),
       };
     }
 
@@ -132,7 +144,7 @@ function readJarMeta(file) {
       return {
         title: data.title || fallback.title,
         version,
-        icon: iconDataUrl(zip, data.logoFile),
+        icon: iconFileUrl(zip, data.logoFile),
       };
     }
 
@@ -220,9 +232,11 @@ function syncProfileMods(profile) {
       continue;
     }
     onDisk.delete(filename);
-    if (rec.file !== hit.file || (rec.enabled !== false) !== hit.enabled) {
+    const inlineIcon = rec.local && /^data:image\//.test(rec.icon || '');
+    if (rec.file !== hit.file || (rec.enabled !== false) !== hit.enabled || inlineIcon) {
       changed = true;
-      mods.push({ ...rec, filename, file: hit.file, enabled: hit.enabled });
+      const replacement = inlineIcon ? readJarMeta(hit.file).icon : rec.icon;
+      mods.push({ ...rec, filename, file: hit.file, enabled: hit.enabled, icon: replacement });
     } else {
       mods.push(rec);
     }
