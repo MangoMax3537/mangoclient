@@ -370,27 +370,16 @@ main {
 
 /* --- the mango glyph, tinted the way Minecraft tints it ------------------- */
 
-/* Minecraft multiplies the grey bitmap by the text colour, so the page does
-   the same thing: flat rank colour, the icon multiplied over it, both clipped
-   to the icon's own alpha. Tinting a silhouette would have lost the shading. */
+/* The page shows the very bitmaps the mod draws in game, so what a visitor
+   sees here is exactly what stands next to a name on a server. */
 .mango {
-  position: relative;
-  isolation: isolate;
   display: inline-block;
   width: var(--size, 22px);
   height: var(--size, 22px);
-  background: var(--rank-color, var(--member));
-  -webkit-mask: url("mango.png") center / contain no-repeat;
-  mask: url("mango.png") center / contain no-repeat;
-}
-
-.mango::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("mango.png") center / contain no-repeat;
-  mix-blend-mode: multiply;
+  object-fit: contain;
   image-rendering: pixelated;
+  vertical-align: middle;
+  flex: none;
 }
 
 /* --- legend and footer ---------------------------------------------------- */

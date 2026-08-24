@@ -138,9 +138,11 @@ function personRow(member, rank) {
   who.appendChild(ign);
   li.appendChild(who);
 
-  const mango = document.createElement('span');
+  const mango = document.createElement('img');
   mango.className = 'mango';
-  mango.title = `${member.name} shows a ${rank === 'owner' ? 'golden' : rank === 'support' ? 'blue' : 'orange'} mango in game`;
+  mango.alt = '';
+  mango.src = `mango-${rank}.png`;
+  mango.title = `${member.name} carries this mango in game`;
   li.appendChild(mango);
   return li;
 }

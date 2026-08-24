@@ -10,7 +10,7 @@ import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
 import java.net.URI;
@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Who else is on MangoClient right now, and what they are to it.
@@ -37,8 +36,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class Presence {
 	private static final String BASE = "http://94.249.184.45:8880";
-	/** The mango glyph in the badge font; see assets/mangoconfig/font/mango.json. */
-	private static final String GLYPH = "";
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
 	/** How often we tell the server we are here. */
@@ -51,20 +48,28 @@ public final class Presence {
 	private static final long POLL_MS = 500;
 
 	/**
-	 * The mango bitmap is painted in greys and Minecraft multiplies it by the
-	 * text colour, so a rank is nothing but a tint. White leaves the texture
-	 * exactly as painted - that grey mango is what every MangoClient player has
-	 * always had - and the ranks colour it from there.
+	 * A glyph per rank rather than one glyph tinted four ways: the mango is the
+	 * app's own logo, and a tint could only have multiplied it - the green leaf
+	 * would have survived into the gold and the blue. See mango.json, where the
+	 * four bitmaps sit at U+E000 upwards in the order used here.
 	 */
-	private static final int GREY = 0xFFFFFF;
-	private static final Map<String, Integer> RANK_COLOURS = Map.of(
-		"owner", 0xFFD24A,      // gold
-		"support", 0x69B4FF,    // blue
-		"mangoplus", 0xF6A93C   // mango orange
+	private static final String GLYPH_MEMBER = "";
+	private static final Map<String, String> RANK_GLYPHS = Map.of(
+		"mangoplus", "", // the logo in its own colours
+		"owner", "",     // gold
+		"support", ""    // blue
 	);
 
-	/** One style per colour, built once: nametags rebuild their text every frame. */
-	private static final Map<Integer, Style> STYLES = new ConcurrentHashMap<>();
+	/**
+	 * White, so each bitmap is drawn exactly as it was painted; italic off so
+	 * /nick styles and team formatting cannot lean the mango over, bold off so
+	 * they cannot fatten it either.
+	 */
+	private static final Style BADGE_STYLE = Compat
+		.withFont(Style.EMPTY, Identifier.of("mangoconfig", "mango"))
+		.withColor(Formatting.WHITE)
+		.withItalic(false)
+		.withBold(false);
 
 	/** UUIDs the server vouched for; swapped whole, never mutated. */
 	private static volatile Set<UUID> online = Set.of();
@@ -94,34 +99,24 @@ public final class Presence {
 		return online.contains(uuid);
 	}
 
-	/** The mango in this player's colour, a space, then the name as it was. */
+	/** This player's mango, a space, then the name as it was. */
 	public static Text withBadge(Text name, UUID uuid) {
 		MutableText out = Text.empty();
-		out.append(Text.literal(GLYPH).setStyle(styleFor(colourFor(uuid))));
+		out.append(Text.literal(glyphFor(uuid)).setStyle(BADGE_STYLE));
 		out.append(" ");
 		out.append(name);
 		return out;
 	}
 
-	private static int colourFor(UUID uuid) {
+	private static String glyphFor(UUID uuid) {
 		String rank = null;
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc != null && mc.player != null && mc.player.getUuid().equals(uuid)) {
 			rank = selfRank;
 		}
 		if (rank == null || rank.isEmpty()) rank = ranks.get(uuid);
-		if (rank == null) return GREY;
-		return RANK_COLOURS.getOrDefault(rank, GREY);
-	}
-
-	private static Style styleFor(int colour) {
-		return STYLES.computeIfAbsent(colour, rgb -> Compat
-			.withFont(Style.EMPTY, Identifier.of("mangoconfig", "mango"))
-			.withColor(TextColor.fromRgb(rgb))
-			// Italic off so /nick styles and team formatting cannot lean the
-			// mango over, bold off so they cannot fatten it either.
-			.withItalic(false)
-			.withBold(false));
+		if (rank == null) return GLYPH_MEMBER;
+		return RANK_GLYPHS.getOrDefault(rank, GLYPH_MEMBER);
 	}
 
 	// --- the background loop --------------------------------------------------

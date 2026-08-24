@@ -2,10 +2,31 @@
 	"providers": [
 		{
 			"type": "bitmap",
-			"file": "mangoconfig:font/mango_icon.png",
+			"file": "mangoconfig:font/mango_grey.png",
 			"ascent": 7,
 			"height": 8,
 			"chars": [""]
+		},
+		{
+			"type": "bitmap",
+			"file": "mangoconfig:font/mango_plus.png",
+			"ascent": 7,
+			"height": 8,
+			"chars": [""]
+		},
+		{
+			"type": "bitmap",
+			"file": "mangoconfig:font/mango_gold.png",
+			"ascent": 7,
+			"height": 8,
+			"chars": [""]
+		},
+		{
+			"type": "bitmap",
+			"file": "mangoconfig:font/mango_blue.png",
+			"ascent": 7,
+			"height": 8,
+			"chars": [""]
 		}
 	]
 }
