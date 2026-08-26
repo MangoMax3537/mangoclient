@@ -1,5 +1,12 @@
 # Changelog
 
+## MangoClient 1.2.12
+
+### Launcher
+
+- Manually added mods now appear immediately after opening the launcher or switching profiles, without requiring Minecraft to start first.
+- Legacy inline mod icons are migrated before profile validation, preserving existing Modrinth metadata during updates.
+
 ## MangoClient 1.2.11
 
 This update is mostly about the small things that get annoying fast: a ping display stuck at zero, zoom steps that feel too sharp, and downloads failing even though Mojang is sending the right file.
