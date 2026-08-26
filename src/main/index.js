@@ -176,6 +176,13 @@ function syncMods(profileId) {
   return { mods, changed };
 }
 
+/** Pick up jars added while the launcher was closed before the UI reads state. */
+function syncSelectedMods() {
+  const profile = store.selectedProfile;
+  if (!profile) return;
+  try { syncMods(profile.id); } catch (err) { console.error('[mods:sync]', err); }
+}
+
 /**
  * Watch an instance's mods folder so a jar dropped in while the launcher is
  * open shows up without the player having to click anything.
@@ -321,6 +328,7 @@ function registerIpc() {
 
   // --- bootstrap
   handle('app:state', async () => {
+    syncSelectedMods();
     return {
       config: store.config,
       profiles: store.profiles,
@@ -427,6 +435,7 @@ function registerIpc() {
   });
   handle('profile:select', async (id) => {
     const config = store.setConfig({ selectedProfile: id });
+    syncSelectedMods();
     refreshModWatchers();
     return config;
   });

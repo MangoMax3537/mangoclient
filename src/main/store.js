@@ -63,7 +63,7 @@ function externalizeInlineIcons(profiles) {
   let changed = false;
   const dir = path.join(P.cache, 'mod-icons');
   for (const profile of profiles) {
-    for (const mod of profile.mods || []) {
+    for (const mod of (Array.isArray(profile?.mods) ? profile.mods : [])) {
       const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(mod.icon || '');
       if (!match) continue;
       try {
@@ -129,6 +129,11 @@ class Store {
     }
     this.config = { ...DEFAULT_CONFIG, ...cleanConfig };
     const acc = readJSON(P.accounts, { accounts: [], profiles: [] });
+    const rawProfiles = Array.isArray(acc.profiles) ? acc.profiles : [];
+    // Older releases stored local mod icons as large inline data URLs. Migrate
+    // those before validation, otherwise one legacy icon can reset the whole
+    // stored mod list and discard its Modrinth metadata.
+    const migratedInlineIcons = externalizeInlineIcons(rawProfiles);
     this.accounts = (Array.isArray(acc.accounts) ? acc.accounts : []).flatMap((account) => {
       try {
         const restored = deserializeAccount(account, safeStorage);
@@ -139,7 +144,7 @@ class Store {
         return [];
       }
     });
-    this.profiles = (Array.isArray(acc.profiles) ? acc.profiles : []).flatMap((profile) => {
+    this.profiles = rawProfiles.flatMap((profile) => {
       try {
         const clean = storedProfile(profile);
         return clean ? [clean] : [];
@@ -152,7 +157,7 @@ class Store {
     if (plaintext && !encryptionAvailable(safeStorage)) {
       console.warn('[credentials] OS key storage is unavailable; account tokens remain protected by file mode 0600 only');
     }
-    if (externalizeInlineIcons(this.profiles)) this.saveAccounts();
+    if (migratedInlineIcons) this.saveAccounts();
     // Rewriting migrates legacy plaintext credentials to safeStorage whenever
     // the operating system offers a real credential backend.
     if (plaintext && encryptionAvailable(safeStorage)) this.saveAccounts();
