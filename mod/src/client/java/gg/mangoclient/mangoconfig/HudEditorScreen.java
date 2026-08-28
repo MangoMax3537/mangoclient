@@ -62,7 +62,7 @@ public class HudEditorScreen extends CompatScreen {
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		ctx.fill(0, 0, this.width, this.height, 0x66000000);
+		ctx.fill(0, 0, this.width, this.height, Theme.withAlpha(Theme.SCRIM, 0x66));
 
 		MangoConfig.renderModules(ctx, mc, true);
 

@@ -49,7 +49,7 @@ MangoClient checks GitHub Releases for updates and can install a new version fro
 
 ## MangoConfig compatibility
 
-MangoConfig `1.9.2` is bundled for Fabric and Quilt profiles running these Minecraft versions:
+MangoConfig `1.9.3` is bundled for Fabric and Quilt profiles running these Minecraft versions:
 
 `1.20.5`, `1.20.6`, and every supported release from `1.21` through `1.21.11`.
 

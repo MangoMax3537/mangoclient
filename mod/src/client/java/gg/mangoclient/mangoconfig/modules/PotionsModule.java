@@ -2,6 +2,7 @@ package gg.mangoclient.mangoconfig.modules;
 
 import gg.mangoclient.mangoconfig.HudModule;
 import gg.mangoclient.mangoconfig.Option;
+import gg.mangoclient.mangoconfig.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -41,7 +42,7 @@ public class PotionsModule extends HudModule {
 	}
 
 	private int colourFor(StatusEffectInstance effect) {
-		if (effect.getDuration() / 20 <= warnAt.value) return 0xFFF2A53C;
+		if (effect.getDuration() / 20 <= warnAt.value) return Theme.WARN;
 		return colour.value;
 	}
 

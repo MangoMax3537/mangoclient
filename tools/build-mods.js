@@ -11,7 +11,9 @@ const versions = [
   '1.20.5', '1.20.6', '1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4',
   '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11',
 ];
-const release = '1.9.2';
+// The one place the version is written down is the mod's own build file.
+const release = /^mod_version=(.+)$/m.exec(fs.readFileSync(path.join(mod, 'gradle.properties'), 'utf8'))?.[1]?.trim();
+if (!release) throw new Error('mod/gradle.properties has no mod_version');
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'mangoconfig-release-'));
 
 try {

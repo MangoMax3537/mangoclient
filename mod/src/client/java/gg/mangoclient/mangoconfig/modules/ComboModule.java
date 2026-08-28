@@ -3,6 +3,7 @@ package gg.mangoclient.mangoconfig.modules;
 import gg.mangoclient.mangoconfig.Combat;
 import gg.mangoclient.mangoconfig.Option;
 import gg.mangoclient.mangoconfig.TextModule;
+import gg.mangoclient.mangoconfig.Theme;
 import net.minecraft.client.MinecraftClient;
 
 import java.util.List;
@@ -42,8 +43,8 @@ public class ComboModule extends TextModule {
 	protected int colourOf(MinecraftClient mc, int index) {
 		if (!escalate.value) return colour.value;
 		int combo = Math.max(Combat.combo(), showFrom.value);
-		if (combo >= 10) return 0xFFFF4B4B;
-		if (combo >= 5) return 0xFFF2A53C;
-		return 0xFF1BD96A;
+		if (combo >= 10) return Theme.DANGER;
+		if (combo >= 5) return Theme.WARN;
+		return Theme.OK;
 	}
 }

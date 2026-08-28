@@ -2,6 +2,7 @@ package gg.mangoclient.mangoconfig.modules;
 
 import gg.mangoclient.mangoconfig.HudModule;
 import gg.mangoclient.mangoconfig.Option;
+import gg.mangoclient.mangoconfig.Theme;
 import gg.mangoclient.mangoconfig.compat.Compat;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -76,8 +77,8 @@ public class ArmourModule extends HudModule {
 	private int durabilityColour(ItemStack stack) {
 		if (!warnLow.value || stack.isEmpty() || !stack.isDamageable()) return colour.value;
 		float left = 1f - (stack.getDamage() / (float) stack.getMaxDamage());
-		if (left <= 0.1f) return 0xFFFF4B4B;
-		if (left <= 0.25f) return 0xFFF2A53C;
+		if (left <= 0.1f) return Theme.DANGER;
+		if (left <= 0.25f) return Theme.WARN;
 		return colour.value;
 	}
 

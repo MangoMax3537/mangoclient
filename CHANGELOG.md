@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### MangoConfig
+
+- The in-game HUD, config screen and HUD editor now use the launcher's current palette: warm greys and the orange sampled from the logo, instead of the cool greys they were left on. Colours already saved in `config/mangoconfig.json` are carried over, so an existing HUD changes with it.
+- The Ping HUD now measures the round trip to the server itself, with the same play-protocol ping request Minecraft's own debug chart uses, instead of reading whatever latency the server publishes in the tab list. Servers that never answer fall back to the tab list as before.
+- Status colours in the Memory, Combo, Armor, Potions and Ping modules come from the shared palette rather than being written out in each module.
+
 ## MangoClient 1.2.12
 
 ### Launcher

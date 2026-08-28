@@ -2,6 +2,7 @@ package gg.mangoclient.mangoconfig.modules;
 
 import gg.mangoclient.mangoconfig.Option;
 import gg.mangoclient.mangoconfig.TextModule;
+import gg.mangoclient.mangoconfig.Theme;
 import net.minecraft.client.MinecraftClient;
 
 import java.util.List;
@@ -51,8 +52,8 @@ public class MemoryModule extends TextModule {
 	protected int colourOf(MinecraftClient mc, int index) {
 		if (!warn.value) return colour.value;
 		float f = fraction();
-		if (f >= 0.9f) return 0xFFFF4B4B;
-		if (f >= 0.75f) return 0xFFF2A53C;
+		if (f >= 0.9f) return Theme.DANGER;
+		if (f >= 0.75f) return Theme.WARN;
 		return colour.value;
 	}
 }

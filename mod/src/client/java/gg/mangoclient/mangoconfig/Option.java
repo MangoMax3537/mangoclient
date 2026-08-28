@@ -163,7 +163,7 @@ public abstract class Option {
 
 		@Override
 		public void load(JsonObject json) {
-			if (json.has(key)) value = json.get(key).getAsInt();
+			if (json.has(key)) value = Theme.repaint(json.get(key).getAsInt());
 		}
 	}
 
