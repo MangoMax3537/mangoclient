@@ -223,7 +223,11 @@ function syncProfileMods(profile) {
 
   for (const rec of profile.mods || []) {
     // Shaders, resource packs and datapacks live in their own folders.
-    if ((rec.type || 'mod') !== 'mod') { mods.push(rec); continue; }
+    if ((rec.type || 'mod') !== 'mod') {
+      if (!rec.file || fs.existsSync(rec.file)) mods.push(rec);
+      else changed = true; // removed manually from its content folder
+      continue;
+    }
 
     const filename = rec.filename || jarName(path.basename(rec.file || ''));
     const hit = onDisk.get(filename);

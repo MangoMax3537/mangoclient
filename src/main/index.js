@@ -183,6 +183,14 @@ function syncSelectedMods() {
   try { syncMods(profile.id); } catch (err) { console.error('[mods:sync]', err); }
 }
 
+/** Persist the dependency graph for old profiles before an operation relies
+ * on it. New installs already carry this metadata. */
+async function prepareProfileDependencies(profile) {
+  const hydrated = await modrinth.hydrateDependencyMetadata(profile);
+  if (hydrated.changed) store.updateProfile(profile.id, { mods: hydrated.mods });
+  return { profile: store.getProfile(profile.id), complete: hydrated.complete };
+}
+
 /**
  * Watch an instance's mods folder so a jar dropped in while the launcher is
  * open shows up without the player having to click anything.
@@ -352,6 +360,16 @@ function registerIpc() {
     const target = which === 'root' ? P.root
       : which === 'logs' ? P.logs
       : P.instanceDir(requireProfile(which).id);
+    await fsp.mkdir(target, { recursive: true });
+    shell.openPath(target);
+    return target;
+  });
+  handle('app:openContentFolder', async (profileId, type) => {
+    const folders = { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks' };
+    const folder = folders[type];
+    if (!folder) throw new Error('Unknown content type');
+    const profile = requireProfile(profileId);
+    const target = path.join(P.instanceDir(profile.id), folder);
     await fsp.mkdir(target, { recursive: true });
     shell.openPath(target);
     return target;
@@ -570,11 +588,19 @@ function registerIpc() {
     // MangoConfig rides along on every launch, so the in-game HUD is there
     // whether or not the player thought about it. It never throws: starting
     // without it beats refusing to start.
-    const mc = await mangoconfig.ensure({
-      profile,
-      config: store.config,
-      onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
-    });
+    const [mc] = await Promise.all([
+      mangoconfig.ensure({
+        profile,
+        config: store.config,
+        onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
+      }),
+      // These helpers touch separate jars and can be prepared together.
+      performancemods.ensure({
+        profile,
+        config: store.config,
+        onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
+      }),
+    ]);
     if (mc.error) {
       send('launch:log', { profileId, line: `${mangoconfig.NAME} skipped: ${mc.error}`, level: 'warn' });
     } else if (mc.state === 'unsupported') {
@@ -584,13 +610,6 @@ function registerIpc() {
         level: 'warn',
       });
     }
-
-    // Sodium and friends ride along the same way: best-effort, never blocking.
-    await performancemods.ensure({
-      profile,
-      config: store.config,
-      onLog: (line) => send('launch:log', { profileId, line, level: 'info' }),
-    });
 
     const instance = await launcher.launch({
       profile,
@@ -677,27 +696,52 @@ function registerIpc() {
   });
 
   handle('modrinth:uninstall', async (profileId, projectId) => {
-    const profile = store.getProfile(profileId);
+    let profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
+    ({ profile } = await prepareProfileDependencies(profile));
+    const dependents = modrinth.installedDependents(profile, projectId);
+    if (dependents.length) {
+      return {
+        blocked: true,
+        dependents: dependents.map((record) => ({ projectId: record.projectId, title: record.title })),
+        mods: profile.mods || [],
+      };
+    }
     await modrinth.uninstallMod(profile, projectId);
-    store.updateProfile(profileId, { mods: (profile.mods || []).filter((m) => m.projectId !== projectId) });
-    return store.getProfile(profileId).mods;
+    const mods = (profile.mods || []).filter((m) => m.projectId !== projectId);
+    store.updateProfile(profileId, { mods });
+    return { blocked: false, dependents: [], mods: store.getProfile(profileId).mods };
   });
 
   handle('modrinth:toggle', async (profileId, projectId, enabled) => {
-    const profile = store.getProfile(profileId);
+    let profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
-    const newPath = await modrinth.setModEnabled(profile, projectId, enabled);
-    const mods = (profile.mods || []).map((m) =>
-      m.projectId === projectId ? { ...m, enabled, file: newPath || m.file } : m);
-    store.updateProfile(profileId, { mods });
-    return mods;
+    const prepared = await prepareProfileDependencies(profile);
+    profile = prepared.profile;
+    if (!prepared.complete) throw new Error('Mod dependencies could not be verified. Check your internet connection and try again.');
+    const result = await modrinth.setEnabledWithDependencies(profile, projectId, enabled);
+    store.updateProfile(profileId, { mods: result.mods });
+    return { mods: store.getProfile(profileId).mods, affected: result.affected };
   });
 
   handle('modrinth:checkUpdates', async (profileId) => {
-    const profile = store.getProfile(profileId);
+    let profile = store.getProfile(profileId);
     if (!profile) throw new Error('Profile not found');
+    ({ profile } = await prepareProfileDependencies(profile));
     return modrinth.checkUpdates(profile);
+  });
+
+  handle('modrinth:checkAllUpdates', async () => {
+    const checked = [];
+    for (const stored of store.profiles) {
+      try {
+        const { profile } = await prepareProfileDependencies(stored);
+        checked.push({ profileId: profile.id, updates: await modrinth.checkUpdates(profile) });
+      } catch (err) {
+        checked.push({ profileId: stored.id, updates: [], error: err.message || String(err) });
+      }
+    }
+    return checked;
   });
 
   handle('modrinth:installModpack', async (profileId, versionId) => {

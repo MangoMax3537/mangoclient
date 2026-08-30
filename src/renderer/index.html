@@ -6,24 +6,28 @@
         content="default-src 'self'; img-src 'self' data: blob: mangoimg: https://cdn.modrinth.com https://api.modrinth.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:;" />
   <title>MangoClient</title>
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/home.css" />
 </head>
 <body>
   <div id="app">
     <!-- ============================ STATUSBAR ============================ -->
     <header id="statusbar">
       <div class="sb-left">
-        <span class="brand-mark" id="brand-mark"></span>
         <button class="icon-btn" id="nav-back" data-icon="arrowLeft" data-tip="tip.back" aria-label="Zurück"></button>
         <button class="icon-btn" id="nav-fwd" data-icon="arrowRight" data-tip="tip.forward" aria-label="Vor"></button>
+        <span id="breadcrumb">Start</span>
       </div>
 
-      <div class="sb-drag"><span id="breadcrumb">Start</span></div>
+      <div class="sb-drag"></div>
 
       <div class="sb-right">
         <button class="update-pill" id="update-pill" hidden><span data-icon="download"></span><span id="update-pill-text"></span></button>
         <button class="run-pill" id="run-pill" hidden><span class="dot up"></span><span id="run-name"></span></button>
         <button class="mc-pill" id="mc-pill" data-tip="mangoconfig.tip">
-          <span class="dot"></span><span data-i18n="mangoconfig.title">MangoConfig</span><b id="mc-state"></b>
+          <span data-i18n="mangoconfig.title">MangoConfig</span><b id="mc-state" aria-hidden="true"></b>
         </button>
         <button class="icon-btn" id="btn-console" data-icon="terminal" data-tip="btn.console" aria-label="Konsole"></button>
         <button class="icon-btn" id="btn-sidebar" data-icon="panelRight" data-tip="tip.sidebar" aria-label="Seitenleiste"></button>
@@ -36,17 +40,23 @@
     </header>
 
     <!-- ============================== RAIL ============================== -->
-    <nav id="rail">
-      <button class="rail-btn active" data-view="start" data-icon="home" data-tip="nav.start"></button>
-      <button class="rail-btn" data-view="mods" data-icon="compass" data-tip="nav.mods"></button>
-      <button class="rail-btn" data-view="profiles" data-icon="layers" data-tip="nav.profiles"></button>
-      <button class="rail-btn" data-view="servers" data-icon="server" data-tip="nav.servers"></button>
-      <button class="rail-btn" data-view="stats" data-icon="chart" data-tip="nav.stats"></button>
-      <div class="rail-sep"></div>
-      <div id="rail-instances"></div>
-      <button class="rail-btn" id="rail-new" data-icon="plus" data-tip="profiles.new"></button>
+    <nav id="rail" aria-label="Hauptnavigation">
+      <div class="rail-brand" aria-label="MangoClient">
+        <span class="brand-mark" id="brand-mark"></span>
+      </div>
+      <div class="rail-destinations">
+        <button class="rail-btn active" data-view="start" data-icon="home" data-tip="nav.start" aria-label="Start"></button>
+        <button class="rail-btn" data-view="mods" data-icon="compass" data-tip="nav.mods" aria-label="Discover"></button>
+        <button class="rail-btn" data-view="profiles" data-icon="layers" data-tip="nav.profiles" aria-label="Profile"></button>
+        <button class="rail-btn" data-view="servers" data-icon="server" data-tip="nav.servers" aria-label="Server"></button>
+        <button class="rail-btn" data-view="stats" data-icon="chart" data-tip="nav.stats" aria-label="Statistik"></button>
+      </div>
+      <div class="rail-profiles">
+        <div id="rail-instances"></div>
+        <button class="rail-btn" id="rail-new" data-icon="plus" data-tip="profiles.new"></button>
+      </div>
       <div class="rail-spacer"></div>
-      <button class="rail-btn" data-view="settings" data-icon="sliders" data-tip="nav.settings"></button>
+      <button class="rail-btn" data-view="settings" data-icon="sliders" data-tip="nav.settings" aria-label="Einstellungen"></button>
       <button class="rail-btn rail-avatar" id="account-chip">
         <img id="chip-avatar" alt="" />
       </button>
@@ -57,42 +67,94 @@
     <main id="main">
       <!-- ============================ START ============================ -->
       <section class="view active" id="view-start">
-        <section class="panel instance-hero">
-          <span class="cover lg" id="lp-tile"></span>
-          <div class="hero-body">
-            <h1 id="lp-name"></h1>
-            <p id="lp-sub"></p>
-            <div class="facts" id="lp-facts"></div>
-          </div>
-          <div class="hero-actions">
-            <button class="btn brand lg" id="btn-play">
-              <span data-icon="play"></span>
-              <span id="play-label">Spielen</span>
-            </button>
-            <button class="btn" id="btn-edit-current" data-icon="pencil"><span data-i18n="profiles.edit">Bearbeiten</span></button>
-          </div>
-        </section>
+        <div class="home-layout">
+          <div class="home-primary">
+            <section class="home-hero" aria-labelledby="lp-name">
+              <svg class="home-line-art" viewBox="0 0 1000 480" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M-80 354C106 212 252 438 455 307S765 164 1080 350" />
+                <path d="M-50 400C176 282 299 465 520 343S809 261 1055 407" />
+                <path class="accent" d="M560 458C655 320 778 246 1050 232" />
+              </svg>
 
-        <div class="notice warn" id="ram-warn" hidden>
-          <span data-icon="alert"></span>
-          <span data-i18n="warn.lowram">Wenig Arbeitsspeicher zugewiesen, das Spiel könnte ruckeln.</span>
-        </div>
+              <div class="home-hero-copy">
+                <div class="home-profile-heading">
+                  <span class="cover" id="lp-tile"></span>
+                  <div>
+                    <h1 id="lp-name"></h1>
+                    <p id="lp-sub"></p>
+                  </div>
+                </div>
 
-        <div class="progress" id="launch-progress" hidden>
-          <div class="progress-label"><span id="progress-text">…</span><span id="progress-pct">0%</span></div>
-          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-        </div>
+                <div class="home-stats" id="lp-facts"></div>
 
-        <section class="panel start-mods">
-          <div class="panel-head">
-            <h2><span data-i18n="mods.installed">Installiert</span> <span class="count" id="start-mod-count"></span></h2>
-            <div class="panel-actions">
-              <button class="btn sm" id="btn-start-add-mods" data-icon="plus"><span data-i18n="mods.add">Mods hinzufügen</span></button>
-              <button class="btn sm" id="btn-start-mods-folder" data-icon="folder"><span data-i18n="mods.openFolder">Ordner öffnen</span></button>
+                <div class="hero-actions">
+                  <div class="home-play-wrap">
+                    <div class="home-play-group">
+                      <button class="btn brand lg home-play" id="btn-play">
+                        <span data-icon="play"></span>
+                        <span id="play-label">Spielen</span>
+                      </button>
+                      <button class="btn brand lg home-profile-trigger" id="btn-home-profile"
+                              data-icon="chevronDown" data-i18n-aria="home.changeProfile"
+                              aria-label="Profil wechseln" aria-haspopup="menu" aria-expanded="false"></button>
+                    </div>
+                    <div class="home-profile-menu" id="home-profile-menu" role="menu" hidden></div>
+                  </div>
+                  <button class="btn home-edit" id="btn-edit-current" data-icon="pencil"><span data-i18n="profiles.edit">Bearbeiten</span></button>
+                </div>
+              </div>
+
+              <div class="home-character" aria-label="Minecraft-Skin">
+                <div class="home-character-orbit" aria-hidden="true"></div>
+                <canvas id="home-skin-canvas"></canvas>
+                <div class="home-character-label" id="home-character-label"></div>
+              </div>
+            </section>
+
+            <div class="notice warn" id="ram-warn" hidden>
+              <span data-icon="alert"></span>
+              <span data-i18n="warn.lowram">Wenig Arbeitsspeicher zugewiesen, das Spiel könnte ruckeln.</span>
             </div>
+
+            <div class="progress" id="launch-progress" data-launch-progress hidden>
+              <div class="progress-label"><span id="progress-text" data-progress-text>…</span><span id="progress-pct" data-progress-pct>0%</span></div>
+              <div class="progress-track"><div class="progress-fill" id="progress-fill" data-progress-fill></div></div>
+            </div>
+
+            <section class="start-mods">
+              <div class="home-section-head">
+                <div>
+                  <h2><span data-i18n="mods.installed">Installiert</span> <span class="count" id="start-mod-count"></span></h2>
+                  <p data-i18n="home.modsSub">Mods im ausgewählten Profil</p>
+                </div>
+                <div class="panel-actions">
+                  <button class="btn sm" id="btn-start-add-mods" data-icon="plus"><span data-i18n="mods.add">Mods hinzufügen</span></button>
+                  <button class="icon-btn" id="btn-start-mods-folder" data-icon="folder" data-tip="mods.openFolder" aria-label="Ordner öffnen"></button>
+                </div>
+              </div>
+              <div class="rows" id="start-mod-list"></div>
+            </section>
           </div>
-          <div class="rows" id="start-mod-list"></div>
-        </section>
+
+          <!-- Context belongs to Home; every other view uses the full canvas. -->
+          <aside id="sidebar" aria-label="Start-Kontext">
+            <section class="home-context-section home-account">
+              <div class="home-context-head">
+                <h2 data-i18n="nav.accounts">Konten</h2>
+                <button class="text-btn" data-view-link="accounts" data-i18n="servers.all">Alle</button>
+              </div>
+              <div class="side-account" id="side-account"></div>
+            </section>
+
+            <section class="home-context-section side-servers">
+              <div class="home-context-head">
+                <h2 data-i18n="home.partneredServers">Partner-Server</h2>
+                <button class="text-btn" data-view-link="servers" data-i18n="servers.all">Alle</button>
+              </div>
+              <div class="server-list" id="server-list"></div>
+            </section>
+          </aside>
+        </div>
       </section>
 
       <!-- =========================== PROFILES =========================== -->
@@ -124,11 +186,15 @@
             <button class="btn" id="ins-edit" data-icon="pencil"><span data-i18n="profiles.edit">Bearbeiten</span></button>
             <button class="btn" id="ins-folder" data-icon="folder"><span data-i18n="profiles.folder">Ordner</span></button>
           </div>
+          <div class="instance-launch-progress" id="instance-launch-progress" data-launch-progress hidden>
+            <div class="progress-label"><span data-progress-text>…</span><span data-progress-pct>0%</span></div>
+            <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          </div>
         </section>
 
         <div class="tabbar" id="ins-tabs">
           <button class="tab active" data-itab="overview" data-icon="home"><span data-i18n="instance.overview">Übersicht</span></button>
-          <button class="tab" data-itab="mods" data-icon="package"><span data-i18n="instance.mods">Mods</span></button>
+          <button class="tab" data-itab="mods" data-icon="package"><span data-i18n="instance.content">Inhalte</span></button>
           <button class="tab" data-itab="shots" data-icon="image"><span data-i18n="instance.shots">Screenshots</span></button>
           <button class="tab" data-itab="logs" data-icon="file"><span data-i18n="instance.logs">Logs</span></button>
           <button class="tab" data-itab="settings" data-icon="sliders"><span data-i18n="instance.settings">Einstellungen</span></button>
@@ -149,9 +215,9 @@
             <p class="view-sub" data-i18n="stats.sub">Wie viel gespielt wurde, wann, und auf welchem Profil.</p>
           </div>
           <div class="segmented" id="stats-range">
-            <button class="seg active" data-days="14">14</button>
-            <button class="seg" data-days="30">30</button>
-            <button class="seg" data-days="90">90</button>
+            <button class="seg active" data-days="14">14d</button>
+            <button class="seg" data-days="30">30d</button>
+            <button class="seg" data-days="90">90d</button>
           </div>
         </div>
         <div class="stat-tiles" id="stat-tiles"></div>
@@ -192,7 +258,7 @@
       <section class="view" id="view-mods">
         <div class="view-head">
           <div>
-            <h1 data-i18n="mods.title">Mods</h1>
+            <h1 data-i18n="mods.title">Discover</h1>
             <p class="view-sub" id="mods-sub"></p>
           </div>
           <div class="tabs" id="mod-tabs">
@@ -267,25 +333,9 @@
       </section>
     </main>
 
-    <!-- ============================= SIDEBAR ============================= -->
-    <aside id="sidebar">
-      <section class="panel">
-        <div class="panel-head">
-          <h2 data-i18n="nav.accounts">Konten</h2>
-          <button class="btn sm" data-view-link="accounts" data-i18n="servers.all">Alle</button>
-        </div>
-        <div class="side-account" id="side-account"></div>
-      </section>
-
-      <section class="panel side-servers">
-        <div class="panel-head">
-          <h2 data-i18n="servers.title">Server</h2>
-          <button class="btn sm" data-view-link="servers" data-i18n="servers.all">Alle</button>
-        </div>
-        <div class="server-list" id="server-list"></div>
-      </section>
-    </aside>
   </div>
+
+  <div class="rail-instance-tooltip" id="rail-instance-tooltip" role="tooltip" hidden></div>
 
   <!-- ============================= CONSOLE ============================= -->
   <div class="drawer" id="console-drawer" hidden>

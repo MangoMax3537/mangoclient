@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('mango', {
     state: () => call('app:state'),
     setConfig: (patch) => call('config:set', patch),
     openFolder: (which) => call('app:openFolder', which),
+    openContentFolder: (profileId, type) => call('app:openContentFolder', profileId, type),
   },
 
   update: {
@@ -105,6 +106,7 @@ contextBridge.exposeInMainWorld('mango', {
     uninstall: (profileId, projectId) => call('modrinth:uninstall', profileId, projectId),
     toggle: (profileId, projectId, enabled) => call('modrinth:toggle', profileId, projectId, enabled),
     checkUpdates: (profileId) => call('modrinth:checkUpdates', profileId),
+    checkAllUpdates: () => call('modrinth:checkAllUpdates'),
     installModpack: (profileId, versionId) => call('modrinth:installModpack', profileId, versionId),
   },
 

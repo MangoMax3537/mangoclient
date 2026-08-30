@@ -1,0 +1,79 @@
+/* MangoClient visual foundation: neutral gaming canvas, selective mango. */
+:root {
+  color-scheme: dark;
+
+  --ink-0: #07080a;
+  --ink-1: #0b0d10;
+  --ink-2: #101318;
+  --ink-3: #15181d;
+  --ink-4: #1c2027;
+  --ink-5: #252a32;
+
+  --text-strong: #f4f1ea;
+  --text-body: #d4d3cf;
+  --text-muted: #9a9da4;
+  --text-faint: #696d75;
+
+  --mango: #ffad32;
+  --mango-hover: #ffc15a;
+  --mango-pressed: #e58c12;
+  --mango-ink: #211507;
+  --mango-soft: rgba(255, 173, 50, .12);
+  --leaf: #86b86b;
+  --danger-new: #ed665c;
+  --warning-new: #e6ac55;
+
+  --line-subtle: rgba(255, 255, 255, .055);
+  --line-control: rgba(255, 255, 255, .095);
+  --line-focus: rgba(255, 173, 50, .52);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-control: 6px;
+  --radius-surface: 10px;
+  --radius-stage: 12px;
+
+  --font-ui: "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
+  --font-display: Bahnschrift, "Arial Narrow", "Segoe UI Variable", sans-serif;
+
+  --ease-ui: cubic-bezier(.2, .8, .2, 1);
+  --motion-fast: 140ms;
+  --motion-base: 180ms;
+
+  --rail-w: 56px;
+  --statusbar-h: 48px;
+  --context-w: 286px;
+
+  /* Compatibility aliases for views not yet structurally redesigned. */
+  --surface-1: var(--ink-1);
+  --surface-2: var(--ink-0);
+  --surface-3: var(--ink-3);
+  --surface-4: var(--ink-4);
+  --text: var(--text-strong);
+  --text-2: var(--text-body);
+  --text-3: var(--text-muted);
+  --brand: var(--mango);
+  --brand-hover: var(--mango-hover);
+  --brand-deep: var(--mango-pressed);
+  --brand-fg: var(--mango-ink);
+  --brand-quiet: var(--mango-soft);
+  --ok: var(--leaf);
+  --danger: var(--danger-new);
+  --warn: var(--warning-new);
+  --hairline: var(--line-subtle);
+  --btn-border: var(--line-control);
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --lift: none;
+  --lift-lg: 0 16px 36px rgba(0, 0, 0, .34);
+}

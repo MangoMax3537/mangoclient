@@ -14,6 +14,8 @@ const { ensureLoader } = require('./loaders');
 const { resolveJava } = require('./java');
 const { ensureFreshAccount } = require('./auth');
 const stats = require('./stats');
+const { FEATURED_SERVERS } = require('./servers');
+const { ensureFeaturedServers } = require('./serverlist');
 
 const CP_SEP = process.platform === 'win32' ? ';' : ':';
 
@@ -260,6 +262,22 @@ async function launch({
   onState('preparing');
   log(`Preparing ${profile.name} (Minecraft ${profile.mcVersion}, ${profile.loader})`);
 
+  // Token refresh and instance-local files do not depend on version downloads.
+  // Start both immediately so their latency overlaps the heavier preparation.
+  const accountResult = ensureFreshAccount(account)
+    .then((value) => ({ value }), (error) => ({ error }));
+  const gameDir = P.instanceDir(profile.id);
+  const instanceFiles = (async () => {
+    await fsp.mkdir(path.join(gameDir, 'mods'), { recursive: true });
+    await seedInstanceOptions(gameDir, { language: config.language });
+    try {
+      await ensureFeaturedServers(gameDir, FEATURED_SERVERS);
+    } catch (err) {
+      // A damaged/foreign list must never keep Minecraft from starting.
+      log(`Partnered server list skipped: ${err.message}`);
+    }
+  })();
+
   // 1. A JVM is needed before Forge-style installers can run, so resolve Java
   //    against the vanilla metadata first.
   const baseVersionJson = await resolveVersionJson(profile.mcVersion);
@@ -304,13 +322,13 @@ async function launch({
 
   // 4. Account
   onState('account');
-  const fresh = await ensureFreshAccount(account);
+  const resolvedAccount = await accountResult;
+  if (resolvedAccount.error) throw resolvedAccount.error;
+  const fresh = resolvedAccount.value;
   if (fresh !== account) store?.upsertAccount(fresh);
 
   // 5. Arguments
-  const gameDir = P.instanceDir(profile.id);
-  await fsp.mkdir(path.join(gameDir, 'mods'), { recursive: true });
-  await seedInstanceOptions(gameDir, { language: config.language });
+  await instanceFiles;
 
   const ram = profile.ram || config.ram || 4096;
   const classpath = [...install.classpath, install.clientJar];

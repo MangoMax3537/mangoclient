@@ -5,8 +5,65 @@ const path = require('path');
 const crypto = require('crypto');
 const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
+const P = require('./paths');
 
 const UA = 'MangoClient/1.0.0 (+https://github.com/mangomax/mangoclient)';
+const INTEGRITY_CACHE_FILE = path.join(P.cache, 'integrity-cache.json');
+let integrityCachePromise = null;
+let integrityWriteTimer = null;
+
+function managedFile(file) {
+  const resolved = path.resolve(file);
+  return resolved === path.resolve(P.root) || resolved.startsWith(`${path.resolve(P.root)}${path.sep}`);
+}
+
+async function integrityCache() {
+  if (!integrityCachePromise) {
+    integrityCachePromise = fsp.readFile(INTEGRITY_CACHE_FILE, 'utf8')
+      .then((raw) => JSON.parse(raw))
+      .then((value) => value && typeof value === 'object' ? value : {})
+      .catch(() => ({}));
+  }
+  return integrityCachePromise;
+}
+
+function integrityKey({ sha1, sha256, sha512, size }) {
+  return `${sha512 || ''}|${sha256 || ''}|${sha1 || ''}|${size ?? ''}`.toLowerCase();
+}
+
+function sameCachedFile(entry, stat, expected) {
+  return entry?.expected === expected
+    && entry.size === stat.size
+    && entry.mtimeMs === stat.mtimeMs
+    && entry.ctimeMs === stat.ctimeMs;
+}
+
+function scheduleIntegrityWrite(cache) {
+  if (integrityWriteTimer) clearTimeout(integrityWriteTimer);
+  integrityWriteTimer = setTimeout(async () => {
+    integrityWriteTimer = null;
+    const tmp = `${INTEGRITY_CACHE_FILE}.${process.pid}.tmp`;
+    try {
+      await fsp.mkdir(P.cache, { recursive: true });
+      await fsp.writeFile(tmp, JSON.stringify(cache));
+      await fsp.rename(tmp, INTEGRITY_CACHE_FILE);
+    } catch {
+      await fsp.unlink(tmp).catch(() => {});
+    }
+  }, 250);
+}
+
+async function rememberIntegrity(file, stat, expected) {
+  if (!managedFile(file) || !expected) return;
+  const cache = await integrityCache();
+  cache[path.resolve(file)] = {
+    expected,
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+    ctimeMs: stat.ctimeMs,
+  };
+  scheduleIntegrityWrite(cache);
+}
 
 async function fetchWithRetry(url, opts = {}, retries = 4) {
   let lastErr;
@@ -65,10 +122,21 @@ async function isValid(file, sha1, size, sha256, sha512) {
   try {
     const stat = await fsp.stat(file);
     if (size != null && stat.size !== size) return false;
-    if (sha512) return (await hashFile(file, 'sha512')) === sha512.toLowerCase();
-    if (sha256) return (await hashFile(file, 'sha256')) === sha256.toLowerCase();
-    if (!sha1) return stat.size > 0;
-    return (await sha1File(file)) === sha1;
+    if (!sha1 && !sha256 && !sha512) return stat.size > 0;
+
+    const expected = integrityKey({ sha1, sha256, sha512, size });
+    if (managedFile(file)) {
+      const cache = await integrityCache();
+      if (sameCachedFile(cache[path.resolve(file)], stat, expected)) return true;
+    }
+
+    const valid = sha512
+      ? (await hashFile(file, 'sha512')) === sha512.toLowerCase()
+      : sha256
+        ? (await hashFile(file, 'sha256')) === sha256.toLowerCase()
+        : (await sha1File(file)) === sha1.toLowerCase();
+    if (valid) await rememberIntegrity(file, stat, expected);
+    return valid;
   } catch {
     return false;
   }
@@ -133,6 +201,8 @@ async function downloadFile(url, dest, { sha1, sha256, sha512, size, onBytes } =
     }
 
     await fsp.rename(tmp, dest);
+    const finalStat = await fsp.stat(dest);
+    await rememberIntegrity(dest, finalStat, integrityKey({ sha1, sha256, sha512, size }));
   } catch (err) {
     await fsp.unlink(tmp).catch(() => {});
     throw err;

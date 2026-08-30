@@ -1,6 +1,34 @@
 # Changelog
 
-## Unreleased
+## MangoClient 1.3.0
+
+This is MangoClient's largest launcher update so far. The frontend has been rebuilt around a faster, denser Minecraft-client experience while keeping existing profiles, accounts, worlds and launcher behaviour intact.
+
+### Launcher UI
+
+- Completely redesigned the Electron renderer with a near-black gaming-client canvas, Mango orange interaction states, a slim navigation rail, an integrated top bar and view-specific layouts instead of a generic dashboard/card treatment.
+- Reworked Home around the selected instance: its cover, Minecraft version, loader, memory, mod count and playtime now form the main launch composition, with a split Play/profile selector and contextual accounts and partnered-server area.
+- Added dedicated instance workspaces for Overview, Content, Screenshots, Logs and per-instance Settings. Launch progress is visible directly in the opened instance instead of only on Home.
+- Renamed the launcher-wide content browser to **Discover** and improved its search layout, equal-height results, filters and installed-content handling.
+- Reworked Profiles into playable instance slots, Statistics into a readable time chart with values and axes, and Settings into full-width native launcher sections.
+- Fixed navigation selection conflicts, clipped instance names, overflowing statistics controls, search-icon alignment and several narrow-window layout issues.
+- Added the official Steve texture as the offline/no-network fallback instead of a generated placeholder model.
+
+### Content and instances
+
+- Discover can now search and install Modrinth mods, modpacks, resource packs and shaders directly into the selected instance's Minecraft-compatible folders.
+- Added separate Mods, Resource Packs and Shaders shelves to each instance, including install, update, enable/disable, remove and open-folder actions.
+- Required Modrinth dependencies are installed with their exact compatible versions. Disabling a dependency also disables its consumers, enabling a mod enables its requirements, and required content cannot be removed accidentally.
+- Dependency badges now show which installed mods require that library.
+- Installed-content updates are checked once whenever MangoClient opens; the manual **Check for updates** action remains available.
+- Modrinth requests are debounced, deduplicated, cached and preloaded for much faster switching between mods, resource packs and shaders.
+
+### Launching and servers
+
+- Added a persistent integrity cache for verified Minecraft libraries and assets, avoiding thousands of repeated hashes on later launches while still invalidating changed files.
+- Reused installed Fabric and Quilt profiles, cached Java probes, and parallelised independent account, MangoConfig and performance-mod preparation to shorten the critical launch path.
+- VincentVanilla is written to the real Minecraft multiplayer list as `★ VincentVanilla`, deduplicated and kept first without replacing the player's other servers, icons or settings.
+- Partnered-server rows now expose a clear hover-to-play action and Home labels the section consistently as **Partnered Servers**.
 
 ### MangoConfig
 
@@ -8,37 +36,12 @@
 - The Ping HUD now measures the round trip to the server itself, with the same play-protocol ping request Minecraft's own debug chart uses, instead of reading whatever latency the server publishes in the tab list. Servers that never answer fall back to the tab list as before.
 - Status colours in the Memory, Combo, Armor, Potions and Ping modules come from the shared palette rather than being written out in each module.
 
-## MangoClient 1.2.12
+### Highlights
 
-### Launcher
-
-- Manually added mods now appear immediately after opening the launcher or switching profiles, without requiring Minecraft to start first.
-- Legacy inline mod icons are migrated before profile validation, preserving existing Modrinth metadata during updates.
-
-## MangoClient 1.2.11
-
-This update is mostly about the small things that get annoying fast: a ping display stuck at zero, zoom steps that feel too sharp, and downloads failing even though Mojang is sending the right file.
-
-### MangoConfig
-
-- Fixed the Ping HUD showing `0 ms` after joining a server. It now uses the server-list measurement until Minecraft receives the live tab-list ping.
-- Hold the zoom key and scroll to change the zoom level without moving through the hotbar.
-- Zooming now eases in and out, including when the zoom level changes with the wheel.
-- The Armor HUD no longer leaves an empty grey background when `Hide empty` is enabled. Its editor preview still stays visible and draggable.
-- Fullbright is now a separate saved setting, displays as `150000%`, and leaves Minecraft's normal brightness value alone.
-
-### Launcher
-
-- Fixed Mojang downloads failing when the CDN reports a placeholder file size of zero.
-- Fixed the white squares where horizontal and vertical scrollbars meet.
-- Failed downloads are cleaned up properly, and downloaded files and modpack archives get stricter size, path and checksum checks.
-- MangoConfig 1.9.2 is bundled for all supported Minecraft versions from 1.20.5 through 1.21.11.
-- Updated Electron and the bundled JSON library.
-
-### Security
-
-- Login tokens now use the operating system's secure storage where available. Existing logins migrate automatically.
-- Tightened external links, window navigation, permissions, IPC calls, local image access and profile settings.
-- Hardened the presence and admin services with HTTPS-only admin routes, safer cookies, request limits and bounded in-memory data.
-
-Linux and Windows builds are available on the GitHub release page.
+- Complete MangoClient UI rework
+- New **Discover** browser
+- Direct resource-pack and shader installation
+- Dependency-aware mod management
+- Per-instance content, screenshots, logs and settings
+- Faster searches and launches
+- Improved statistics and partnered-server integration

@@ -23,8 +23,10 @@
     skins: new Map(),
     covers: new Map(),
     modSearch: { offset: 0 },
+    modUpdates: new Map(),
     consoleLines: [],
     instanceTab: 'overview',
+    instanceContentType: 'mod',
     shots: [],
     shotIndex: 0,
     logs: [],
@@ -35,6 +37,9 @@
   let viewer = null;
   let viewerSkin = null;
   let viewerUnavailable = false;
+  let homeViewer = null;
+  let homeViewerSkin = null;
+  let homeViewerUnavailable = false;
   let versionsPromise = null;
   const loadingSkins = new Set();
   const loadingCovers = new Set();
@@ -88,6 +93,12 @@
     return h > 0 ? `${h} h ${m} min` : `${m} min`;
   }
 
+  function fmtChartDuration(ms) {
+    if (!ms) return '0 min';
+    if (ms < 60000) return '<1 min';
+    return fmtDuration(ms);
+  }
+
   function fmtDate(ts) {
     if (!ts) return t('profiles.never');
     return new Date(ts).toLocaleDateString(window.i18n.lang === 'de' ? 'de-DE' : 'en-GB',
@@ -113,6 +124,30 @@
   }
 
   const LOADER_LABEL = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', neoforge: 'NeoForge', forge: 'Forge' };
+  const CONTENT_TYPES = ['mod', 'resourcepack', 'shader'];
+  const CONTENT_ICONS = { mod: 'package', resourcepack: 'image', shader: 'layers' };
+
+  /** Old profiles have no type on mod records, so an absent value still means mod. */
+  function contentType(record) {
+    return record?.type || 'mod';
+  }
+
+  function profileContent(profile, type = null) {
+    const entries = profile?.mods || [];
+    return type ? entries.filter((entry) => contentType(entry) === type) : entries;
+  }
+
+  function dependencyOwners(profile, projectId) {
+    return (profile?.mods || []).filter((candidate) =>
+      candidate.projectId !== projectId
+      && (candidate.requiredDependencies || []).some((dependency) => dependency.projectId === projectId));
+  }
+
+  function contentLabel(type) {
+    if (type === 'resourcepack') return t('mods.type.rp');
+    if (type === 'shader') return t('mods.type.shader');
+    return t('mods.type.mod');
+  }
 
   function javaBadgeFor(mcVersion) {
     // 26.x and later use a year.major scheme and need a much newer JVM.
@@ -154,11 +189,31 @@
       [t('facts.loader'), profile.loaderVersion ? `${loader} ${profile.loaderVersion}` : loader],
       [t('facts.java'), javaBadgeFor(profile.mcVersion)],
       [t('facts.ram'), fmtGB(ram)],
-      [t('facts.mods'), String((profile.mods || []).length)],
+      [t('facts.mods'), String(profileContent(profile, 'mod').length)],
       [t('facts.lastPlayed'), fmtDate(profile.lastPlayed)],
       ...extra,
     ].map(([k, v]) => `<div class="fact"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`)
       .join('');
+  }
+
+  /** Home keeps the selected profile readable at a glance instead of showing
+   * every runtime detail with equal weight. Version/loader/Java sit by the
+   * title; these four values answer the questions players check before Play. */
+  function homeFactsHtml(profile) {
+    const ram = profile.ram || state.config.ram || 4096;
+    return [
+      ['package', String(profileContent(profile, 'mod').length), t('facts.mods')],
+      ['clock', fmtDuration(profile.playTimeMs || 0), t('instance.playTime')],
+      ['gauge', fmtGB(ram), t('facts.ram')],
+      ['calendar', fmtDate(profile.lastPlayed), t('facts.lastPlayed')],
+    ].map(([glyph, value, label]) => `
+      <div class="home-stat">
+        ${icon(glyph)}
+        <div class="home-stat-copy">
+          <span class="home-stat-value">${esc(value)}</span>
+          <span class="home-stat-label">${esc(label)}</span>
+        </div>
+      </div>`).join('');
   }
 
   function coverHtml(profile, size = '') {
@@ -222,6 +277,7 @@
     if (e.key !== 'Escape') return;
     if (!$('#modal-backdrop').hidden) closeModal();
     else if (!$('#console-drawer').hidden) $('#console-drawer').hidden = true;
+    else closeHomeProfileMenu();
   });
 
   // =========================================================================
@@ -232,6 +288,7 @@
   const history = { stack: ['start'], idx: 0 };
 
   function renderView(name) {
+    document.body.dataset.activeView = name;
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${name}`));
     if (name !== 'instance') {
       $$('#view-instance .tabpanel').forEach((panel) => panel.replaceChildren());
@@ -241,6 +298,7 @@
       if (!$('#lightbox').hidden) closeLightbox();
     }
     $$('.rail-btn').forEach((n) => n.classList.toggle('active', n.dataset.view === name));
+    renderRailInstances();
     // An instance page is about one instance, so it says which one.
     $('#breadcrumb').textContent = name === 'instance'
       ? (state.profile?.name || t('nav.instance'))
@@ -352,7 +410,17 @@
     }
   });
 
-  document.addEventListener('click', () => { $('#account-menu').hidden = true; });
+  function closeHomeProfileMenu() {
+    const menu = $('#home-profile-menu');
+    const trigger = $('#btn-home-profile');
+    if (menu) menu.hidden = true;
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  }
+
+  document.addEventListener('click', () => {
+    $('#account-menu').hidden = true;
+    closeHomeProfileMenu();
+  });
 
   // =========================================================================
   // start view
@@ -368,10 +436,10 @@
 
     if (profile) {
       $('#lp-name').textContent = profile.name;
-      $('#lp-sub').textContent = `${profile.mcVersion} · ${LOADER_LABEL[profile.loader] || profile.loader}`;
+      $('#lp-sub').textContent = `${profile.mcVersion} · ${LOADER_LABEL[profile.loader] || profile.loader} · ${javaBadgeFor(profile.mcVersion)}`;
 
       const ram = profile.ram || state.config.ram || 4096;
-      $('#lp-facts').innerHTML = factsHtml(profile);
+      $('#lp-facts').innerHTML = homeFactsHtml(profile);
       $('#ram-warn').hidden = ram >= 3072;
     } else {
       $('#lp-name').textContent = t('profiles.none');
@@ -379,31 +447,60 @@
       $('#lp-facts').innerHTML = '';
       $('#ram-warn').hidden = true;
     }
+    $('#home-character-label').textContent = state.account?.name || t('account.none');
 
     updatePlayButton();
     renderAccountChip();
     renderRunPill();
     renderMangoConfigPill();
     renderRailInstances();
-    renderModList($('#start-mod-list'));
-    $('#start-mod-count').textContent = (state.profile?.mods || []).length || '';
+    renderModList($('#start-mod-list'), 'mod');
+    $('#start-mod-count').textContent = profileContent(state.profile, 'mod').length || '';
   }
 
   /** Rail quick-switcher: most recently played instance sits at the top. */
+  function hideRailInstanceTooltip() {
+    const tooltip = $('#rail-instance-tooltip');
+    if (tooltip) tooltip.hidden = true;
+  }
+
+  function showRailInstanceTooltip(button) {
+    const tooltip = $('#rail-instance-tooltip');
+    if (!tooltip) return;
+    const rect = button.getBoundingClientRect();
+    tooltip.textContent = button.getAttribute('aria-label') || '';
+    tooltip.hidden = false;
+    const top = Math.max(8, Math.min(
+      window.innerHeight - tooltip.offsetHeight - 8,
+      rect.top + (rect.height - tooltip.offsetHeight) / 2,
+    ));
+    tooltip.style.top = `${Math.round(top)}px`;
+  }
+
   function renderRailInstances() {
     const rail = $('#rail-instances');
+    hideRailInstanceTooltip();
     const ordered = [...state.profiles].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0));
+    const instanceViewActive = document.body.dataset.activeView === 'instance';
 
     rail.innerHTML = ordered.map((p) => `
-      <button class="rail-instance ${p.id === state.profile?.id ? 'active' : ''}"
-              data-id="${esc(p.id)}" data-tip-text="${esc(p.name)}">
+      <button class="rail-instance ${instanceViewActive && p.id === state.profile?.id ? 'active' : ''}"
+              data-id="${esc(p.id)}" data-tip-text="${esc(p.name)}" aria-label="${esc(p.name)}">
         ${coverHtml(p)}
         ${state.running.has(p.id) ? '<span class="running-dot"></span>' : ''}
       </button>`).join('');
 
     $$('.rail-instance', rail).forEach((btn) => {
-      btn.onclick = () => openInstance(btn.dataset.id);
+      btn.onpointerenter = () => showRailInstanceTooltip(btn);
+      btn.onpointerleave = hideRailInstanceTooltip;
+      btn.onfocus = () => showRailInstanceTooltip(btn);
+      btn.onblur = hideRailInstanceTooltip;
+      btn.onclick = () => {
+        hideRailInstanceTooltip();
+        openInstance(btn.dataset.id);
+      };
     });
+    rail.onscroll = hideRailInstanceTooltip;
   }
 
   function updatePlayButton() {
@@ -420,6 +517,14 @@
       label.textContent = running ? t('btn.stop') : busy ? t('btn.preparing') : t('btn.play');
       const glyph = $('.ic', btn);
       if (glyph) glyph.outerHTML = icon(running ? 'stop' : 'play');
+    }
+
+    const profileTrigger = $('#btn-home-profile');
+    if (profileTrigger) {
+      profileTrigger.disabled = busy || Boolean(running) || state.profiles.length === 0;
+      profileTrigger.classList.toggle('brand', !running);
+      $('.home-play-wrap')?.classList.toggle('running', Boolean(running));
+      if (profileTrigger.disabled) closeHomeProfileMenu();
     }
   }
 
@@ -446,9 +551,12 @@
     pill.hidden = false;
     pill.classList.toggle('on', info.enabled && info.supported);
     pill.classList.toggle('off', !info.enabled);
-    $('#mc-state').textContent = info.enabled
+    pill.classList.toggle('unsupported', !info.supported);
+    pill.setAttribute('aria-pressed', String(Boolean(info.enabled && info.supported)));
+    pill.setAttribute('aria-label', `${t('mangoconfig.title')}: ${info.enabled
       ? (info.supported ? t('mangoconfig.on') : t('mangoconfig.na'))
-      : t('mangoconfig.off');
+      : t('mangoconfig.off')}`);
+    $('#mc-state').innerHTML = info.enabled && info.supported ? icon('check') : '';
     // Fourteen versions would burst the tooltip, so a span reads better.
     const versions = info.gameVersions.length > 3
       ? `${info.gameVersions[0]} – ${info.gameVersions[info.gameVersions.length - 1]}`
@@ -490,6 +598,7 @@
     if (head) avatar.src = head;
     else avatar.removeAttribute('src');
     $('#account-chip').dataset.tipText = account ? account.name : t('account.none');
+    $('#account-chip').setAttribute('aria-label', account ? account.name : t('account.none'));
 
     $('#side-account').innerHTML = `
       <div class="sa-row">
@@ -533,8 +642,57 @@
   };
   $('#account-menu').onclick = (e) => e.stopPropagation();
 
+  function renderHomeProfileMenu() {
+    const menu = $('#home-profile-menu');
+    menu.innerHTML = state.profiles.map((profile) => {
+      const selected = profile.id === state.profile?.id;
+      const meta = `${profile.mcVersion} · ${LOADER_LABEL[profile.loader] || profile.loader}`;
+      return `<button class="home-profile-option ${selected ? 'selected' : ''}"
+                      data-profile-id="${esc(profile.id)}" role="menuitemradio"
+                      aria-checked="${selected}">
+        ${coverHtml(profile)}
+        <span class="home-profile-option-copy">
+          <span class="home-profile-option-name">${esc(profile.name)}</span>
+          <span class="home-profile-option-meta">${esc(meta)}</span>
+        </span>
+        ${selected ? `<span class="home-profile-option-check">${icon('check')}</span>` : ''}
+      </button>`;
+    }).join('');
+    hydrateIcons(menu);
+
+    $$('.home-profile-option', menu).forEach((option) => {
+      option.onclick = async (event) => {
+        event.stopPropagation();
+        option.disabled = true;
+        try {
+          if (option.dataset.profileId !== state.profile?.id) {
+            await api.profiles.select(option.dataset.profileId);
+            await refreshState();
+          }
+        } catch (err) {
+          toast(err.message, 'err');
+        } finally {
+          closeHomeProfileMenu();
+        }
+      };
+    });
+  }
+
+  $('#btn-home-profile').onclick = (event) => {
+    event.stopPropagation();
+    const trigger = $('#btn-home-profile');
+    const menu = $('#home-profile-menu');
+    const opening = menu.hidden;
+    $('#account-menu').hidden = true;
+    if (opening) renderHomeProfileMenu();
+    menu.hidden = !opening;
+    trigger.setAttribute('aria-expanded', String(opening));
+    if (opening) $('.home-profile-option.selected', menu)?.focus();
+  };
+  $('#home-profile-menu').onclick = (event) => event.stopPropagation();
+
   $('#btn-edit-current').onclick = () => state.profile && openProfileDialog(state.profile);
-  $('#btn-start-add-mods').onclick = () => showView('mods');
+  $('#btn-start-add-mods').onclick = () => openContentBrowser('mod');
   $('#btn-start-mods-folder').onclick = () => state.profile && api.app.openFolder(state.profile.id);
   $('#btn-console').onclick = () => { $('#console-drawer').hidden = false; scrollConsole(); };
   $('#btn-close-console').onclick = () => { $('#console-drawer').hidden = true; };
@@ -562,13 +720,13 @@
   async function doLaunch(profileId, quickJoin) {
     state.launchState = 'preparing';
     updatePlayButton();
-    $('#launch-progress').hidden = false;
+    setLaunchProgressVisible(true);
     setProgress(0, t('launch.preparing'));
     try {
       await api.game.launch(profileId, quickJoin);
     } catch (err) {
       state.launchState = 'idle';
-      $('#launch-progress').hidden = true;
+      setLaunchProgressVisible(false);
       updatePlayButton();
       toast(err.message, 'err');
       if (err.needsRelogin) showView('accounts');
@@ -577,10 +735,16 @@
     }
   }
 
+  function setLaunchProgressVisible(visible) {
+    $$('[data-launch-progress]').forEach((progress) => { progress.hidden = !visible; });
+  }
+
   function setProgress(pct, label) {
-    $('#progress-fill').style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    $('#progress-pct').textContent = `${Math.round(pct)}%`;
-    $('#progress-text').textContent = label;
+    $$('[data-progress-fill]').forEach((fill) => {
+      fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    });
+    $$('[data-progress-pct]').forEach((value) => { value.textContent = `${Math.round(pct)}%`; });
+    $$('[data-progress-text]').forEach((value) => { value.textContent = label; });
   }
 
   // =========================================================================
@@ -604,6 +768,21 @@
     return viewer;
   }
 
+  function ensureHomeViewer() {
+    if (homeViewerUnavailable) return null;
+    if (homeViewer) return homeViewer;
+    const canvas = $('#home-skin-canvas');
+    if (!canvas) return null;
+    try {
+      homeViewer = new window.SkinViewer(canvas, { slim: false, rotation: -0.35 });
+    } catch (err) {
+      console.warn('Home SkinViewer unavailable:', err);
+      homeViewerUnavailable = true;
+      canvas.hidden = true;
+    }
+    return homeViewer;
+  }
+
   function destroyViewer() {
     if (!viewer) return;
     const canvas = viewer.canvas;
@@ -615,16 +794,37 @@
     if (canvas?.isConnected) canvas.replaceWith(canvas.cloneNode(false));
   }
 
-  function syncViewer() {
-    const visible = !document.hidden && $('#view-accounts').classList.contains('active');
-    if (!visible) { destroyViewer(); return; }
+  function destroyHomeViewer() {
+    if (!homeViewer) return;
+    const canvas = homeViewer.canvas;
+    homeViewer.destroy();
+    homeViewer = null;
+    homeViewerSkin = null;
+    if (canvas?.isConnected) canvas.replaceWith(canvas.cloneNode(false));
+  }
 
+  function syncViewer() {
     const skin = state.account ? state.skins.get(state.account.uuid) : state.defaultSkin;
     if (!skin) return;
-    const activeViewer = ensureViewer();
-    if (activeViewer && viewerSkin !== skin) {
-      activeViewer.setSkin(skin.skin, skin.slim);
-      viewerSkin = skin;
+
+    const accountsVisible = !document.hidden && $('#view-accounts').classList.contains('active');
+    if (!accountsVisible) destroyViewer();
+    else {
+      const activeViewer = ensureViewer();
+      if (activeViewer && viewerSkin !== skin) {
+        activeViewer.setSkin(skin.skin, skin.slim);
+        viewerSkin = skin;
+      }
+    }
+
+    const homeVisible = !document.hidden && $('#view-start').classList.contains('active');
+    if (!homeVisible) destroyHomeViewer();
+    else {
+      const activeHomeViewer = ensureHomeViewer();
+      if (activeHomeViewer && homeViewerSkin !== skin) {
+        activeHomeViewer.setSkin(skin.skin, skin.slim);
+        homeViewerSkin = skin;
+      }
     }
   }
 
@@ -739,7 +939,7 @@
       { key: 'edit', label: t('profiles.edit'), glyph: 'pencil' },
       { key: 'dup', label: t('profiles.duplicate'), glyph: 'copy' },
       { key: 'folder', label: t('profiles.folder'), glyph: 'folder' },
-      { key: 'mods', label: t('profiles.manageMods'), glyph: 'package' },
+      { key: 'mods', label: t('profiles.manageContent'), glyph: 'package' },
       { key: 'del', label: t('btn.delete'), glyph: 'trash', danger: true },
     ];
     openModal({
@@ -1084,21 +1284,34 @@
   const QUICK_PICKS = ['sodium', 'lithium', 'iris', 'fabric-api'];
   const PERF_PACK = ['sodium', 'lithium', 'ferrite-core', 'entityculling', 'modernfix', 'immediatelyfast'];
 
+  function selectModPageTab(tab, render = true) {
+    $$('#mod-tabs .tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
+    $('#mods-browse').hidden = tab !== 'browse';
+    $('#mods-installed').hidden = tab !== 'installed';
+    if (!render) return;
+    if (tab === 'installed') { renderInstalledMods(); syncLocalMods(); }
+    else renderMods();
+  }
+
   $$('#mod-tabs .tab').forEach((btn) => {
-    btn.onclick = () => {
-      $$('#mod-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
-      $('#mods-browse').hidden = btn.dataset.tab !== 'browse';
-      $('#mods-installed').hidden = btn.dataset.tab !== 'installed';
-      if (btn.dataset.tab === 'installed') { renderInstalledMods(); syncLocalMods(); }
-      else renderMods();
-    };
+    btn.onclick = () => selectModPageTab(btn.dataset.tab);
   });
+
+  /** Open Modrinth with the content kind already selected for this instance. */
+  function openContentBrowser(type = 'mod') {
+    const selected = CONTENT_TYPES.includes(type) ? type : 'mod';
+    $('#mod-type').value = selected;
+    state.modSearch.offset = 0;
+    selectModPageTab('browse', false);
+    if (history.stack[history.idx] === 'mods') renderMods();
+    else showView('mods');
+  }
 
   let searchTimer = null;
   let modSearchToken = 0;
   $('#mod-search').oninput = () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { state.modSearch.offset = 0; renderMods(); }, 320);
+    searchTimer = setTimeout(() => { state.modSearch.offset = 0; renderMods(); }, 220);
   };
   $('#mod-type').onchange = () => { state.modSearch.offset = 0; renderMods(); };
   $('#mod-sort').onchange = () => { state.modSearch.offset = 0; renderMods(); };
@@ -1134,7 +1347,8 @@
       $('#mod-grid').innerHTML = `<div class="empty"><div class="et">${esc(t('profiles.none'))}</div>${esc(t('mods.needProfile'))}</div>`;
       return;
     }
-    renderQuickPicks();
+    if ($('#mod-type').value === 'mod') renderQuickPicks();
+    else $('#quickpicks').replaceChildren();
     $('#mod-filter-label').textContent = state.profile.mcVersion;
     $('#mods-sub').textContent = t('mods.sub', {
       profile: state.profile.name,
@@ -1209,12 +1423,14 @@
     }
   }
 
-  async function installMod(slug, btn) {
+  async function installMod(slug, btn, versionId = null) {
     if (!state.profile) return;
     const original = btn?.textContent;
     if (btn) { btn.disabled = true; btn.textContent = t('mods.installing'); }
     try {
-      const installed = await api.modrinth.install(state.profile.id, slug);
+      const profileId = state.profile.id;
+      const installed = await api.modrinth.install(profileId, slug, versionId);
+      clearModUpdate(profileId, installed[0]?.projectId || slug);
       await refreshState();
       toast(t('mods.installedOk', { name: installed[0]?.title || slug }), 'ok');
       if (btn) { btn.textContent = t('mods.installedBadge'); btn.classList.remove('brand'); }
@@ -1264,36 +1480,45 @@
   }
 
   /**
-   * The installed-mods list, shared by the Start view and the Mods view.
-   * Each row carries an enable/disable switch and a delete button; deleting
-   * always asks first, since it removes the jar from disk.
+   * Shared installed-content list. A type can be supplied for an instance's
+   * Mods / Resource Packs / Shaders shelves; without one it shows everything.
    */
-  function renderModList(list) {
+  function renderModList(list, type = null) {
     if (!list) return;
-    const mods = state.profile?.mods || [];
+    const mods = profileContent(state.profile, type);
     if (!mods.length) {
-      list.innerHTML = `<div class="empty"><div class="et">${esc(t('mods.none'))}</div>${esc(t('mods.noneHint'))}</div>`;
+      const emptyKey = type ? `content.none.${type}` : 'mods.none';
+      const hintKey = type ? `content.noneHint.${type}` : 'mods.noneHint';
+      list.innerHTML = `<div class="empty content-empty"><div class="empty-icon" data-icon="${CONTENT_ICONS[type] || 'package'}"></div><div class="et">${esc(t(emptyKey))}</div>${esc(t(hintKey))}</div>`;
+      hydrateIcons(list);
       return;
     }
-    list.innerHTML = mods.map((m) => `
-      <div class="row ${m.enabled === false ? 'off' : ''}" data-id="${esc(m.projectId)}">
-        ${m.icon ? `<img class="mod-icon" src="${esc(m.icon)}" alt="" />` : `<span class="mod-icon" data-icon="package"></span>`}
+    list.innerHTML = mods.map((m) => {
+      const owners = dependencyOwners(state.profile, m.projectId);
+      const dependencyHint = owners.length
+        ? t('mods.dependencyHint', { names: owners.map((owner) => owner.title).join(', ') })
+        : t('mods.dependencyHintUnknown');
+      return `
+      <div class="row content-row ${m.enabled === false ? 'off' : ''}" data-id="${esc(m.projectId)}">
+        ${m.icon ? `<img class="mod-icon" src="${esc(m.icon)}" alt="" />` : `<span class="mod-icon" data-icon="${CONTENT_ICONS[contentType(m)] || 'package'}"></span>`}
         <div class="row-meta">
           <div class="row-name">${esc(m.title)}
-            ${m.dependency ? `<span class="badge">${esc(t('mods.dependency'))}</span>` : ''}
+            ${contentType(m) !== 'mod' ? `<span class="badge content-kind">${esc(contentLabel(contentType(m)))}</span>` : ''}
+            ${m.dependency ? `<span class="badge dependency-badge" tabindex="0" title="${esc(dependencyHint)}" data-tip-text="${esc(dependencyHint)}" aria-label="${esc(dependencyHint)}">${esc(t('mods.dependency'))}</span>` : ''}
             ${m.local ? `<span class="badge" data-tip-text="${esc(t('mods.localHint'))}">${esc(t('mods.local'))}</span>` : ''}
-            ${m.update ? `<span class="badge warn">${esc(t('mods.updateAvailable'))}</span>` : ''}
+            ${m.update ? `<span class="badge warn"${m.update.conflict ? ` data-tip-text="${esc(t('mods.conflictHint', { names: (m.update.requiredBy || []).map((item) => item.title).join(', ') }))}"` : ''}>${esc(t(m.update.conflict ? 'mods.dependencyConflict' : m.update.compatibility ? 'mods.compatibilityFix' : 'mods.updateAvailable'))}</span>` : ''}
           </div>
           <div class="row-sub">${m.versionNumber ? `${esc(m.versionNumber)} · ` : ''}${esc(m.filename)}</div>
         </div>
         <span class="row-state">${esc(m.enabled === false ? t('mods.off') : t('mods.on'))}</span>
         <label class="switch" data-tip-text="${esc(t('mods.toggle'))}">
-          <input type="checkbox" data-act="toggle" ${m.enabled === false ? '' : 'checked'} /><span class="slider"></span>
+          <input type="checkbox" data-act="toggle" aria-label="${esc(t('mods.toggle'))}" ${m.enabled === false ? '' : 'checked'} /><span class="slider"></span>
         </label>
-        ${m.update ? `<button class="btn sm brand" data-act="update">${esc(t('mods.update'))}</button>` : ''}
+        ${m.update && !m.update.conflict ? `<button class="btn sm brand" data-act="update">${esc(t(m.update.compatibility ? 'mods.fix' : 'mods.update'))}</button>` : ''}
         <button class="btn sm icon-only danger" data-act="remove" data-icon="trash"
-                data-tip-text="${esc(t('mods.remove'))}"></button>
-      </div>`).join('');
+                data-tip-text="${esc(t('mods.remove'))}" aria-label="${esc(t('mods.remove'))}"></button>
+      </div>`;
+    }).join('');
     hydrateIcons(list);
 
     $$('.row', list).forEach((row) => {
@@ -1303,8 +1528,15 @@
       $('[data-act="toggle"]', row).onchange = async (e) => {
         const enabled = e.target.checked;
         try {
-          await api.modrinth.toggle(state.profile.id, id, enabled);
+          const result = await api.modrinth.toggle(state.profile.id, id, enabled);
           await refreshState();
+          const cascaded = (result.affected || []).filter((item) => item.projectId !== id);
+          if (cascaded.length) {
+            toast(t(enabled ? 'mods.dependenciesEnabled' : 'mods.dependentsDisabled', {
+              n: cascaded.length,
+              names: cascaded.map((item) => item.title).join(', '),
+            }), 'info');
+          }
         } catch (err) {
           e.target.checked = !enabled; // put the switch back where it was
           toast(err.message, 'err');
@@ -1313,14 +1545,22 @@
 
       $('[data-act="remove"]', row).onclick = () => {
         confirmDialog({
-          title: t('mods.deleteTitle'),
-          text: t('mods.deleteConfirm', { name: mod?.title || id }),
+          title: t('content.deleteTitle'),
+          text: t('content.deleteConfirm', { name: mod?.title || id }),
           confirmLabel: t('btn.delete'),
           onConfirm: async () => {
             try {
-              await api.modrinth.uninstall(state.profile.id, id);
+              const profileId = state.profile.id;
+              const result = await api.modrinth.uninstall(profileId, id);
+              if (result.blocked) {
+                toast(t('mods.removeBlocked', {
+                  names: result.dependents.map((item) => item.title).join(', '),
+                }), 'err');
+                return;
+              }
+              clearModUpdate(profileId, id);
               await refreshState();
-              toast(t('mods.deleted', { name: mod?.title || id }), 'ok');
+              toast(t('content.deleted', { name: mod?.title || id }), 'ok');
             } catch (err) { toast(err.message, 'err'); }
           },
         });
@@ -1329,20 +1569,67 @@
       const upd = $('[data-act="update"]', row);
       if (upd) {
         upd.onclick = async () => {
-          await installMod(id, upd);
+          await installMod(id, upd, mod?.update?.versionId || null);
           if (mod) delete mod.update;
-          renderModList(list);
+          renderModList(list, type);
         };
       }
     });
   }
 
-  /** Mark which installed mods a newer version was found for. */
-  function applyModUpdates(updates) {
-    for (const mod of state.profile?.mods || []) {
-      const hit = updates.find((u) => u.projectId === mod.projectId);
-      if (hit) mod.update = hit; else delete mod.update;
+  function clearModUpdate(profileId, projectId) {
+    const updates = state.modUpdates.get(profileId);
+    if (!updates) return;
+    state.modUpdates.set(profileId, updates.filter((update) => update.projectId !== projectId));
+  }
+
+  /** Mark which installed content has a newer or compatibility-required build. */
+  function applyModUpdates(updates, profileId = state.profile?.id) {
+    if (!profileId) return;
+    state.modUpdates.set(profileId, updates);
+    const targets = [state.profiles.find((profile) => profile.id === profileId),
+      state.profile?.id === profileId ? state.profile : null].filter(Boolean);
+    for (const profile of new Set(targets)) {
+      for (const mod of profile.mods || []) {
+        const hit = updates.find((update) => update.projectId === mod.projectId);
+        if (hit) mod.update = hit; else delete mod.update;
+      }
     }
+  }
+
+  async function checkModUpdatesOnStartup() {
+    try {
+      const checked = await api.modrinth.checkAllUpdates();
+      // The main process also hydrates dependency graphs for older profiles.
+      // Pull those records in before rendering owner names on dependency badges.
+      await refreshState();
+      let total = 0;
+      for (const result of checked) {
+        applyModUpdates(result.updates || [], result.profileId);
+        total += result.updates?.length || 0;
+        if (result.error) console.warn(`mod update check failed for ${result.profileId}: ${result.error}`);
+      }
+      renderAll();
+      if (total) toast(t('mods.autoUpdatesFound', { n: total }), 'info');
+    } catch (err) {
+      console.warn('automatic mod update check failed', err);
+    }
+  }
+
+  /** Fill the three default browser queries after the shell is usable. Opening
+   * Mods, resource packs or shaders then usually renders from the main-process
+   * cache instead of waiting for the first Modrinth round trip. */
+  async function warmContentSearch() {
+    if (!state.profile) return;
+    await Promise.allSettled(CONTENT_TYPES.map((projectType) => api.modrinth.search({
+      query: '',
+      loader: state.profile.loader,
+      gameVersion: state.profile.mcVersion,
+      projectType,
+      index: 'relevance',
+      limit: 30,
+      offset: 0,
+    })));
   }
 
   function renderInstalledMods() {
@@ -1387,7 +1674,10 @@
         : st ? `<span class="sr-players off">${esc(t('servers.offline'))}</span>`
         : '<span class="sr-players"><span class="spinner"></span></span>';
       return `<button class="server-row" data-addr="${esc(s.address)}">
-        ${serverIconHtml(s)}
+        <span class="server-icon-action">
+          ${serverIconHtml(s)}
+          <span class="server-play-overlay">${icon('play')}</span>
+        </span>
         <span class="sr-meta">
           <span class="sr-name"><span class="dot ${!st ? '' : st.online ? 'up' : 'down'}"></span>${esc(s.name)}</span>
           <span class="sr-addr">${esc(s.address)}</span>
@@ -1454,7 +1744,7 @@
   // settings
   // =========================================================================
 
-  /** OneLauncher splits its settings into pages; this is that rail. */
+  /** Settings use a section rail so global preferences stay scannable. */
   const SETTINGS_SECTIONS = [
     { key: 'game', glyph: 'monitor' },
     { key: 'performance', glyph: 'gauge' },
@@ -1717,9 +2007,8 @@
   // =========================================================================
   // instance page
   //
-  // OneLauncher gives every instance a page of its own with a tab bar; this is
-  // that page, over MangoClient's profiles. The page always shows the selected
-  // profile, so the rail, the Start view and this view never disagree.
+  // Every instance owns a tabbed workspace. The page always shows the selected
+  // profile, so the rail, Start view and this view never disagree.
   // =========================================================================
 
   const INSTANCE_TABS = ['overview', 'mods', 'shots', 'logs', 'settings'];
@@ -1805,20 +2094,20 @@
 
       <section class="panel">
         <div class="panel-head">
-          <h2>${esc(t('mods.installed'))} <span class="count">${(profile.mods || []).length || ''}</span></h2>
+          <h2>${esc(t('mods.installed'))} <span class="count">${profileContent(profile, 'mod').length || ''}</span></h2>
           <button class="btn sm" data-act="allmods">${esc(t('servers.all'))}</button>
         </div>
         <div class="rows" id="ov-mods"></div>
       </section>`;
     hydrateIcons(panel);
 
-    $('[data-act="browse"]', panel).onclick = () => showView('mods');
+    $('[data-act="browse"]', panel).onclick = () => openContentBrowser('mod');
     $('[data-act="shots"]', panel).onclick = () => api.screenshots.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
     $('[data-act="logs"]', panel).onclick = () => api.logs.openFolder(profile.id).catch((err) => toast(err.message, 'err'));
     $('[data-act="allshots"]', panel).onclick = () => showInstanceTab('shots');
     $('[data-act="allmods"]', panel).onclick = () => showInstanceTab('mods');
 
-    renderModList($('#ov-mods'));
+    renderModList($('#ov-mods'), 'mod');
 
     // The strip is a preview, so a slow folder must never hold up the page.
     api.screenshots.list(profile.id).then((shots) => {
@@ -1834,32 +2123,51 @@
     }).catch(() => {});
   }
 
-  // --- mods ----------------------------------------------------------------
+  // --- instance content ----------------------------------------------------
 
   function renderInstanceMods() {
     const profile = state.profile;
     if (!profile) return;
     const panel = $('#itab-mods');
+    const selected = CONTENT_TYPES.includes(state.instanceContentType) ? state.instanceContentType : 'mod';
+    state.instanceContentType = selected;
+    const addLabel = t(`content.add.${selected}`);
     panel.innerHTML = `
+      <div class="content-switcher" role="tablist" aria-label="${esc(t('content.tabs'))}">
+        ${CONTENT_TYPES.map((type) => `<button class="content-switch ${type === selected ? 'active' : ''}"
+          data-content-type="${type}" role="tab" aria-selected="${type === selected}">
+          <span data-icon="${CONTENT_ICONS[type]}"></span>
+          <span>${esc(contentLabel(type))}</span>
+          <span class="content-count">${profileContent(profile, type).length}</span>
+        </button>`).join('')}
+      </div>
       <div class="tab-toolbar">
-        <button class="btn brand" data-act="browse" data-icon="plus"><span>${esc(t('mods.add'))}</span></button>
+        <button class="btn brand" data-act="browse" data-icon="plus"><span>${esc(addLabel)}</span></button>
         <button class="btn" data-act="updates" data-icon="refresh"><span>${esc(t('mods.checkUpdates'))}</span></button>
-        <button class="btn" data-act="folder" data-icon="folder"><span>${esc(t('mods.openFolder'))}</span></button>
+        <span class="spacer"></span>
+        <button class="btn" data-act="folder" data-icon="folder"><span>${esc(t('content.openFolder'))}</span></button>
       </div>
       <div class="rows" id="ins-mod-list"></div>`;
     hydrateIcons(panel);
 
-    $('[data-act="browse"]', panel).onclick = () => showView('mods');
-    $('[data-act="folder"]', panel).onclick = () => api.app.openFolder(profile.id);
+    $$('[data-content-type]', panel).forEach((button) => {
+      button.onclick = () => {
+        state.instanceContentType = button.dataset.contentType;
+        renderInstanceMods();
+      };
+    });
+    $('[data-act="browse"]', panel).onclick = () => openContentBrowser(selected);
+    $('[data-act="folder"]', panel).onclick = () => api.app.openContentFolder(profile.id, selected);
     $('[data-act="updates"]', panel).onclick = async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
       try {
         const updates = await api.modrinth.checkUpdates(profile.id);
         applyModUpdates(updates);
-        renderModList($('#ins-mod-list'));
-        toast(updates.length ? t('mods.updatesFound', { n: updates.length }) : t('mods.upToDate'),
-          updates.length ? 'info' : 'ok');
+        const relevant = updates.filter((update) => (update.type || 'mod') === selected);
+        renderModList($('#ins-mod-list'), selected);
+        toast(relevant.length ? t('mods.updatesFound', { n: relevant.length }) : t('mods.upToDate'),
+          relevant.length ? 'info' : 'ok');
       } catch (err) {
         toast(err.message, 'err');
       } finally {
@@ -1867,7 +2175,7 @@
       }
     };
 
-    renderModList($('#ins-mod-list'));
+    renderModList($('#ins-mod-list'), selected);
   }
 
   // --- per-instance settings ----------------------------------------------
@@ -2086,7 +2394,7 @@
   // logs
   //
   // What the game wrote, what it crashed with, and what the launcher captured,
-  // with a one-click share through mclo.gs the way OneLauncher offers it.
+  // with a one-click share through mclo.gs for fast support handoffs.
   // =========================================================================
 
   function renderInstanceLogs() {
@@ -2240,14 +2548,26 @@
     const chart = $('#stat-chart');
     chart.classList.toggle('dense', data.days.length > 14);
     const peak = Math.max(...data.days.map((d) => d.ms), 1);
-    chart.innerHTML = data.days.map((d) => {
+    const columns = data.days.map((d) => {
       const pct = Math.round((d.ms / peak) * 100);
       const label = d.date.slice(8) + '.' + d.date.slice(5, 7);
-      return `<div class="chart-col ${d.ms ? 'has-play' : ''}" data-tip-text="${esc(`${label} · ${fmtDuration(d.ms)}`)}">
+      const tooltip = `${label} · ${fmtChartDuration(d.ms)}`;
+      return `<div class="chart-col ${d.ms ? 'has-play' : ''}" data-tip-text="${esc(tooltip)}"
+                   tabindex="0" aria-label="${esc(tooltip)}">
         <div class="chart-bar" style="height:${d.ms ? Math.max(pct, 3) : 0}%"></div>
         <div class="chart-label">${esc(label)}</div>
       </div>`;
     }).join('');
+    chart.innerHTML = `
+      <div class="chart-y-axis" aria-hidden="true">
+        <span>${esc(fmtChartDuration(peak))}</span>
+        <span>${esc(fmtChartDuration(peak / 2))}</span>
+        <span>0 min</span>
+      </div>
+      <div class="chart-plot">
+        <div class="chart-grid-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="chart-bars">${columns}</div>
+      </div>`;
 
     const rows = $('#stat-profiles');
     if (!data.perProfile.length) {
@@ -2454,11 +2774,11 @@
     state.launchState = s;
     if (s === 'running') {
       state.running.add(profileId);
-      $('#launch-progress').hidden = true;
+      setLaunchProgressVisible(false);
       viewer?.setWalking(true);
     } else if (s === 'stopped' || s === 'crashed') {
       state.running.delete(profileId);
-      $('#launch-progress').hidden = true;
+      setLaunchProgressVisible(false);
       viewer?.setWalking(false);
       if (s === 'crashed') {
         toast(t('launch.crashed'), 'err');
@@ -2489,6 +2809,7 @@
     state.paths = s.paths;
     state.running = new Set(s.running || []);
     state.version = s.version;
+    for (const [profileId, updates] of state.modUpdates) applyModUpdates(updates, profileId);
     await ensureCovers([state.profile?.id], { rerender: false });
     renderAll();
   }
@@ -2504,6 +2825,7 @@
     if ($('#view-instance').classList.contains('active')) renderInstance();
     if ($('#view-stats').classList.contains('active')) renderStats();
     renderServerList();
+    syncViewer();
   }
 
   async function init() {
@@ -2526,6 +2848,12 @@
     api.on.modsChanged(({ profileId, mods }) => applyMods(profileId, mods));
 
     renderAll();
+
+    // Network housekeeping starts after the shell is interactive. Browser
+    // results warm first; the more expensive installed-content update scan
+    // still runs once per launch, just without competing with initial paint.
+    setTimeout(warmContentSearch, 450);
+    setTimeout(checkModUpdatesOnStartup, 1800);
 
     // Last, so the overlay opens over a launcher that is already up to date.
     if (!state.config.firstRunDone) startOnboarding();

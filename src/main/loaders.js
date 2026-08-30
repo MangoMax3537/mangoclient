@@ -70,6 +70,15 @@ function versionIdFor(loader, mcVersion, loaderVersion) {
 /** Fabric and Quilt hand us a ready-made version JSON, no processors needed. */
 async function installJsonLoader(loader, mcVersion, loaderVersion, onLog) {
   const base = loader === 'fabric' ? FABRIC_META : QUILT_META;
+  const expectedId = versionIdFor(loader, mcVersion, loaderVersion);
+  const expectedFile = path.join(P.versions, expectedId, `${expectedId}.json`);
+  const existing = await fsp.readFile(expectedFile, 'utf8')
+    .then((raw) => JSON.parse(raw))
+    .catch(() => null);
+  if (existing?.id === expectedId || existing?.inheritsFrom === mcVersion) {
+    onLog?.(`${loader} ${loaderVersion} already installed.`);
+    return expectedId;
+  }
   const url = `${base}/versions/loader/${encodeURIComponent(mcVersion)}/${encodeURIComponent(loaderVersion)}/profile/json`;
   onLog?.(`Fetching ${loader} ${loaderVersion} for ${mcVersion}…`);
   const json = await getJSON(url);

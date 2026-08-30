@@ -8,6 +8,34 @@ const { getJSON, downloadFile, pool } = require('./net');
 const { LIMITS, safeArchivePath, validateArchiveEntries } = require('./archive');
 
 const API = 'https://api.modrinth.com/v2';
+const responseCache = new Map();
+const pendingRequests = new Map();
+const SEARCH_TTL = 5 * 60 * 1000;
+const METADATA_TTL = 15 * 60 * 1000;
+
+/** Modrinth metadata is immutable or slow-changing. Reuse it while the launcher
+ * is open and collapse identical simultaneous calls into one network request. */
+async function cachedJSON(url, ttl = METADATA_TTL) {
+  const now = Date.now();
+  const cached = responseCache.get(url);
+  if (cached && now - cached.at < ttl) {
+    // Refresh insertion order so the cap acts as a small LRU.
+    responseCache.delete(url);
+    responseCache.set(url, cached);
+    return cached.value;
+  }
+  if (pendingRequests.has(url)) return pendingRequests.get(url);
+
+  const request = getJSON(url)
+    .then((value) => {
+      responseCache.set(url, { at: Date.now(), value });
+      while (responseCache.size > 250) responseCache.delete(responseCache.keys().next().value);
+      return value;
+    })
+    .finally(() => pendingRequests.delete(url));
+  pendingRequests.set(url, request);
+  return request;
+}
 
 /** Loaders that can also load plain-Fabric mods. */
 function loaderFacet(loader) {
@@ -43,14 +71,14 @@ async function search({
     offset: String(offset),
     index,
   });
-  return getJSON(`${API}/search?${params}`);
+  return cachedJSON(`${API}/search?${params}`, SEARCH_TTL);
 }
 
-const getProject = (idOrSlug) => getJSON(`${API}/project/${encodeURIComponent(idOrSlug)}`);
+const getProject = (idOrSlug) => cachedJSON(`${API}/project/${encodeURIComponent(idOrSlug)}`);
 
 function getProjects(ids) {
   if (!ids.length) return Promise.resolve([]);
-  return getJSON(`${API}/projects?ids=${encodeURIComponent(JSON.stringify(ids))}`);
+  return cachedJSON(`${API}/projects?ids=${encodeURIComponent(JSON.stringify(ids))}`);
 }
 
 async function getVersions(idOrSlug, { loader, gameVersion } = {}) {
@@ -58,11 +86,11 @@ async function getVersions(idOrSlug, { loader, gameVersion } = {}) {
   if (loader && loader !== 'vanilla') params.set('loaders', JSON.stringify(loaderQuery(loader)));
   if (gameVersion) params.set('game_versions', JSON.stringify([gameVersion]));
   const qs = params.toString();
-  return getJSON(`${API}/project/${encodeURIComponent(idOrSlug)}/version${qs ? `?${qs}` : ''}`);
+  return cachedJSON(`${API}/project/${encodeURIComponent(idOrSlug)}/version${qs ? `?${qs}` : ''}`);
 }
 
-const getVersion = (versionId) => getJSON(`${API}/version/${encodeURIComponent(versionId)}`);
-const getCategories = () => getJSON(`${API}/tag/category`);
+const getVersion = (versionId) => cachedJSON(`${API}/version/${encodeURIComponent(versionId)}`);
+const getCategories = () => cachedJSON(`${API}/tag/category`, 24 * 60 * 60 * 1000);
 
 /** Pick the best version: newest release that matches, else newest of anything. */
 function pickVersion(versions) {
@@ -92,6 +120,134 @@ function safeFilename(name) {
     throw new Error('Modrinth returned an invalid filename');
   }
   return name;
+}
+
+/** A dependency is reusable only when it is the exact Modrinth build selected
+ * by the parent mod. Sharing a project id alone is not enough: Iris, for
+ * example, can require an older Sodium build than the newest Sodium release. */
+function hasExactInstalledVersion(profile, projectId, versionId) {
+  return (profile.mods || []).some((record) =>
+    record.projectId === projectId && record.versionId === versionId);
+}
+
+function directDependencyRefs(version, versionsByProject = new Map(), projectByVersion = new Map()) {
+  const refs = [];
+  const seen = new Set();
+  for (const dependency of version.dependencies || []) {
+    if (dependency.dependency_type !== 'required') continue;
+    const projectId = dependency.project_id || projectByVersion.get(dependency.version_id);
+    if (!projectId || seen.has(projectId)) continue;
+    seen.add(projectId);
+    refs.push({
+      projectId,
+      versionId: dependency.version_id || versionsByProject.get(projectId) || null,
+    });
+  }
+  return refs;
+}
+
+/** Fill dependency metadata on profiles created before MangoClient stored the
+ * graph. Version records on Modrinth are immutable, so this only needs doing
+ * once per installed build. Failures are left unknown rather than guessed. */
+async function hydrateDependencyMetadata(profile) {
+  const records = profile.mods || [];
+  const missing = records.filter((record) =>
+    (record.type || 'mod') === 'mod' && !record.local && record.versionId
+      && !Array.isArray(record.requiredDependencies));
+  if (!missing.length) return { mods: records, changed: false, complete: true };
+
+  const versions = await pool(missing, 6, async (record) => {
+    try { return await getVersion(record.versionId); } catch { return null; }
+  });
+  const versionByRecord = new Map(missing.map((record, index) => [record.projectId, versions[index]]));
+  const versionsByProject = new Map(records.filter((record) => record.projectId && record.versionId)
+    .map((record) => [record.projectId, record.versionId]));
+  const projectByVersion = new Map(records.filter((record) => record.projectId && record.versionId)
+    .map((record) => [record.versionId, record.projectId]));
+
+  const unresolvedVersionIds = new Set();
+  for (const version of versions) {
+    for (const dependency of version?.dependencies || []) {
+      if (dependency.dependency_type === 'required' && !dependency.project_id
+          && dependency.version_id && !projectByVersion.has(dependency.version_id)) {
+        unresolvedVersionIds.add(dependency.version_id);
+      }
+    }
+  }
+  const resolvedOwners = await pool([...unresolvedVersionIds], 6, async (versionId) => {
+    try { return await getVersion(versionId); } catch { return null; }
+  });
+  [...unresolvedVersionIds].forEach((versionId, index) => {
+    const owner = resolvedOwners[index]?.project_id;
+    if (owner) projectByVersion.set(versionId, owner);
+  });
+
+  let complete = true;
+  let changed = false;
+  const mods = records.map((record) => {
+    if (!missing.includes(record)) return record;
+    const version = versionByRecord.get(record.projectId);
+    if (!version) { complete = false; return record; }
+    changed = true;
+    return {
+      ...record,
+      requiredDependencies: directDependencyRefs(version, versionsByProject, projectByVersion),
+    };
+  });
+  return { mods, changed, complete };
+}
+
+function dependencyProjectIds(record) {
+  return (record.requiredDependencies || []).map((dependency) => dependency.projectId);
+}
+
+function installedDependents(profile, projectId) {
+  return (profile.mods || []).filter((record) => dependencyProjectIds(record).includes(projectId));
+}
+
+/** Toggle a complete dependency tree. Requirements are enabled before their
+ * consumer; dependents are disabled before the dependency they consume. */
+async function setEnabledWithDependencies(profile, projectId, enabled) {
+  const byId = new Map((profile.mods || []).map((record) => [record.projectId, record]));
+  if (!byId.has(projectId)) return { mods: profile.mods || [], affected: [] };
+
+  const order = [];
+  const visited = new Set();
+  const visitRequirements = (id) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const record = byId.get(id);
+    if (!record) throw new Error(`Required dependency ${id} is not installed`);
+    for (const dependency of record.requiredDependencies || []) {
+      const installed = byId.get(dependency.projectId);
+      if (!installed) throw new Error(`Required dependency ${dependency.projectId} is not installed`);
+      if (dependency.versionId && installed.versionId !== dependency.versionId) {
+        throw new Error(`${record.title} requires a different version of ${installed.title}. Run Check for updates before enabling it.`);
+      }
+      visitRequirements(dependency.projectId);
+    }
+    order.push(id);
+  };
+  const visitDependents = (id) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    for (const dependent of installedDependents(profile, id)) visitDependents(dependent.projectId);
+    order.push(id);
+  };
+  if (enabled) visitRequirements(projectId);
+  else visitDependents(projectId);
+
+  let mods = [...(profile.mods || [])];
+  const affected = [];
+  for (const id of order) {
+    const index = mods.findIndex((record) => record.projectId === id);
+    if (index < 0 || (mods[index].enabled !== false) === enabled) continue;
+    const workingProfile = { ...profile, mods };
+    const newPath = await setModEnabled(workingProfile, id, enabled);
+    mods[index] = { ...mods[index], enabled, file: newPath || mods[index].file };
+    affected.push({ projectId: id, title: mods[index].title });
+  }
+  return { mods, affected };
 }
 
 /**
@@ -156,11 +312,12 @@ async function installProject({
     }
   }
 
+  const selectedVersions = new Map(toInstall.map((item) => [item.project.id, item.version.id]));
+  const selectedProjects = new Map(toInstall.map((item) => [item.version.id, item.project.id]));
   const installed = [];
-  const already = new Set((profile.mods || []).map((m) => m.projectId));
-
   for (const item of toInstall) {
-    if (already.has(item.project.id) && item.project.id !== project.id) continue;
+    const isDependency = item.project.id !== project.id;
+    if (isDependency && hasExactInstalledVersion(profile, item.project.id, item.version.id)) continue;
     const file = primaryFile(item.version);
     if (!file) continue;
     const dir = targetDirFor(item.project.project_type || 'mod', profile.id);
@@ -181,7 +338,8 @@ async function installProject({
       gameVersions: item.version.game_versions,
       loaders: item.version.loaders,
       installedAt: Date.now(),
-      dependency: item.project.id !== project.id,
+      dependency: isDependency,
+      requiredDependencies: directDependencyRefs(item.version, selectedVersions, selectedProjects),
     });
   }
   return installed;
@@ -194,7 +352,7 @@ async function uninstallMod(profile, projectId) {
   return true;
 }
 
-/** Toggle by renaming: the loader ignores anything not ending in `.jar`. */
+/** Toggle by renaming: Minecraft and loaders ignore files ending in `.disabled`. */
 async function setModEnabled(profile, projectId, enabled) {
   const record = (profile.mods || []).find((m) => m.projectId === projectId);
   if (!record) return null;
@@ -206,16 +364,63 @@ async function setModEnabled(profile, projectId, enabled) {
   return to;
 }
 
-/** Check every installed mod for a newer build matching the profile. */
+/** Check every Modrinth-managed content item for a compatible newer build. */
 async function checkUpdates(profile) {
-  // Hand-added jars have no Modrinth project to compare against.
-  const mods = (profile.mods || []).filter((m) => m.type === 'mod' && !m.local);
-  const results = await pool(mods, 6, async (mod) => {
+  const hydrated = await hydrateDependencyMetadata(profile);
+  const effectiveProfile = { ...profile, mods: hydrated.mods };
+  // Hand-added files have no Modrinth project to compare against.
+  const content = (effectiveProfile.mods || []).filter((item) =>
+    ['mod', 'resourcepack', 'shader'].includes(item.type || 'mod') && !item.local && item.projectId);
+  const pinnedVersions = new Map();
+  const requiredBy = new Map();
+  for (const parent of effectiveProfile.mods || []) {
+    if (parent.enabled === false) continue;
+    for (const dependency of parent.requiredDependencies || []) {
+      if (!dependency.versionId) continue;
+      if (!pinnedVersions.has(dependency.projectId)) pinnedVersions.set(dependency.projectId, new Set());
+      pinnedVersions.get(dependency.projectId).add(dependency.versionId);
+      if (!requiredBy.has(dependency.projectId)) requiredBy.set(dependency.projectId, []);
+      requiredBy.get(dependency.projectId).push({
+        projectId: parent.projectId,
+        title: parent.title,
+        versionId: dependency.versionId,
+      });
+    }
+  }
+  const results = await pool(content, 6, async (item) => {
     try {
-      const versions = await getVersions(mod.projectId, { loader: profile.loader, gameVersion: profile.mcVersion });
-      const latest = pickVersion(versions);
-      if (latest && latest.id !== mod.versionId) {
-        return { projectId: mod.projectId, title: mod.title, from: mod.versionNumber, to: latest.version_number, versionId: latest.id };
+      const type = item.type || 'mod';
+      const pins = pinnedVersions.get(item.projectId);
+      let latest;
+      let compatibility = false;
+      if (pins?.size === 1) {
+        latest = await getVersion([...pins][0]);
+        compatibility = latest.id !== item.versionId;
+      } else if (pins?.size > 1) {
+        return {
+          projectId: item.projectId,
+          type,
+          title: item.title,
+          conflict: true,
+          requiredBy: requiredBy.get(item.projectId) || [],
+        };
+      } else {
+        const versions = await getVersions(item.projectId, {
+          loader: type === 'mod' ? profile.loader : undefined,
+          gameVersion: profile.mcVersion,
+        });
+        latest = pickVersion(versions);
+      }
+      if (latest && latest.id !== item.versionId) {
+        return {
+          projectId: item.projectId,
+          type,
+          title: item.title,
+          from: item.versionNumber,
+          to: latest.version_number,
+          versionId: latest.id,
+          compatibility,
+        };
       }
     } catch { /* project may have been deleted */ }
     return null;
@@ -293,5 +498,6 @@ async function installModpack({ profile, versionId, onLog = () => {}, onProgress
 module.exports = {
   search, getProject, getProjects, getVersions, getVersion, getCategories,
   installProject, uninstallMod, setModEnabled, checkUpdates, installModpack,
-  modsDir, pickVersion,
+  modsDir, targetDirFor, pickVersion, hasExactInstalledVersion,
+  hydrateDependencyMetadata, installedDependents, setEnabledWithDependencies,
 };

@@ -18,9 +18,10 @@ const EXE = process.platform === 'win32' ? 'javaw.exe' : 'java';
 const ADOPT_OS = process.platform === 'win32' ? 'windows'
   : process.platform === 'darwin' ? 'mac' : 'linux';
 const ADOPT_ARCH = { x64: 'x64', arm64: 'aarch64', ia32: 'x86', arm: 'arm' }[process.arch] || 'x64';
+const javaProbeCache = new Map();
 
 /** Read the major version out of `java -version` output. */
-async function probeJava(javaPath) {
+async function probeJavaUncached(javaPath) {
   try {
     const { stderr, stdout } = await execFileAsync(javaPath, ['-version'], { timeout: 10000 });
     const out = `${stderr}${stdout}`;
@@ -32,6 +33,11 @@ async function probeJava(javaPath) {
   } catch {
     return null;
   }
+}
+
+function probeJava(javaPath) {
+  if (!javaProbeCache.has(javaPath)) javaProbeCache.set(javaPath, probeJavaUncached(javaPath));
+  return javaProbeCache.get(javaPath);
 }
 
 async function findSystemJavas() {
@@ -48,27 +54,22 @@ async function findSystemJavas() {
     }
   }
 
-  const found = [];
-  for (const c of candidates) {
-    const info = await probeJava(c);
-    if (info) found.push(info);
-  }
-  return found;
+  return (await Promise.all([...candidates].map((candidate) => probeJava(candidate)))).filter(Boolean);
 }
 
 /** Runtimes we manage ourselves, keyed by major version. */
 async function listManagedRuntimes() {
-  const out = [];
   const entries = await fsp.readdir(P.runtimes, { withFileTypes: true }).catch(() => []);
-  for (const e of entries) {
-    if (!e.isDirectory()) continue;
+  const out = await Promise.all(entries.map(async (e) => {
+    if (!e.isDirectory()) return null;
     const exe = await findJavaExecutable(path.join(P.runtimes, e.name));
     if (exe) {
       const info = await probeJava(exe);
-      if (info) out.push({ ...info, managed: true, id: e.name });
+      if (info) return { ...info, managed: true, id: e.name };
     }
-  }
-  return out;
+    return null;
+  }));
+  return out.filter(Boolean);
 }
 
 /** JREs unpack into a versioned subfolder whose name we can't predict. */

@@ -77,6 +77,15 @@ function validateMods(v) {
     if (mod.installedAt != null) clean.installedAt = integer(mod.installedAt, 'installedAt', 0, Number.MAX_SAFE_INTEGER);
     if (Array.isArray(mod.gameVersions)) clean.gameVersions = mod.gameVersions.slice(0, 128).map((x) => text(x, 'gameVersion', 64));
     if (Array.isArray(mod.loaders)) clean.loaders = mod.loaders.slice(0, 16).map((x) => text(x, 'loader', 32));
+    if (Array.isArray(mod.requiredDependencies)) {
+      clean.requiredDependencies = mod.requiredDependencies.slice(0, 128).map((dependency) => {
+        object(dependency, 'mod dependency');
+        return {
+          projectId: text(dependency.projectId, 'dependency projectId', 512, false),
+          versionId: dependency.versionId == null ? null : text(dependency.versionId, 'dependency versionId', 512, false),
+        };
+      });
+    }
     return clean;
   });
 }

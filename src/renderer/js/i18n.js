@@ -10,10 +10,11 @@
       'tip.sidebar': 'Seitenleiste ein-/ausblenden',
       'profiles.more': 'Weitere Aktionen',
       'profiles.manageMods': 'Mods verwalten',
+      'profiles.manageContent': 'Inhalte verwalten',
       'btn.close': 'Schließen',
       'nav.profiles': 'Profile',
       'nav.accounts': 'Konten',
-      'nav.mods': 'Mods',
+      'nav.mods': 'Discover',
       'nav.servers': 'Server',
       'nav.settings': 'Einstellungen',
       'nav.stats': 'Statistik',
@@ -31,9 +32,13 @@
       'mangoconfig.turnedOn': 'MangoConfig für dieses Profil eingeschaltet',
       'mangoconfig.turnedOff': 'MangoConfig für dieses Profil ausgeschaltet',
       'nav.instance': 'Instanz',
+      'home.modsSub': 'Mods im ausgewählten Profil',
+      'home.changeProfile': 'Profil wechseln',
+      'home.partneredServers': 'Partner-Server',
 
       'instance.overview': 'Übersicht',
       'instance.mods': 'Mods',
+      'instance.content': 'Inhalte',
       'instance.shots': 'Screenshots',
       'instance.logs': 'Logs',
       'instance.settings': 'Einstellungen',
@@ -229,7 +234,7 @@
       'accounts.offlineName': 'Spielername',
       'accounts.offlineHint': '3 bis 16 Zeichen: Buchstaben, Ziffern, Unterstrich. Funktioniert nur im Einzelspieler und auf Servern ohne Online-Modus.',
 
-      'mods.title': 'Mods',
+      'mods.title': 'Discover',
       'mods.add': 'Mods hinzufügen',
       'mods.on': 'An',
       'mods.off': 'Aus',
@@ -272,12 +277,37 @@
       'mods.checkUpdates': 'Nach Updates suchen',
       'mods.openFolder': 'Ordner öffnen',
       'mods.dependency': 'Abhängigkeit',
+      'mods.dependencyHint': 'Wird benötigt von: {names}',
+      'mods.dependencyHintUnknown': 'Wurde automatisch als benötigte Abhängigkeit installiert.',
       'mods.updateAvailable': 'Update',
       'mods.update': 'Aktualisieren',
+      'mods.compatibilityFix': 'Kompatibilität',
+      'mods.fix': 'Beheben',
+      'mods.dependencyConflict': 'Dependency-Konflikt',
+      'mods.conflictHint': 'Unterschiedliche Versionen werden benötigt von: {names}',
       'mods.updatesFound': '{n} Updates verfügbar',
       'mods.upToDate': 'Alles aktuell',
+      'mods.autoUpdatesFound': '{n} Mod-Updates verfügbar',
       'mods.toggle': 'Aktivieren / deaktivieren',
       'mods.remove': 'Entfernen',
+      'mods.dependenciesEnabled': '{n} benötigte Mods wurden ebenfalls aktiviert: {names}',
+      'mods.dependentsDisabled': '{n} abhängige Mods wurden ebenfalls deaktiviert: {names}',
+      'mods.removeBlocked': 'Kann nicht entfernt werden. Wird benötigt von: {names}',
+
+      'content.tabs': 'Instanzinhalte',
+      'content.add.mod': 'Mods hinzufügen',
+      'content.add.resourcepack': 'Resource Pack hinzufügen',
+      'content.add.shader': 'Shader hinzufügen',
+      'content.openFolder': 'Diesen Ordner öffnen',
+      'content.none.mod': 'Keine Mods installiert',
+      'content.none.resourcepack': 'Keine Resource Packs installiert',
+      'content.none.shader': 'Keine Shader installiert',
+      'content.noneHint.mod': 'Füge Mods über Modrinth hinzu oder lege Jars direkt in den Mods-Ordner.',
+      'content.noneHint.resourcepack': 'Füge ein Resource Pack über Modrinth direkt zu dieser Instanz hinzu.',
+      'content.noneHint.shader': 'Füge einen Shader über Modrinth direkt zu dieser Instanz hinzu.',
+      'content.deleteTitle': 'Inhalt entfernen',
+      'content.deleteConfirm': '„{name}“ wirklich entfernen? Die Datei wird aus dieser Instanz gelöscht.',
+      'content.deleted': '{name} entfernt',
 
       'servers.title': 'Server',
       'servers.sub': 'Status wird live abgefragt. Beitreten startet das gewählte Profil.',
@@ -369,10 +399,11 @@
       'tip.sidebar': 'Toggle sidebar',
       'profiles.more': 'More actions',
       'profiles.manageMods': 'Manage mods',
+      'profiles.manageContent': 'Manage content',
       'btn.close': 'Close',
       'nav.profiles': 'Profiles',
       'nav.accounts': 'Accounts',
-      'nav.mods': 'Mods',
+      'nav.mods': 'Discover',
       'nav.servers': 'Servers',
       'nav.settings': 'Settings',
       'nav.stats': 'Statistics',
@@ -390,9 +421,13 @@
       'mangoconfig.turnedOn': 'MangoConfig switched on for this profile',
       'mangoconfig.turnedOff': 'MangoConfig switched off for this profile',
       'nav.instance': 'Instance',
+      'home.modsSub': 'Mods in the selected profile',
+      'home.changeProfile': 'Switch profile',
+      'home.partneredServers': 'Partnered Servers',
 
       'instance.overview': 'Overview',
       'instance.mods': 'Mods',
+      'instance.content': 'Content',
       'instance.shots': 'Screenshots',
       'instance.logs': 'Logs',
       'instance.settings': 'Settings',
@@ -588,7 +623,7 @@
       'accounts.offlineName': 'Player name',
       'accounts.offlineHint': '3 to 16 characters: letters, digits, underscore. Works in singleplayer and on servers with online mode off.',
 
-      'mods.title': 'Mods',
+      'mods.title': 'Discover',
       'mods.add': 'Add mods',
       'mods.on': 'On',
       'mods.off': 'Off',
@@ -631,12 +666,37 @@
       'mods.checkUpdates': 'Check for updates',
       'mods.openFolder': 'Open folder',
       'mods.dependency': 'Dependency',
+      'mods.dependencyHint': 'Required by: {names}',
+      'mods.dependencyHintUnknown': 'Installed automatically as a required dependency.',
       'mods.updateAvailable': 'Update',
       'mods.update': 'Update',
+      'mods.compatibilityFix': 'Compatibility',
+      'mods.fix': 'Fix',
+      'mods.dependencyConflict': 'Dependency conflict',
+      'mods.conflictHint': 'Different versions are required by: {names}',
       'mods.updatesFound': '{n} updates available',
       'mods.upToDate': 'Everything up to date',
+      'mods.autoUpdatesFound': '{n} mod updates available',
       'mods.toggle': 'Enable / disable',
       'mods.remove': 'Remove',
+      'mods.dependenciesEnabled': 'Also enabled {n} required mods: {names}',
+      'mods.dependentsDisabled': 'Also disabled {n} dependent mods: {names}',
+      'mods.removeBlocked': 'Cannot remove this mod. It is required by: {names}',
+
+      'content.tabs': 'Instance content',
+      'content.add.mod': 'Add mods',
+      'content.add.resourcepack': 'Add resource pack',
+      'content.add.shader': 'Add shader',
+      'content.openFolder': 'Open this folder',
+      'content.none.mod': 'No mods installed',
+      'content.none.resourcepack': 'No resource packs installed',
+      'content.none.shader': 'No shaders installed',
+      'content.noneHint.mod': 'Add mods from Modrinth or drop jars directly into the mods folder.',
+      'content.noneHint.resourcepack': 'Add a resource pack from Modrinth directly to this instance.',
+      'content.noneHint.shader': 'Add a shader from Modrinth directly to this instance.',
+      'content.deleteTitle': 'Remove content',
+      'content.deleteConfirm': 'Really remove “{name}”? Its file will be deleted from this instance.',
+      'content.deleted': 'Removed {name}',
 
       'servers.title': 'Servers',
       'servers.sub': 'Status is queried live. Joining starts the selected profile.',
@@ -749,9 +809,14 @@
     root.querySelectorAll('[data-i18n-ph]').forEach((el) => {
       el.placeholder = t(el.dataset.i18nPh);
     });
+    root.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+      el.setAttribute('aria-label', t(el.dataset.i18nAria));
+    });
     // Rail/statusbar tooltips render from an attribute, not from text content.
     root.querySelectorAll('[data-tip]').forEach((el) => {
-      el.dataset.tipText = t(el.dataset.tip);
+      const label = t(el.dataset.tip);
+      el.dataset.tipText = label;
+      if (el.matches('button')) el.setAttribute('aria-label', label);
     });
   }
 
