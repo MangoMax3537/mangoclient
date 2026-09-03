@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('MangoConfig release metadata and patched org.json are current', () => {
-  assert.match(read('mod/gradle.properties'), /^mod_version=1\.9\.3$/m);
+  assert.match(read('mod/gradle.properties'), /^mod_version=1\.9\.5$/m);
   assert.match(read('mod/build.gradle'), /org\.json:json:20251224/);
   assert.doesNotMatch(read('mod/build.gradle'), /org\.json:json:20230227/);
 });

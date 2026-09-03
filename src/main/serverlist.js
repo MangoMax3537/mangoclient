@@ -1,8 +1,8 @@
 'use strict';
-const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const zlib = require('zlib');
+const serverIcons = require('./servericons');
 
 const TAG = {
   end: 0, byte: 1, short: 2, int: 3, long: 4, float: 5, double: 6,
@@ -28,7 +28,8 @@ class Reader {
   double() { return this.buffer.readDoubleBE(this.take(8)); }
   string() {
     const size = this.ushort();
-    return this.buffer.toString('utf8', this.take(size), this.offset);
+    const start = this.take(size);
+    return decodeModifiedUtf8(this.buffer.subarray(start, start + size));
   }
   length() {
     const value = this.int();
@@ -88,8 +89,61 @@ function sized(size, write) {
   return buffer;
 }
 
+/** NBT is written through Java's DataOutput.writeUTF, which uses modified
+ * UTF-8 (not Node's standard UTF-8). In particular, emoji are encoded as two
+ * three-byte surrogate code units. Decoding them as ordinary UTF-8 silently
+ * replaces characters and can make a rewritten servers.dat unusable. */
+function encodeModifiedUtf8(value) {
+  const bytes = [];
+  const input = String(value);
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code >= 0x0001 && code <= 0x007f) {
+      bytes.push(code);
+    } else if (code <= 0x07ff) {
+      bytes.push(0xc0 | ((code >> 6) & 0x1f), 0x80 | (code & 0x3f));
+    } else {
+      bytes.push(0xe0 | ((code >> 12) & 0x0f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    }
+  }
+  return Buffer.from(bytes);
+}
+
+function decodeModifiedUtf8(buffer) {
+  const units = [];
+  for (let i = 0; i < buffer.length;) {
+    const first = buffer[i++];
+    if (first > 0 && first <= 0x7f) {
+      units.push(first);
+      continue;
+    }
+    if ((first & 0xe0) === 0xc0) {
+      if (i >= buffer.length || (buffer[i] & 0xc0) !== 0x80) throw new Error('Invalid modified UTF-8');
+      const code = ((first & 0x1f) << 6) | (buffer[i++] & 0x3f);
+      if (code !== 0 && code < 0x80) throw new Error('Invalid modified UTF-8');
+      units.push(code);
+      continue;
+    }
+    if ((first & 0xf0) === 0xe0) {
+      if (i + 1 >= buffer.length || (buffer[i] & 0xc0) !== 0x80 || (buffer[i + 1] & 0xc0) !== 0x80) {
+        throw new Error('Invalid modified UTF-8');
+      }
+      const code = ((first & 0x0f) << 12) | ((buffer[i] & 0x3f) << 6) | (buffer[i + 1] & 0x3f);
+      i += 2;
+      if (code < 0x800) throw new Error('Invalid modified UTF-8');
+      units.push(code);
+      continue;
+    }
+    throw new Error('Invalid modified UTF-8');
+  }
+  // Avoid apply/spread argument limits for a large but valid NBT string.
+  let result = '';
+  for (let i = 0; i < units.length; i += 8192) result += String.fromCharCode(...units.slice(i, i + 8192));
+  return result;
+}
+
 function stringBuffer(value) {
-  const text = Buffer.from(String(value), 'utf8');
+  const text = encodeModifiedUtf8(value);
   if (text.length > 0xffff) throw new Error('NBT string is too long');
   const length = sized(2, (out) => out.writeUInt16BE(text.length));
   return Buffer.concat([length, text]);
@@ -158,6 +212,13 @@ function setString(compound, name, value) {
   }
 }
 
+/** Minecraft's legacy formatting parser renders this gold almost exactly like
+ * the launcher's #ffad32 Mango accent; reset immediately so only the star is
+ * coloured and the partner name keeps Vanilla's normal white. */
+function featuredName(name) {
+  return `§6★ §r${name}`;
+}
+
 function normalizeAddress(address) {
   return String(address || '').trim().toLowerCase().replace(/\.$/, '').replace(/:25565$/, '');
 }
@@ -170,8 +231,7 @@ function emptyServerList() {
   };
 }
 
-async function readServerList(file) {
-  if (!fs.existsSync(file)) return emptyServerList();
+async function readServerListFile(file) {
   const compressed = await fsp.readFile(file);
   const raw = compressed[0] === 0x1f && compressed[1] === 0x8b
     ? zlib.gunzipSync(compressed)
@@ -179,17 +239,49 @@ async function readServerList(file) {
   return parseNbt(raw);
 }
 
-async function writeServerList(file, root) {
-  const tmp = `${file}.${process.pid}.tmp`;
+async function readServerList(file) {
+  try {
+    return await readServerListFile(file);
+  } catch (mainError) {
+    try {
+      return await readServerListFile(`${file}.mangoclient-backup`);
+    } catch {
+      if (mainError.code === 'ENOENT') return emptyServerList();
+      throw mainError;
+    }
+  }
+}
+
+async function writeFileAtomic(file, contents) {
+  const tmp = `${file}.${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`;
   await fsp.mkdir(path.dirname(file), { recursive: true });
-  await fsp.writeFile(tmp, zlib.gzipSync(encodeNbt(root)));
-  await fsp.rename(tmp, file);
+  let handle;
+  try {
+    handle = await fsp.open(tmp, 'wx', 0o600);
+    await handle.writeFile(contents);
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await fsp.rename(tmp, file);
+  } catch (err) {
+    if (handle) await handle.close().catch(() => {});
+    await fsp.unlink(tmp).catch(() => {});
+    throw err;
+  }
+}
+
+async function writeServerList(file, root) {
+  const contents = zlib.gzipSync(encodeNbt(root));
+  // The sidecar is launcher-owned and ignored by Minecraft. Writing it first
+  // means an interrupted update always leaves at least one complete list.
+  await writeFileAtomic(`${file}.mangoclient-backup`, contents);
+  await writeFileAtomic(file, contents);
 }
 
 /** Put partnered servers first in the real Minecraft multiplayer list. Existing
  * entries and their icons/settings are retained; matching addresses are moved
  * instead of duplicated. */
-async function ensureFeaturedServers(gameDir, servers) {
+async function ensureFeaturedServers(gameDir, servers, iconStore = serverIcons) {
   const file = path.join(gameDir, 'servers.dat');
   const root = await readServerList(file);
   let listTag = field(root.value, 'servers', TAG.list);
@@ -205,8 +297,10 @@ async function ensureFeaturedServers(gameDir, servers) {
   for (const server of servers) {
     const address = normalizeAddress(server.address);
     const existing = items.find((item) => normalizeAddress(field(item, 'ip', TAG.string)?.value) === address) || [];
-    setString(existing, 'name', `★ ${server.name}`);
+    setString(existing, 'name', featuredName(server.name));
     setString(existing, 'ip', server.address);
+    const cachedIcon = iconStore.get(server.address);
+    if (cachedIcon && !field(existing, 'icon', TAG.string)?.value) setString(existing, 'icon', cachedIcon);
     featured.push(existing);
   }
   const rest = items.filter((item) => !featuredAddresses.has(normalizeAddress(field(item, 'ip', TAG.string)?.value)));
@@ -215,6 +309,41 @@ async function ensureFeaturedServers(gameDir, servers) {
   return file;
 }
 
+/** Read Minecraft's final file without falling back to an older generation and
+ * retain the first partner favicon outside servers.dat. This never writes the
+ * player's server list. */
+async function cacheFeaturedServerIcons(gameDir, servers, iconStore = serverIcons) {
+  const file = path.join(gameDir, 'servers.dat');
+  const root = await readServerListFile(file);
+  const listTag = field(root.value, 'servers', TAG.list);
+  if (!listTag || listTag.value.elementType !== TAG.compound) return file;
+  const featuredAddresses = new Set(servers.map((server) => normalizeAddress(server.address)));
+  for (const item of listTag.value.items) {
+    const address = normalizeAddress(field(item, 'ip', TAG.string)?.value);
+    if (!featuredAddresses.has(address)) continue;
+    const icon = field(item, 'icon', TAG.string)?.value;
+    if (icon) iconStore.remember(address, icon);
+  }
+  return file;
+}
+
+/** Bootstrap a brand-new instance only. Existing servers.dat files are never
+ * rewritten during launch; MangoConfig pins the partner after Vanilla loads
+ * the complete list in memory. */
+async function seedFeaturedServers(gameDir, servers, iconStore = serverIcons) {
+  const file = path.join(gameDir, 'servers.dat');
+  try {
+    await fsp.access(file);
+    await cacheFeaturedServerIcons(gameDir, servers, iconStore).catch(() => {});
+    return file;
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  return ensureFeaturedServers(gameDir, servers, iconStore);
+}
+
 module.exports = {
   TAG, parseNbt, encodeNbt, readServerList, writeServerList, ensureFeaturedServers,
+  seedFeaturedServers, cacheFeaturedServerIcons,
+  encodeModifiedUtf8, decodeModifiedUtf8, featuredName,
 };

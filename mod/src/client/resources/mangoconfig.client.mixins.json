@@ -17,6 +17,8 @@
 		"MouseMixin",
 		"ParticleManagerMixin",
 		"PlayerListHudMixin",
+		"ServerEntryMixin",
+		"ServerListMixin",
 		"SimpleOptionAccessor"
 	],
 	"injectors": {

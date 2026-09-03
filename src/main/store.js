@@ -9,6 +9,7 @@ const { configPatch, profilePatch } = require('./validation');
 const { UUID_RE } = require('./validation');
 const { encryptionAvailable, serializeAccount, deserializeAccount, hasPlaintextCredentials } = require('./credentials');
 const { containsPath } = require('./security');
+const { readJSON, writeJSONAtomic } = require('./persistence');
 
 function totalRamMB() {
   return Math.floor(os.totalmem() / 1024 / 1024);
@@ -42,22 +43,6 @@ const DEFAULT_CONFIG = {
   firstRunDone: false,
   telemetry: true,        // count this copy on the website (anonymous id only)
 };
-
-function readJSON(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJSONAtomic(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, file);
-  fs.chmodSync(file, 0o600);
-}
 
 function externalizeInlineIcons(profiles) {
   let changed = false;
@@ -113,7 +98,19 @@ function storedProfile(raw) {
     if (!Object.prototype.hasOwnProperty.call(raw, key)) continue;
     try { clean[key] = profilePatch({ [key]: raw[key] })[key]; } catch { /* retain default */ }
   }
-  clean.mods = safeMods(clean.id, clean.mods);
+  // One stale or unsafe legacy mod path must not discard the profile that owns
+  // the player's worlds. Keep every valid record and let folder sync rediscover
+  // local jars after startup.
+  clean.mods = clean.mods.flatMap((mod) => {
+    try { return safeMods(clean.id, [mod]); }
+    catch (err) {
+      console.warn(`[profiles] Ignoring unsafe content in ${clean.id}: ${err.message}`);
+      return [];
+    }
+  });
+  // The picture file is the source of truth. This repairs older metadata that
+  // lost `cover: true` while the actual image remained safely on disk.
+  clean.cover = fs.existsSync(P.coverFile(clean.id));
   clean.created = Number.isSafeInteger(raw.created) && raw.created >= 0 ? raw.created : Date.now();
   return clean;
 }

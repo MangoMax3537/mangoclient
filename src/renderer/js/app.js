@@ -2810,7 +2810,9 @@
     state.running = new Set(s.running || []);
     state.version = s.version;
     for (const [profileId, updates] of state.modUpdates) applyModUpdates(updates, profileId);
-    await ensureCovers([state.profile?.id], { rerender: false });
+    // Covers are tiny local 256px files. Warm every profile once so the rail,
+    // switcher and profile grid never depend on which instance was opened first.
+    await ensureCovers(state.profiles.map((profile) => profile.id), { rerender: false });
     renderAll();
   }
 

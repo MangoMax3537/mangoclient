@@ -501,7 +501,15 @@ function registerIpc() {
     const resized = square.resize({ width: 256, height: 256, quality: 'best' });
 
     await fsp.mkdir(P.covers, { recursive: true });
-    await fsp.writeFile(P.coverFile(id), resized.toPNG());
+    const cover = P.coverFile(id);
+    const temp = `${cover}.${process.pid}-${Date.now()}.tmp`;
+    try {
+      await fsp.writeFile(temp, resized.toPNG(), { flag: 'wx', mode: 0o600 });
+      await fsp.rename(temp, cover);
+    } catch (err) {
+      await fsp.unlink(temp).catch(() => {});
+      throw err;
+    }
     store.updateProfile(id, { cover: true });
     return coverUrl(id, Date.now());
   });
@@ -515,13 +523,28 @@ function registerIpc() {
   handle('profile:duplicate', async (id) => {
     const src = store.getProfile(id);
     if (!src) throw new Error('Profile not found');
-    const copy = store.addProfile({ ...src, name: `${src.name} (copy)`, mods: [] });
-    refreshModWatchers();
-    // Copy the instance folder so mods/configs/worlds come along.
-    await fsp.cp(P.instanceDir(id), P.instanceDir(copy.id), { recursive: true }).catch(() => {});
-    if (src.cover) await fsp.copyFile(P.coverFile(id), P.coverFile(copy.id)).catch(() => {});
-    store.updateProfile(copy.id, { mods: (src.mods || []).map((m) => ({ ...m, file: m.file.replace(id, copy.id) })) });
-    return store.getProfile(copy.id);
+    const copy = store.addProfile({ ...src, name: `${src.name} (copy)`, cover: false, mods: [] });
+    try {
+      // Copy the instance folder so mods/configs/worlds come along. A failed
+      // copy is reported and rolled back instead of leaving an empty profile
+      // that looks like a successful duplicate.
+      const sourceDir = P.instanceDir(id);
+      const copyDir = P.instanceDir(copy.id);
+      await fsp.cp(sourceDir, copyDir, { recursive: true });
+      if (src.cover && fs.existsSync(P.coverFile(id))) {
+        await fsp.copyFile(P.coverFile(id), P.coverFile(copy.id));
+      }
+      const mods = (src.mods || []).map((mod) => ({
+        ...mod,
+        file: mod.file ? path.join(copyDir, path.relative(sourceDir, mod.file)) : mod.file,
+      }));
+      store.updateProfile(copy.id, { cover: src.cover && fs.existsSync(P.coverFile(copy.id)), mods });
+      refreshModWatchers();
+      return store.getProfile(copy.id);
+    } catch (err) {
+      store.deleteProfile(copy.id);
+      throw new Error(`Instance could not be duplicated: ${err.message}`);
+    }
   });
 
   // --- versions & loaders

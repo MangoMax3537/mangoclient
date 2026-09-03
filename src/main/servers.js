@@ -1,6 +1,7 @@
 'use strict';
 const net = require('net');
 const dns = require('dns/promises');
+const serverIcons = require('./servericons');
 
 // ---- varint helpers --------------------------------------------------------
 
@@ -73,7 +74,7 @@ function stripColorCodes(str) {
  * Server List Ping: handshake -> status request -> JSON response.
  * Resolves with null on any failure so the UI can just show "offline".
  */
-async function pingServer(address, { timeout = 9000, protocol = 767 } = {}) {
+async function queryServer(address, { timeout = 9000, protocol = 767 } = {}) {
   const [rawHost, rawPort] = String(address).split(':');
   const { host, port } = await resolveTarget(rawHost, rawPort ? Number(rawPort) : null);
 
@@ -134,6 +135,16 @@ async function pingServer(address, { timeout = 9000, protocol = 767 } = {}) {
     socket.on('close', () => finish({ online: false, host, port }));
     setTimeout(() => finish({ online: false, host, port }), timeout + 500);
   });
+}
+
+/** A successful first ping establishes the partner icon. Afterwards even an
+ * offline result keeps that same cached icon instead of falling back to a
+ * generated letter tile or adopting a transient replacement favicon. */
+async function pingServer(address, options) {
+  const result = await queryServer(address, options);
+  if (result.favicon) serverIcons.remember(address, result.favicon);
+  const favicon = serverIcons.get(address);
+  return favicon ? { ...result, favicon } : result;
 }
 
 /**

@@ -70,6 +70,9 @@ test('instance content UI separates types and opens the matching browser', () =>
   assert.match(preload, /openContentFolder: \(profileId, type\)/);
   assert.match(preload, /checkAllUpdates: \(\) => call\('modrinth:checkAllUpdates'\)/);
   assert.match(app, /checkModUpdatesOnStartup\(\)/);
+  assert.match(app, /ensureCovers\(state\.profiles\.map\(\(profile\) => profile\.id\)/);
+  assert.doesNotMatch(fs.readFileSync(path.resolve(__dirname, '../src/main/launcher.js'), 'utf8'),
+    /ensureFeaturedServers\(gameDir/);
   assert.match(css, /#itab-mods > \.rows\s*\{\s*padding:\s*0;/);
   assert.match(css, /\.settings-grid\.sectioned\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s);
 });

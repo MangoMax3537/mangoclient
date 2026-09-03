@@ -1,7 +1,7 @@
 'use strict';
-const fs = require('fs');
 const path = require('path');
 const P = require('./paths');
+const { readJSON, writeJSONAtomic } = require('./persistence');
 
 /**
  * A journal of play sessions, so the launcher can show the kind of statistics
@@ -20,19 +20,12 @@ const MIN_SESSION_MS = 30 * 1000;
 const FILE = path.join(P.root, 'stats.json');
 
 function read() {
-  try {
-    const data = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    return Array.isArray(data?.sessions) ? data : { version: 1, sessions: [] };
-  } catch {
-    return { version: 1, sessions: [] };
-  }
+  const data = readJSON(FILE, { version: 1, sessions: [] });
+  return Array.isArray(data?.sessions) ? data : { version: 1, sessions: [] };
 }
 
 function write(data) {
-  const tmp = `${FILE}.tmp`;
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(data));
-  fs.renameSync(tmp, FILE);
+  writeJSONAtomic(FILE, data);
 }
 
 /**

@@ -15,7 +15,7 @@ const { resolveJava } = require('./java');
 const { ensureFreshAccount } = require('./auth');
 const stats = require('./stats');
 const { FEATURED_SERVERS } = require('./servers');
-const { ensureFeaturedServers } = require('./serverlist');
+const { seedFeaturedServers, cacheFeaturedServerIcons } = require('./serverlist');
 
 const CP_SEP = process.platform === 'win32' ? ';' : ':';
 
@@ -271,7 +271,7 @@ async function launch({
     await fsp.mkdir(path.join(gameDir, 'mods'), { recursive: true });
     await seedInstanceOptions(gameDir, { language: config.language });
     try {
-      await ensureFeaturedServers(gameDir, FEATURED_SERVERS);
+      await seedFeaturedServers(gameDir, FEATURED_SERVERS);
     } catch (err) {
       // A damaged/foreign list must never keep Minecraft from starting.
       log(`Partnered server list skipped: ${err.message}`);
@@ -467,6 +467,13 @@ async function launch({
   child.on('close', async (code) => {
     instance.flushPlayTime();
     await follower.stop(); // pick up the last lines the game wrote
+    try {
+      // Only retain the partner's first real favicon. MangoConfig owns pinning
+      // inside Minecraft; the launcher must never rewrite a player's list here.
+      await cacheFeaturedServerIcons(gameDir, FEATURED_SERVERS);
+    } catch (err) {
+      onLog(`Partnered server list could not be finalised: ${err.message}`, 'error');
+    }
     onLog(`Game exited with code ${code}`, code === 0 ? 'info' : 'error');
     onState(code === 0 ? 'stopped' : 'crashed');
     instance.emit('exit', code);

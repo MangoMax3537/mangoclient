@@ -6,8 +6,14 @@ import com.google.gson.JsonObject;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 /**
@@ -28,15 +34,25 @@ public class ConfigFile {
 		this.file = FabricLoader.getInstance().getConfigDir().resolve("mangoconfig.json");
 	}
 
-	public void load(List<HudModule> modules) {
-		JsonObject root;
+	private JsonObject read(Path source) {
 		try {
-			if (!Files.exists(file)) return;
-			root = GSON.fromJson(Files.readString(file), JsonObject.class);
+			if (!Files.exists(source)) return null;
+			return GSON.fromJson(Files.readString(source), JsonObject.class);
 		} catch (Exception e) {
-			return; // a corrupt file is not worth crashing a game session over
+			return null;
 		}
-		if (root == null) return;
+	}
+
+	public void load(List<HudModule> modules) {
+		JsonObject root = read(file);
+		if (root == null) {
+			Path backup = file.resolveSibling(file.getFileName() + ".bak");
+			root = read(backup);
+			if (root == null) return;
+			// Best effort self-heal. The good backup remains untouched if this fails.
+			try { Files.copy(backup, file, StandardCopyOption.REPLACE_EXISTING); }
+			catch (IOException ignored) { }
+		}
 
 		if (root.has("hudEnabled")) hudEnabled = root.get("hudEnabled").getAsBoolean();
 		if (root.has("fullbright")) fullbright = root.get("fullbright").getAsBoolean();
@@ -82,7 +98,30 @@ public class ConfigFile {
 
 		try {
 			Files.createDirectories(file.getParent());
-			Files.writeString(file, GSON.toJson(root));
+			Path backup = file.resolveSibling(file.getFileName() + ".bak");
+			Path temp = Files.createTempFile(file.getParent(), ".mangoconfig-", ".tmp");
+			try {
+				byte[] bytes = GSON.toJson(root).getBytes(StandardCharsets.UTF_8);
+				try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+					ByteBuffer buffer = ByteBuffer.wrap(bytes);
+					while (buffer.hasRemaining()) channel.write(buffer);
+					channel.force(true);
+				}
+				boolean establishBackup = read(file) == null && read(backup) == null;
+				if (read(file) != null) {
+					Files.copy(file, backup, StandardCopyOption.REPLACE_EXISTING);
+				}
+				try {
+					Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+				} catch (AtomicMoveNotSupportedException e) {
+					Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+				}
+				// On the first save, establish the redundant copy only after the
+				// complete temp file has atomically become the authoritative file.
+				if (establishBackup) Files.copy(file, backup, StandardCopyOption.REPLACE_EXISTING);
+			} finally {
+				Files.deleteIfExists(temp);
+			}
 		} catch (IOException e) {
 			// Nothing useful to do about it in game; the settings stay in memory.
 		}
