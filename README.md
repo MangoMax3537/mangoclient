@@ -14,7 +14,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-MangoClient brings Modrinth discovery, separate Minecraft setups, and account switching into one desktop app. It is free, has no ads or bundled offers, and is available for Windows and Linux.
+MangoClient brings Modrinth discovery, separate Minecraft setups, and account switching into one desktop app. It is free, has no ads or bundled offers, and is available for Windows, macOS, and Linux.
 
 ## Features
 
@@ -36,6 +36,7 @@ Get the newest stable build from the [GitHub Releases page](https://github.com/M
 | Platform | Build | Requirements |
 | --- | --- | --- |
 | Windows | `.exe` installer | Windows 10 or 11, 64-bit |
+| macOS | `.dmg` (Apple Silicon and Intel) | macOS 11 Big Sur or newer |
 | Linux | AppImage or `.tar.gz` | x86_64, glibc 2.31+ |
 
 On Linux, make the AppImage executable before starting it:
@@ -44,6 +45,8 @@ On Linux, make the AppImage executable before starting it:
 chmod +x MangoClient-*.AppImage
 ./MangoClient-*.AppImage
 ```
+
+On macOS, download the `.dmg` for your chip (`arm64` for Apple Silicon, `x64` for Intel), open it, and drag MangoClient to Applications. The builds are not signed with an Apple Developer certificate, so the first launch is blocked by Gatekeeper — right-click the app and choose **Open**, then confirm once. Later launches open normally.
 
 MangoClient checks GitHub Releases for updates and can install a new version from inside the app.
 
@@ -62,6 +65,7 @@ Game data is stored outside the application installation so launcher updates do 
 | Platform | Data directory |
 | --- | --- |
 | Windows | `%APPDATA%\.mangoclient` |
+| macOS | `~/Library/Application Support/mangoclient` |
 | Linux | `~/.mangoclient` |
 
 Microsoft credentials use the operating system's secure storage when available. Downloads are checked against their published sizes and checksums, and archive extraction is restricted to the selected profile.

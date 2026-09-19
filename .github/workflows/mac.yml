@@ -1,0 +1,69 @@
+# The macOS builds, made where they can be.
+#
+# Like the AppImage, the Mac disk image and update zip cannot come off the
+# Windows machine that publishes the release: a .app bundle, its icns icon and
+# the DMG that wraps them can only be produced on macOS. So this runs on a Mac
+# runner once the release exists and uploads the missing artifacts into it,
+# next to the Windows installer, the tarball and the AppImage.
+#
+# Both artifacts are built for Apple Silicon (arm64) and Intel (x64):
+#   * the DMG is what a new user downloads and drags to Applications,
+#   * the zip is what electron-updater installs when updating in place, so the
+#     "Build and publish" step also writes latest-mac.yml.
+name: macOS
+
+on:
+  # Normal path: a release is published from the Windows machine with the
+  # Windows and tarball artifacts, and this fills in the Mac ones.
+  release:
+    types: [published]
+  # For filling in a release after the fact, or re-running a failed build.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to build, e.g. v1.3.1"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The lockfile still carries the version this project started at, so
+      # `npm ci` can refuse it; the fallback keeps that from being a chore.
+      - run: npm ci || npm install --no-audit --no-fund
+
+      # The MangoConfig jars are committed under src/main/assets, so there is
+      # no JDK step here - electron-builder only packages what is already in the
+      # checkout, exactly like the AppImage workflow.
+      #
+      # These builds are unsigned: there is no Apple Developer certificate, so
+      # CSC_IDENTITY_AUTO_DISCOVERY is turned off to stop electron-builder from
+      # looking for one and failing. A downloaded app therefore has to be opened
+      # once via right-click -> Open (see the README).
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish always -c.publish.releaseType=release
+
+      # Kept whatever happens to the upload, so a failed publish still leaves
+      # something to download.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: warn
