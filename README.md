@@ -52,7 +52,7 @@ MangoClient checks GitHub Releases for updates and can install a new version fro
 
 ## MangoConfig compatibility
 
-MangoConfig `1.10.0` is bundled for Fabric and Quilt profiles running these Minecraft versions:
+MangoConfig `1.10.1` is bundled for Fabric and Quilt profiles running these Minecraft versions:
 
 `1.20.5`, `1.20.6`, and every supported release from `1.21` through `1.21.11`.
 
@@ -71,6 +71,8 @@ Game data is stored outside the application installation so launcher updates do 
 Microsoft credentials use the operating system's secure storage when available. Downloads are checked against their published sizes and checksums, and archive extraction is restricted to the selected profile.
 
 Optional telemetry powers the public install and online counters. When enabled, it sends only a random installation ID, the MangoClient version, and the operating-system platform. It does not send a Minecraft account, player name, or hardware information, and it can be disabled in Settings.
+
+While you are in game, MangoConfig sends a presence heartbeat so other MangoClient players see your mango badge. It contains your Minecraft UUID and name, the Minecraft and MangoConfig versions, and the address of the server you are on (or "singleplayer"). Only the badge and the online count are public; the rest is visible to MangoClient staff only.
 
 ## Development
 

@@ -1,41 +1,168 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MangoClient staff</title>
+<title>MangoClient Admin</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="icon.png">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="admin.css">
 </head>
-<body>
+<body class="adm">
 
-<header class="top">
+<section class="gate" id="gate" hidden>
   <a class="mark" href="/"><img src="icon.png" alt=""><span>MangoClient</span></a>
-  <nav><a href="/">Back to the site</a></nav>
-</header>
+  <h1>Admin-Anmeldung</h1>
+  <p>Das Passwort liegt auf dem Server. Niemand sonst braucht ein Konto.</p>
+  <form id="login" autocomplete="off">
+    <input type="password" id="password" placeholder="Passwort" autocomplete="current-password" required>
+    <div class="row"><button type="submit">Anmelden</button></div>
+    <p class="note" id="login-note"></p>
+  </form>
+</section>
 
-<main>
-  <section class="gate" id="gate" hidden>
-    <h1>Staff sign in</h1>
-    <p>The password lives on the server. Nobody else needs an account.</p>
-    <form id="login" autocomplete="off">
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
-      <div class="row"><button type="submit">Sign in</button></div>
-      <p class="note" id="login-note"></p>
-    </form>
-  </section>
-
-  <section id="panel" hidden>
-    <div class="admin-head">
-      <h1>Ranks</h1>
-      <button class="linkish" id="logout" type="button">Sign out</button>
+<div class="shell" id="panel" hidden>
+  <aside class="side">
+    <a class="mark" href="/"><img src="icon.png" alt=""><span>MangoClient</span></a>
+    <nav id="nav">
+      <button type="button" data-view="overview" class="on">Übersicht</button>
+      <button type="button" data-view="live">Live <span class="pill" id="nav-live">0</span></button>
+      <button type="button" data-view="servers">Server</button>
+      <button type="button" data-view="players">Alle Spieler</button>
+      <button type="button" data-view="installs">Launcher</button>
+      <button type="button" data-view="ranks">Ränge</button>
+      <button type="button" data-view="system">System</button>
+    </nav>
+    <div class="side-foot">
+      <span class="pulse" id="pulse">live</span>
+      <button class="linkish" id="logout" type="button">Abmelden</button>
     </div>
-    <div id="ranks"></div>
-    <p class="note" id="note"></p>
-  </section>
-</main>
+  </aside>
 
+  <main class="content">
+    <!-- Übersicht -->
+    <section class="view" id="view-overview">
+      <header class="vh"><h1>Übersicht</h1><span class="sub" id="ov-updated"></span></header>
+      <div class="tiles" id="tiles"></div>
+      <div class="grid2">
+        <article class="card wide">
+          <header><h2>Verlauf (7 Tage)</h2><div class="legend-mini"><i class="k1"></i>Im Spiel <i class="k2"></i>Launcher offen</div></header>
+          <div class="chart" id="chart-history"></div>
+        </article>
+        <article class="card wide">
+          <header><h2>Spieler pro Tag (30 Tage)</h2><div class="legend-mini"><i class="k1"></i>Spieler <i class="k2"></i>Launcher <i class="k3"></i>Neue Installs</div></header>
+          <div class="chart" id="chart-days"></div>
+        </article>
+        <article class="card"><header><h2>Minecraft-Versionen (online)</h2></header><div class="bars" id="bd-mc"></div></article>
+        <article class="card"><header><h2>MangoConfig-Versionen (online)</h2></header><div class="bars" id="bd-mod"></div></article>
+        <article class="card"><header><h2>Server (online)</h2></header><div class="bars" id="bd-server"></div></article>
+        <article class="card"><header><h2>Launcher-Versionen (30 Tage)</h2></header><div class="bars" id="bd-launcher"></div></article>
+        <article class="card"><header><h2>Betriebssysteme (30 Tage)</h2></header><div class="bars" id="bd-os"></div></article>
+      </div>
+    </section>
+
+    <!-- Live -->
+    <section class="view" id="view-live" hidden>
+      <header class="vh"><h1>Online-Spieler</h1><span class="sub" id="live-count"></span></header>
+      <div class="toolbar">
+        <input type="text" id="live-q" placeholder="Name, UUID oder Server filtern" spellcheck="false">
+        <select id="live-server"><option value="__all">Alle Server</option></select>
+        <select id="live-mc"><option value="__all">Alle Versionen</option></select>
+        <button type="button" class="ghost" id="live-csv">CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="live-table">
+          <thead><tr>
+            <th data-sort="name">Spieler</th>
+            <th data-sort="mc">Minecraft</th>
+            <th data-sort="mod">MangoConfig</th>
+            <th data-sort="server">Server</th>
+            <th data-sort="since">Online seit</th>
+            <th data-sort="last">Letztes Signal</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="empty" id="live-empty" hidden>Gerade ist niemand mit MangoClient im Spiel.</p>
+      <p class="hint">Version und Server senden erst Spieler mit MangoConfig 1.10.1 oder neuer. Ältere Versionen erscheinen mit „alt“.</p>
+    </section>
+
+    <!-- Server -->
+    <section class="view" id="view-servers" hidden>
+      <header class="vh"><h1>Server</h1><span class="sub">Wo MangoClient-Spieler gerade spielen</span></header>
+      <div class="server-grid" id="server-grid"></div>
+      <article class="card">
+        <header><h2>Meistbesucht (letzter Server je Spieler)</h2></header>
+        <div class="table-wrap">
+          <table class="tbl" id="top-servers"><thead><tr><th>Server</th><th class="num">Jetzt online</th><th class="num">Spieler gesamt</th></tr></thead><tbody></tbody></table>
+        </div>
+      </article>
+    </section>
+
+    <!-- Alle Spieler -->
+    <section class="view" id="view-players" hidden>
+      <header class="vh"><h1>Alle Spieler</h1><span class="sub" id="dir-count"></span></header>
+      <div class="toolbar">
+        <input type="text" id="dir-q" placeholder="Suche nach Name, UUID oder Server" spellcheck="false">
+        <button type="button" class="ghost" id="dir-csv">CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="dir-table">
+          <thead><tr>
+            <th>Spieler</th><th>Status</th><th>Letzter Server</th><th>Minecraft</th><th>MangoConfig</th>
+            <th>Zuerst gesehen</th><th>Zuletzt gesehen</th><th class="num">Sessions</th><th class="num">Spielzeit</th><th>Rang</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="note" id="dir-note"></p>
+    </section>
+
+    <!-- Launcher -->
+    <section class="view" id="view-installs" hidden>
+      <header class="vh"><h1>Launcher-Installationen</h1><span class="sub" id="inst-count"></span></header>
+      <div class="toolbar">
+        <select id="inst-filter">
+          <option value="all">Alle</option>
+          <option value="online">Gerade offen</option>
+          <option value="month">Aktiv (30 Tage)</option>
+        </select>
+        <button type="button" class="ghost" id="inst-csv">CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="inst-table">
+          <thead><tr><th>Install-ID</th><th>Status</th><th>Version</th><th>OS</th><th>Erste Öffnung</th><th>Zuletzt offen</th><th class="num">Sessions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Ränge -->
+    <section class="view" id="view-ranks" hidden>
+      <header class="vh"><h1>Ränge</h1><span class="sub">Mango-Abzeichen im Spiel</span></header>
+      <div id="ranks"></div>
+    </section>
+
+    <!-- System -->
+    <section class="view" id="view-system" hidden>
+      <header class="vh"><h1>System</h1><span class="sub">mango-presence</span></header>
+      <div class="tiles" id="sys-tiles"></div>
+      <article class="card">
+        <header><h2>Endpunkte</h2></header>
+        <ul class="links">
+          <li><a href="/" target="_blank" rel="noopener">Öffentliche Statistik-Seite</a></li>
+          <li><a href="/v1/stats" target="_blank" rel="noopener">/v1/stats (JSON)</a></li>
+          <li><a href="/v1/ranks" target="_blank" rel="noopener">/v1/ranks (JSON)</a></li>
+        </ul>
+      </article>
+    </section>
+
+    <p class="note" id="note"></p>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
 <script src="admin.js"></script>
 </body>
 </html>

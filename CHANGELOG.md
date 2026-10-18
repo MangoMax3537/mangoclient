@@ -1,3 +1,11 @@
+### MangoClient 1.3.4
+
+- Ships MangoConfig 1.10.1 (below).
+
+### MangoConfig 1.10.1
+
+- The presence heartbeat now also sends your Minecraft name, the Minecraft and MangoConfig versions, and the address of the server you are on (or "singleplayer"). It beats immediately when you switch servers. This powers the staff dashboard; nothing new is shown publicly.
+
 ### MangoClient 1.3.3
 
 - Ships MangoConfig 1.10.0 (below): the new MangoClient home screen in game and the Visuals page. The launcher swaps the old MangoConfig jar for the new one on the next game start.

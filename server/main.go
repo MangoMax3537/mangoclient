@@ -113,6 +113,11 @@ func newWebMux() http.Handler {
 	mux.Handle("/admin/logout", admin.secure(admin.require(method(http.MethodPost, http.HandlerFunc(admin.handleLogout)))))
 	mux.Handle("/admin/session", admin.secure(method(http.MethodGet, http.HandlerFunc(admin.handleSession))))
 	mux.Handle("/admin/ranks", admin.secure(admin.require(methods([]string{http.MethodGet, http.MethodPost}, http.HandlerFunc(handleAdminRanks)))))
+	mux.Handle("/admin/overview", admin.secure(admin.require(method(http.MethodGet, http.HandlerFunc(handleAdminOverview)))))
+	mux.Handle("/admin/live", admin.secure(admin.require(method(http.MethodGet, http.HandlerFunc(handleAdminLive)))))
+	mux.Handle("/admin/players", admin.secure(admin.require(method(http.MethodGet, http.HandlerFunc(handleAdminPlayers)))))
+	mux.Handle("/admin/installs", admin.secure(admin.require(method(http.MethodGet, http.HandlerFunc(handleAdminInstalls)))))
+	mux.Handle("/admin/system", admin.secure(admin.require(method(http.MethodGet, http.HandlerFunc(handleAdminSystem)))))
 	mux.Handle("/", methods([]string{http.MethodGet, http.MethodHead}, http.HandlerFunc(handleSite)))
 	return securityHeaders(mux)
 }
@@ -167,13 +172,19 @@ func listen(addr string, handler http.Handler) {
 // --- the mod ----------------------------------------------------------------
 
 func handleHeartbeat(w http.ResponseWriter, r *http.Request) {
+	// Everything past the uuid arrived with MangoConfig 1.10.1; older mods
+	// send the uuid alone and still decode fine.
 	var body struct {
-		UUID string `json:"uuid"`
+		UUID   string `json:"uuid"`
+		Name   string `json:"name"`
+		MC     string `json:"mc"`
+		Mod    string `json:"mod"`
+		Server string `json:"server"`
 	}
 	if !readJSON(w, r, &body) {
 		return
 	}
-	store.Beat(body.UUID)
+	store.Beat(body.UUID, BeatInfo{Name: body.Name, MC: body.MC, Mod: body.Mod, Server: body.Server})
 	writeJSON(w, map[string]any{"ok": true, "rank": ranks.Of(body.UUID)})
 }
 
@@ -259,7 +270,7 @@ func handleSite(w http.ResponseWriter, r *http.Request) {
 	switch path {
 	case "":
 		path = "index.html"
-	case "admin":
+	case "admin", "admin/":
 		path = "admin.html"
 	}
 	data, err := fs.ReadFile(sub, path)
@@ -533,7 +544,7 @@ func sameOrigin(r *http.Request) bool {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://mc-heads.net; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")

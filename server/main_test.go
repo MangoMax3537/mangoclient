@@ -133,18 +133,67 @@ func TestStoreCapsPresenceAndSeenPlayers(t *testing.T) {
 	s := NewStore(t.TempDir())
 	now := time.Now()
 	for i := 0; i < maxActivePlayers; i++ {
-		s.players[fmt.Sprintf("%032x", i)] = now
+		s.players[fmt.Sprintf("%032x", i)] = &Session{Since: now, Last: now}
 	}
-	s.Beat("ffffffffffffffffffffffffffffffff")
+	s.Beat("ffffffffffffffffffffffffffffffff", BeatInfo{})
 	if len(s.players) != maxActivePlayers {
 		t.Fatalf("players grew to %d", len(s.players))
 	}
-	s.players = map[string]time.Time{}
+	s.players = map[string]*Session{}
 	for i := 0; i < maxSeenPlayers; i++ {
 		s.seen[fmt.Sprintf("%032x", i)] = now
 	}
-	s.Beat("ffffffffffffffffffffffffffffffff")
+	s.Beat("ffffffffffffffffffffffffffffffff", BeatInfo{})
 	if len(s.seen) != maxSeenPlayers {
 		t.Fatalf("seen grew to %d", len(s.seen))
+	}
+}
+
+func TestHeartbeatDetailsReachTheAdminViews(t *testing.T) {
+	legacy, _ := setupHandlers(t, "secret")
+	body := `{"uuid":"0123456789abcdef0123456789abcdef","name":"Mango_Max","mc":"1.21.11","mod":"1.10.1","server":"Hypixel.NET"}`
+	if got := request(legacy, http.MethodPost, "/v1/heartbeat", body, false).Code; got != http.StatusOK {
+		t.Fatalf("heartbeat status = %d", got)
+	}
+	// An old mod, only the uuid: must still be accepted.
+	if got := request(legacy, http.MethodPost, "/v1/heartbeat", `{"uuid":"fedcba9876543210fedcba9876543210"}`, false).Code; got != http.StatusOK {
+		t.Fatalf("legacy heartbeat status = %d", got)
+	}
+	live := store.Live()
+	if len(live) != 2 {
+		t.Fatalf("live = %d players", len(live))
+	}
+	var found bool
+	for _, p := range live {
+		if p.UUID == "0123456789abcdef0123456789abcdef" {
+			found = true
+			if p.Name != "Mango_Max" || p.MC != "1.21.11" || p.Mod != "1.10.1" || p.Server != "hypixel.net" {
+				t.Fatalf("live row = %+v", p)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("player missing from live list")
+	}
+	ov := store.Overview()
+	if ov.InGame != 2 || ov.ByServer["hypixel.net"] != 1 || ov.ByMC["unknown"] != 1 || len(ov.Days) != 30 {
+		t.Fatalf("overview = %+v", ov)
+	}
+	if players, total := store.Directory("mango", 10); total != 1 || players[0].Name != "Mango_Max" || !players[0].Online {
+		t.Fatalf("directory = %+v (%d)", players, total)
+	}
+	// A hostile name is dropped, not stored.
+	request(legacy, http.MethodPost, "/v1/heartbeat", `{"uuid":"0123456789abcdef0123456789abcdef","name":"<script>"}`, false)
+	if players, _ := store.Directory("0123", 10); players[0].Name != "Mango_Max" {
+		t.Fatalf("name overwritten: %+v", players[0])
+	}
+}
+
+func TestAdminDataRoutesNeedASession(t *testing.T) {
+	_, web := setupHandlers(t, "secret")
+	for _, path := range []string{"/admin/overview", "/admin/live", "/admin/players", "/admin/installs", "/admin/system"} {
+		if got := request(web, http.MethodGet, path, "", true).Code; got != http.StatusUnauthorized {
+			t.Fatalf("%s without session = %d", path, got)
+		}
 	}
 }

@@ -5,7 +5,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import gg.mangoclient.mangoconfig.compat.Compat;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;
@@ -79,6 +81,10 @@ public final class Presence {
 	/** Our own rank, which the heartbeat answers with, so it needs no query. */
 	private static volatile String selfRank = "";
 
+	/** Read once: neither changes while the game is running. */
+	private static final String MC_VERSION = version("minecraft", false);
+	private static final String MOD_VERSION = version("mangoconfig", true);
+
 	private Presence() {
 	}
 
@@ -149,6 +155,7 @@ public final class Presence {
 		Set<UUID> asked = Set.of();
 		long lastBeat = 0;
 		long lastQuery = 0;
+		String lastWhere = "";
 
 		while (true) {
 			try {
@@ -162,15 +169,20 @@ public final class Presence {
 					asked = Set.of();
 					lastBeat = 0;
 					lastQuery = 0;
+					lastWhere = "";
 					continue;
 				}
 
 				long now = System.currentTimeMillis();
-				if (now - lastBeat >= BEAT_MS) {
+				String where = where(mc);
+				// A server switch beats at once, so the admin list never shows
+				// the server someone left half a minute ago.
+				if (now - lastBeat >= BEAT_MS || !where.equals(lastWhere)) {
 					// Not gated on the toggle: switching the badge off hides the
 					// mangos from you, it does not hide you from everyone else.
 					lastBeat = now;
-					beat(http, mc.player.getUuid());
+					lastWhere = where;
+					beat(http, mc.player.getUuid(), mc.getSession().getUsername(), where);
 				}
 
 				if (!badgeEnabled()) {
@@ -222,9 +234,29 @@ public final class Presence {
 		}, mc).get();
 	}
 
-	private static void beat(HttpClient http, UUID self) throws Exception {
+	/** "singleplayer", or the address the player typed for the server they are on. */
+	private static String where(MinecraftClient mc) {
+		if (mc.isInSingleplayer()) return "singleplayer";
+		ServerInfo info = mc.getCurrentServerEntry();
+		if (info == null || info.address == null) return "";
+		String address = info.address.trim().toLowerCase(java.util.Locale.ROOT);
+		return address.length() > 96 ? address.substring(0, 96) : address;
+	}
+
+	private static String version(String modId, boolean stripBuild) {
+		return FabricLoader.getInstance().getModContainer(modId)
+			.map(m -> m.getMetadata().getVersion().getFriendlyString())
+			.map(v -> stripBuild ? v.split("\\+")[0] : v)
+			.orElse("");
+	}
+
+	private static void beat(HttpClient http, UUID self, String name, String where) throws Exception {
 		JsonObject json = new JsonObject();
 		json.addProperty("uuid", self.toString());
+		json.addProperty("name", name);
+		json.addProperty("mc", MC_VERSION);
+		json.addProperty("mod", MOD_VERSION);
+		json.addProperty("server", where);
 		String response = post(http, "/v1/heartbeat", json.toString());
 		JsonElement rank = JsonParser.parseString(response).getAsJsonObject().get("rank");
 		selfRank = rank == null || rank.isJsonNull() ? "" : rank.getAsString();
