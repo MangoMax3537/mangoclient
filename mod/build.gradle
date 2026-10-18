@@ -51,6 +51,22 @@ def nametag = (family == 'v121' || family == 'v1206') ? 'label' : 'state'
 // nausea overlay; before 1.21 the HUD render methods took a float tick delta.
 def hud = family == 'v1206' ? 'c' : (family == 'v121' ? 'b' : 'a')
 
+// Fog moved twice: a void that set RenderSystem's fog up to 1.21.1, a Fog
+// record from 1.21.2, and a uniform buffer written by FogRenderer from 1.21.6.
+def old = family == 'v1206' || family == 'v121'
+def fog = old ? 'f1' : ((family == 'v1212' || family == 'v1215') ? 'f2' : 'f3')
+
+// The F3+B hitbox has been drawn by six different pieces of code since 1.20.5.
+def hitbox = family == 'v1206' ? 'h0' : family == 'v121' ? 'h1' : family == 'v1212' ? 'h2' : (family == 'v1215' || family == 'v1216') ? 'h3'
+	: family == 'v1219' ? 'h4' : 'h5'
+
+// The block outline has taken its colour as an argument since 1.21.2.
+def outline = old ? 'o1' : 'o2'
+
+// Colour saturation rides on vanilla's color_convolve program, whose post
+// chain format changed with nearly every release: one set of chains for each.
+def fx = old ? 'a' : family == 'v1212' ? 'b' : family == 'v1215' ? 'c' : family == 'v1216' ? 'd' : 'e'
+
 version = "${project.mod_version}+mc${mcVer}"
 group = project.maven_group
 
@@ -75,6 +91,12 @@ sourceSets {
 			srcDir "src/compat/${family}/java"
 			srcDir "src/nametag/${nametag}/java"
 			srcDir "src/hud/${hud}/java"
+			srcDir "src/fog/${fog}/java"
+			srcDir "src/hitbox/${hitbox}/java"
+			srcDir "src/outline/${outline}/java"
+		}
+		resources {
+			srcDir "src/fx/${fx}/resources"
 		}
 	}
 }

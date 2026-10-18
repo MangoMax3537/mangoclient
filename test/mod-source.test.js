@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('MangoConfig release metadata and patched org.json are current', () => {
-  assert.match(read('mod/gradle.properties'), /^mod_version=1\.9\.5$/m);
+  assert.match(read('mod/gradle.properties'), /^mod_version=1\.10\.0$/m);
   assert.match(read('mod/build.gradle'), /org\.json:json:20251224/);
   assert.doesNotMatch(read('mod/build.gradle'), /org\.json:json:20230227/);
 });
@@ -18,7 +18,9 @@ test('fullbright persists independently and restores raw gamma after lightmap up
   const mixin = read('mod/src/client/java/gg/mangoclient/mangoconfig/mixin/LightmapTextureManagerMixin.java');
   assert.match(config, /public boolean fullbright = false/);
   assert.match(config, /addProperty\("fullbright", fullbright\)/);
-  assert.match(mixin, /mangoconfig\$setRawValue\(1500\.0D\)/);
+  const visuals = read('mod/src/client/java/gg/mangoclient/mangoconfig/Visuals.java');
+  assert.match(visuals, /if \(GameSettings\.fullbrightEnabled\(\)\) return 1500\.0D;/);
+  assert.match(mixin, /mangoconfig\$setRawValue\(override\)/);
   assert.match(mixin, /mangoconfig\$setRawValue\(mangoconfig\$normalGamma\)/);
 });
 

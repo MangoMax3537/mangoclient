@@ -1,5 +1,9 @@
 package gg.mangoclient.mangoconfig.compat;
 
+import gg.mangoclient.mangoconfig.mixin.GameRendererAccessor;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.GameRenderer;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
@@ -56,6 +60,9 @@ public final class Compat {
 	public static void drawGuiTexture(DrawContext ctx, Identifier sprite, int x, int y, int w, int h) {
 		ctx.drawGuiTexture(RenderLayer::getGuiTextured, sprite, x, y, w, h);
 	}
+	public static void drawTexture(DrawContext ctx, Identifier texture, int x, int y, int w, int h) {
+		ctx.drawTexture(RenderLayer::getGuiTextured, texture, x, y, 0f, 0f, w, h, w, h);
+	}
 	public static List<ItemStack> mainStacks(PlayerInventory inventory) {
 		return inventory.main;
 	}
@@ -64,5 +71,49 @@ public final class Compat {
 	}
 	public static Identifier vanillaId(String path) {
 		return Identifier.ofVanilla(path);
+	}
+
+	public static int scaleFactor(Window window) {
+		return (int) window.getScaleFactor();
+	}
+
+	public static void setScaleFactor(Window window, int scale) {
+		window.setScaleFactor(scale);
+	}
+
+	public static void resize(Screen screen, MinecraftClient client, int width, int height) {
+		screen.resize(client, width, height);
+	}
+
+	/** The post chain for a saturation step, by its post_effect id. */
+	public static Identifier saturationEffect(int percent) {
+		return Identifier.of("mangoconfig", "saturation_" + pad(percent));
+	}
+
+	public static Identifier postEffect(GameRenderer renderer) {
+		return renderer.getPostProcessorId();
+	}
+
+	public static void setPostEffect(GameRenderer renderer, Identifier id) {
+		((GameRendererAccessor) renderer).mangoconfig$setPostProcessor(id);
+	}
+
+	public static void clearPostEffect(GameRenderer renderer) {
+		renderer.clearPostProcessor();
+	}
+
+	private static String pad(int percent) {
+		return String.format(java.util.Locale.ROOT, "%03d", percent);
+	}
+
+	/** The signed-in player's face, hat layer included, for the home screen. */
+	public static void drawFace(DrawContext ctx, MinecraftClient client, int x, int y, int size) {
+		net.minecraft.client.gui.PlayerSkinDrawer.draw(ctx, client.getSkinProvider().getSkinTextures(client.getGameProfile()), x, y, size);
+	}
+
+	/** The vanilla button click, for screens that draw their own buttons. */
+	public static void clickSound(MinecraftClient client) {
+		client.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(
+			net.minecraft.sound.SoundEvents.UI_BUTTON_CLICK, 1.0f));
 	}
 }

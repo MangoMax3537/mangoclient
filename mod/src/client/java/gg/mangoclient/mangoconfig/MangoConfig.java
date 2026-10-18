@@ -104,6 +104,8 @@ public class MangoConfig implements ClientModInitializer {
 						Pvp.noTotemAnimation),
 					ModEntry.of("No Hurt Cam", "Keeps the view still when something hits you.",
 						Mods.noHurtCam))));
+			CATEGORIES.add(new Category("visuals", "Visuals", "How the world and vanilla's screens look.")
+				.withEntries(visuals()));
 			CATEGORIES.add(new Category("overlays", "Overlays", "Parts of the vanilla HUD you can drop.")
 				.withEntries(List.of(
 					ModEntry.of("Hide Scoreboard", "Drops the scoreboard on the right.", Mods.hideScoreboard),
@@ -124,6 +126,42 @@ public class MangoConfig implements ClientModInitializer {
 					() -> MODULES.stream().filter(m -> m.enabled).count() + " of " + MODULES.size())));
 		}
 		return CATEGORIES;
+	}
+
+	private static List<ModEntry> visuals() {
+		var o = MinecraftClient.getInstance().options;
+		// The chat card also carries vanilla's own chat look, bound like the
+		// Video page's rows, so everything about the chat sits in one place.
+		Option chatBackground = new Option.Range("chatBackground", "Chat background", 50, 0, 100, "%")
+			.bind(() -> (int) Math.round(o.getTextBackgroundOpacity().getValue() * 100),
+				v -> o.getTextBackgroundOpacity().setValue(v / 100.0))
+			.hint("Vanilla's text background; the tab list uses it too.");
+		Option chatSpacing = new Option.Range("chatSpacing", "Line spacing", 0, 0, 100, "%")
+			.bind(() -> (int) Math.round(o.getChatLineSpacing().getValue() * 100),
+				v -> o.getChatLineSpacing().setValue(v / 100.0));
+		Option chatWidth = new Option.Range("chatWidth", "Chat width", 100, 0, 100, "%")
+			.bind(() -> (int) Math.round(o.getChatWidth().getValue() * 100),
+				v -> o.getChatWidth().setValue(v / 100.0));
+
+		return List.of(
+			ModEntry.of("Block Overlay", "Your own colour on the block outline.",
+				Visuals.blockOverlay, Visuals.outlineColour, Visuals.outlineOpacity),
+			ModEntry.of("Brightness", "Brighter than vanilla allows, at a level you pick.",
+				Visuals.brightness, Visuals.brightnessLevel),
+			ModEntry.of("Colour Saturation", "Richer or more washed-out colours.",
+				Visuals.saturation, Visuals.saturationLevel),
+			ModEntry.of("Custom Chat", "Smooth chat and the look of the chat box.",
+				Visuals.smoothChat, Visuals.smoothChatTime, chatBackground, chatSpacing, chatWidth),
+			ModEntry.of("Custom F3", "Background, colour and shadow of the debug screen.",
+				Visuals.customF3, Visuals.f3Background, Visuals.f3TextColour, Visuals.f3Shadow),
+			ModEntry.of("Custom Fog", "Push the fog back or clear it out.",
+				Visuals.customFog, Visuals.noWorldFog, Visuals.fogDistance, Visuals.noLiquidFog),
+			ModEntry.of("Hitboxes", "Colour and lines of the F3+B hitboxes.",
+				Visuals.hitboxes, Visuals.hitboxColour, Visuals.hitboxEye, Visuals.hitboxLook),
+			ModEntry.of("Tab & Scoreboard", "See-through tab list and scoreboard.",
+				Visuals.tabScoreboard, Visuals.tabBackground, Visuals.tabEntries, Visuals.scoreboardBackground),
+			ModEntry.of("UI Scale", "Inventories at a different size from the rest of the GUI.",
+				Visuals.uiScale, Visuals.inventoryScale));
 	}
 
 	public static ConfigFile config() {
@@ -191,6 +229,21 @@ public class MangoConfig implements ClientModInitializer {
 		module.renderBackground(ctx, w, h);
 		module.render(ctx, mc, font, preview);
 		Compat.pop(ctx);
+	}
+
+	private static boolean audited;
+
+	/**
+	 * Development only, behind -Dmangoconfig.audit=true: once loading is done, load
+	 * every class this mod hooks so a hook that no longer fits a Minecraft
+	 * version fails now, in the log, rather than the first time a player
+	 * happens to open F3 or turn on hitboxes.
+	 */
+	public static void audit(MinecraftClient mc) {
+		if (audited || !Boolean.getBoolean("mangoconfig.audit") || mc.getOverlay() != null) return;
+		audited = true;
+		org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment().audit();
+		org.slf4j.LoggerFactory.getLogger(NAME).info("MangoConfig mixin audit finished");
 	}
 
 	private static void pollOpenKey(MinecraftClient mc) {

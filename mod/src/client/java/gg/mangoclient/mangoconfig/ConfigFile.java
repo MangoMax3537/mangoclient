@@ -63,6 +63,7 @@ public class ConfigFile {
 		if (settings != null) {
 			for (Option option : Mods.all()) option.load(settings);
 			for (Option option : Pvp.all()) option.load(settings);
+			for (Option option : Visuals.all()) option.load(settings);
 			// Older files sized both crosshair axes with one slider.
 			if (settings.has("crosshairSize") && !settings.has("crosshairWidth")) {
 				Mods.crosshairWidth.set(settings.get("crosshairSize").getAsInt());
@@ -86,6 +87,7 @@ public class ConfigFile {
 		JsonObject settings = new JsonObject();
 		for (Option option : Mods.all()) option.save(settings);
 		for (Option option : Pvp.all()) option.save(settings);
+		for (Option option : Visuals.all()) option.save(settings);
 		root.add("mods", settings);
 
 		JsonObject mods = new JsonObject();

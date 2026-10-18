@@ -462,18 +462,14 @@ public class MangoConfigScreen extends CompatScreen {
 		}
 		if (on) ctx.fill(r[0], y, r[0] + r[2], y + 1, Theme.BRAND);
 
-		// The mod's icon on a plate: a Minecraft item or GUI sprite where one
-		// fits, or the mod's initial where none does.
+		// The mod's icon on a plate: custom minimalist Lucide icon.
 		int plate = 20;
 		int px = r[0] + (r[2] - plate) / 2;
 		int py = y + 6;
 		ctx.fill(px, py, px + plate, py + plate, on ? Theme.BRAND_QUIET : Theme.SURFACE_4);
 		Icons.Icon icon = entry.icon;
-		if (icon != null && icon.sprite() != null) {
-			Compat.drawGuiTexture(ctx, icon.sprite(),
-				px + (plate - icon.width()) / 2, py + (plate - icon.height()) / 2, icon.width(), icon.height());
-		} else if (icon != null) {
-			ctx.drawItem(icon.stack(), px + 2, py + 2);
+		if (icon != null) {
+			icon.render(ctx, px, py, plate, plate, on, hot);
 		} else {
 			String initial = entry.name.substring(0, 1);
 			ctx.drawText(this.textRenderer, initial,

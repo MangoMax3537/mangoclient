@@ -117,8 +117,17 @@ public abstract class Option {
 			return Math.max(min, Math.min(max, v));
 		}
 
+		/** Snaps the slider to multiples of this, for values that only exist in steps. */
+		public Range step(int step) {
+			this.step = Math.max(1, step);
+			return this;
+		}
+
+		private int step = 1;
+
 		public void set(int v) {
-			int clamped = Math.max(min, Math.min(max, v));
+			int snapped = step > 1 ? min + Math.round((v - min) / (float) step) * step : v;
+			int clamped = Math.max(min, Math.min(max, snapped));
 			if (setter != null) setter.accept(clamped);
 			else value = clamped;
 		}
