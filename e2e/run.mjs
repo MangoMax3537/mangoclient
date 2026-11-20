@@ -221,10 +221,8 @@ async function s6() {
   await sleep(500);
   await page.shot('s6-03-onboarding-account');
   await page.click(/./, { selector: '.nav .btn.accent' });
-  // RAM
-  await page.click(/recommended|empfohlen/i, { selector: 'button' });
-  await page.shot('s6-04-onboarding-ram');
-  await page.click(/./, { selector: '.nav .btn.accent' });
+  // the RAM step was removed: the next step is the finish step
+  await page.shot('s6-04-onboarding-finish');
   await page.click(/./, { selector: '.nav .btn.accent' }); // finish
   await waitFor(() => page.exec(`return !document.querySelector('.ob');`), { what: 'onboarding closed' });
   const st = (await page.invoke('app_state')).ok;
