@@ -89,6 +89,16 @@ pub struct Config {
     /// Look into sub-folders of the watched folders too.
     #[serde(default)]
     pub blocked_mods_check_subfolders: bool,
+    /// Take an automatic snapshot before content is updated or removed.
+    #[serde(default = "default_true")]
+    pub auto_snapshot: bool,
+    /// Automatic backups kept per instance (1..=50); manual ones never expire.
+    #[serde(default = "default_backup_keep")]
+    pub backup_keep: u32,
+}
+
+fn default_backup_keep() -> u32 {
+    5
 }
 
 fn default_true() -> bool {
@@ -125,6 +135,8 @@ impl Config {
                 .into_iter()
                 .collect(),
             blocked_mods_check_subfolders: false,
+            auto_snapshot: true,
+            backup_keep: default_backup_keep(),
         }
     }
 

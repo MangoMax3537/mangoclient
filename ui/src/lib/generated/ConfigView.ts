@@ -3,4 +3,8 @@
 /**
  * The config as the UI sees it (no `theme`).
  */
-export type ConfigView = { language: 'de' | 'en', ram: number, javaPath: string, javaArgs: string, fullscreen: boolean, width: number, height: number, keepLauncherOpen: boolean, hideOnLaunch: boolean, showSnapshots: boolean, mangoConfig: boolean, performanceMods: boolean, concurrentDownloads: number, performancePreset: 'potato' | 'balanced' | 'quality', selectedProfile: string | null, selectedAccount: string | null, firstRunDone: boolean, telemetry: boolean, sidebarOpen: boolean, blockedModsModrinthFallback: boolean, blockedModsWatchDirs: Array<string>, blockedModsCheckSubfolders: boolean, };
+export type ConfigView = { language: 'de' | 'en', ram: number, javaPath: string, javaArgs: string, fullscreen: boolean, width: number, height: number, keepLauncherOpen: boolean, hideOnLaunch: boolean, showSnapshots: boolean, mangoConfig: boolean, performanceMods: boolean, concurrentDownloads: number, performancePreset: 'potato' | 'balanced' | 'quality', selectedProfile: string | null, selectedAccount: string | null, firstRunDone: boolean, telemetry: boolean, sidebarOpen: boolean, blockedModsModrinthFallback: boolean, blockedModsWatchDirs: Array<string>, blockedModsCheckSubfolders: boolean, autoSnapshot: boolean, 
+/**
+ * 1..50.
+ */
+backupKeep: number, };

@@ -238,6 +238,9 @@ pub struct ConfigView {
     pub blocked_mods_modrinth_fallback: bool,
     pub blocked_mods_watch_dirs: Vec<String>,
     pub blocked_mods_check_subfolders: bool,
+    pub auto_snapshot: bool,
+    /// 1..50.
+    pub backup_keep: u32,
 }
 
 impl From<&Config> for ConfigView {
@@ -265,6 +268,8 @@ impl From<&Config> for ConfigView {
             blocked_mods_modrinth_fallback: c.blocked_mods_modrinth_fallback,
             blocked_mods_watch_dirs: c.blocked_mods_watch_dirs.clone(),
             blocked_mods_check_subfolders: c.blocked_mods_check_subfolders,
+            auto_snapshot: c.auto_snapshot,
+            backup_keep: c.backup_keep,
         }
     }
 }

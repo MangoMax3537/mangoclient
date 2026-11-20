@@ -188,7 +188,10 @@ pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
         }
         "selectedProfile" | "selectedAccount" => nullable_id(v, key),
         "curseforgeApiKey" => api_key(v),
-        "blockedModsModrinthFallback" | "blockedModsCheckSubfolders" => boolean(v, key),
+        "blockedModsModrinthFallback" | "blockedModsCheckSubfolders" | "autoSnapshot" => {
+            boolean(v, key)
+        }
+        "backupKeep" => integer(v, "backupKeep", 1, 50),
         "blockedModsWatchDirs" => watch_dirs(v),
         _ => return None,
     })

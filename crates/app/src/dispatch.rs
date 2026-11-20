@@ -170,6 +170,30 @@ args! {
         #[ts(optional = nullable)]
         title: Option<String>,
     }
+    PickSaveArgs {
+        #[ts(optional = nullable)]
+        title: Option<String>,
+        default_name: String,
+    }
+    WorldBackupArgs {
+        profile_id: String,
+        world_id: String,
+        #[ts(optional = nullable)]
+        label: Option<String>,
+    }
+    WorldDeleteArgs { profile_id: String, world_id: String, make_backup: bool }
+    BackupArgs { profile_id: String, backup_id: String }
+    BackupRestoreArgs {
+        profile_id: String,
+        backup_id: String,
+        #[ts(optional = nullable)]
+        as_new: Option<bool>,
+    }
+    SnapshotCreateArgs {
+        profile_id: String,
+        #[ts(optional = nullable)]
+        label: Option<String>,
+    }
     AddressArgs { address: String }
     ScreenshotActionArgs { profile_id: String, name: String, action: ScreenshotAction }
     LogFileArgs { profile_id: String, id: String }
@@ -320,6 +344,21 @@ table! {
         |s, a| s.profile_background_clear(a.id, a.none.unwrap_or(false));
     "pick_image_file": PickArgs => Option<String> = |s, a| s.pick_image_file(a.title).await;
     "pick_folder": PickArgs => Option<String> = |s, a| s.pick_folder(a.title).await;
+    "pick_save_file": PickSaveArgs => Option<String> =
+        |s, a| s.pick_save_file(a.title, a.default_name).await;
+    "worlds_list": ProfileIdArgs => Vec<World> = |s, a| s.worlds_list(a.profile_id).await;
+    "world_open_folder": ProfileIdArgs => String = |s, a| s.world_open_folder(a.profile_id);
+    "world_backup": WorldBackupArgs => Backup =
+        |s, a| s.world_backup(a.profile_id, a.world_id, a.label).await;
+    "world_delete": WorldDeleteArgs => Option<Backup> =
+        |s, a| s.world_delete(a.profile_id, a.world_id, a.make_backup).await;
+    "backups_list": ProfileIdArgs => Vec<Backup> = |s, a| s.backups_list(a.profile_id).await;
+    "backup_restore": BackupRestoreArgs => Vec<Backup> =
+        |s, a| s.backup_restore(a.profile_id, a.backup_id, a.as_new).await;
+    "backup_delete": BackupArgs => Vec<Backup> =
+        |s, a| s.backup_delete(a.profile_id, a.backup_id).await;
+    "snapshot_create": SnapshotCreateArgs => Backup =
+        |s, a| s.snapshot_create(a.profile_id, a.label).await;
     "servers_list": NoArgs => Vec<ServerEntry> = |s, _a| s.servers_list().await;
     "servers_ping_all": NoArgs => () = |s, _a| s.servers_ping_all().await;
     "servers_ping": AddressArgs => ServerStatus = |s, a| s.servers_ping(a.address).await;

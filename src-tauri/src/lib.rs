@@ -7,13 +7,13 @@ mod platform_updater;
 
 use mango_app::image_protocol::Image;
 use mango_app::{
-    AppError, AppService, AppState, BlockIconsStatus, BlockedFile, ClipboardImage, ConfigView,
-    ContentItem, ContentType, Event, EventSink, FileDialog, Host, InstallPlan, InstallTarget,
-    LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow,
-    ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion, Provider, ProviderStatus,
-    PublicAccount, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,
-    ServerStatus, ServiceOptions, StatsSummary, StorageKey, StorageUsage, ToggleResult,
-    UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
+    AppError, AppService, AppState, Backup, BlockIconsStatus, BlockedFile, ClipboardImage,
+    ConfigView, ContentItem, ContentType, Event, EventSink, FileDialog, Host, InstallPlan,
+    InstallTarget, LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome,
+    LoginWindow, ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion, Provider,
+    ProviderStatus, PublicAccount, Screenshot, ScreenshotAction, SearchParams, SearchResult,
+    ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey, StorageUsage,
+    ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest, World,
 };
 use mango_core::Paths;
 use serde::Deserialize;
@@ -443,6 +443,72 @@ async fn pick_folder(svc: Svc<'_>, title: Option<String>) -> Res<Option<String>>
     svc.pick_folder(title).await
 }
 
+#[tauri::command]
+async fn pick_save_file(
+    svc: Svc<'_>,
+    title: Option<String>,
+    default_name: String,
+) -> Res<Option<String>> {
+    svc.pick_save_file(title, default_name).await
+}
+
+// ---- worlds, backups, snapshots ----
+
+#[tauri::command]
+async fn worlds_list(svc: Svc<'_>, profile_id: String) -> Res<Vec<World>> {
+    svc.worlds_list(profile_id).await
+}
+
+#[tauri::command]
+fn world_open_folder(svc: Svc<'_>, profile_id: String) -> Res<String> {
+    svc.world_open_folder(profile_id)
+}
+
+#[tauri::command]
+async fn world_backup(
+    svc: Svc<'_>,
+    profile_id: String,
+    world_id: String,
+    label: Option<String>,
+) -> Res<Backup> {
+    svc.world_backup(profile_id, world_id, label).await
+}
+
+#[tauri::command]
+async fn world_delete(
+    svc: Svc<'_>,
+    profile_id: String,
+    world_id: String,
+    make_backup: bool,
+) -> Res<Option<Backup>> {
+    svc.world_delete(profile_id, world_id, make_backup).await
+}
+
+#[tauri::command]
+async fn backups_list(svc: Svc<'_>, profile_id: String) -> Res<Vec<Backup>> {
+    svc.backups_list(profile_id).await
+}
+
+#[tauri::command]
+async fn backup_restore(
+    svc: Svc<'_>,
+    profile_id: String,
+    backup_id: String,
+    as_new: Option<bool>,
+) -> Res<Vec<Backup>> {
+    svc.backup_restore(profile_id, backup_id, as_new).await
+}
+
+#[tauri::command]
+async fn backup_delete(svc: Svc<'_>, profile_id: String, backup_id: String) -> Res<Vec<Backup>> {
+    svc.backup_delete(profile_id, backup_id).await
+}
+
+#[tauri::command]
+async fn snapshot_create(svc: Svc<'_>, profile_id: String, label: Option<String>) -> Res<Backup> {
+    svc.snapshot_create(profile_id, label).await
+}
+
 // ---- servers, media, logs, stats, storage ----
 
 #[tauri::command]
@@ -549,6 +615,20 @@ impl ClipboardImage for TauriClipboard {
 struct TauriDialog(AppHandle);
 
 impl TauriDialog {
+    async fn save(&self, title: Option<String>, name: String) -> Option<std::path::PathBuf> {
+        let app = self.0.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut dialog = app.dialog().file().set_file_name(name);
+            if let Some(t) = title {
+                dialog = dialog.set_title(t);
+            }
+            dialog.blocking_save_file().and_then(|p| p.into_path().ok())
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
     async fn pick(&self, title: Option<String>, folder: bool) -> Option<std::path::PathBuf> {
         let app = self.0.clone();
         tauri::async_runtime::spawn_blocking(move || {
@@ -579,6 +659,14 @@ impl FileDialog for TauriDialog {
 
     async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf> {
         self.pick(title, true).await
+    }
+
+    async fn pick_save(
+        &self,
+        title: Option<String>,
+        default_name: String,
+    ) -> Option<std::path::PathBuf> {
+        self.save(title, default_name).await
     }
 }
 
@@ -800,6 +888,15 @@ pub fn run() {
             profile_background_clear,
             pick_image_file,
             pick_folder,
+            pick_save_file,
+            worlds_list,
+            world_open_folder,
+            world_backup,
+            world_delete,
+            backups_list,
+            backup_restore,
+            backup_delete,
+            snapshot_create,
             servers_list,
             servers_ping_all,
             servers_ping,

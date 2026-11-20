@@ -10,6 +10,7 @@
 //! | `head/<uuid>` | the 8x8 face (+ hat) of the cached skin, 64x64 PNG |
 //! | `block/<id>/<top\|left\|right>` | a face of the block gallery, `cache/block-icons/` |
 //! | `panorama/<version>/<0..5>` | a title-screen panorama face, `cache/panoramas/` |
+//! | `world/<uuid>/<folder>` | `icon.png` of a world: `instances/<uuid>/saves/<folder>/icon.png`, folder percent-encoded |
 //! | `icon/<base64url https url>` | a remote Modrinth image once cached under `cache/mod-icons/` |
 //!
 //! Only `png|jpg|jpeg|webp|gif` files are ever served, and only when their
@@ -142,7 +143,7 @@ fn split_url(url: &str) -> Option<(&str, &str)> {
     let rest = rest.trim_end_matches('/');
     let (kind, arg) = rest.split_once('/')?;
     // `block/<id>/<face>` and `panorama/<version>/<n>` carry two segments.
-    let segments = if matches!(kind, "block" | "panorama") {
+    let segments = if matches!(kind, "block" | "panorama" | "world") {
         2
     } else {
         1
@@ -218,6 +219,7 @@ pub fn resolve(paths: &Paths, url: &str) -> Result<Image, ImageError> {
             roots.extend(screenshots_root(paths, &file));
             approve(&file, &roots)
         }
+        "world" => resolve_world_icon(paths, arg),
         "head" => render_head_for(paths, arg),
         "icon" => {
             let raw = URL_SAFE_NO_PAD
@@ -270,6 +272,41 @@ fn screenshots_root(paths: &Paths, file: &Path) -> Option<PathBuf> {
     let real_root = std::fs::canonicalize(&root).ok()?;
     let real_instances = std::fs::canonicalize(&instances).ok()?;
     contains_path(&real_instances, &real_root).then_some(root)
+}
+
+// ---- world icons ----
+
+/// `<uuid>/<percent-encoded folder>` -> that world's `icon.png`. The folder
+/// must be one plain name, nothing on the way may be a symlink, and the
+/// real path must stay inside the instance's real `saves` folder (which in
+/// turn must lie inside the real instances folder).
+fn resolve_world_icon(paths: &Paths, arg: &str) -> Result<Image, ImageError> {
+    let (id, folder) = arg.split_once('/').ok_or(ImageError::BadUrl)?;
+    let folder = crate::worlds::decode_segment(folder).ok_or(ImageError::BadUrl)?;
+    if !is_canonical_uuid(id) || !crate::worlds::safe_folder_name(&folder) {
+        return Err(ImageError::BadUrl);
+    }
+    let saves = paths
+        .instance_dir(id)
+        .map_err(|_| ImageError::BadUrl)?
+        .join("saves");
+    let icon = saves.join(&folder).join("icon.png");
+    let is_link = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
+    if is_link(&saves) || is_link(&saves.join(&folder)) || is_link(&icon) {
+        return Err(ImageError::Forbidden);
+    }
+    let too_big =
+        std::fs::symlink_metadata(&icon).is_ok_and(|m| m.len() > crate::worlds::MAX_WORLD_ICON);
+    if too_big {
+        return Err(ImageError::Forbidden);
+    }
+    let real_saves = std::fs::canonicalize(&saves).map_err(|_| ImageError::NotFound)?;
+    let real_instances =
+        std::fs::canonicalize(paths.instances()).map_err(|_| ImageError::NotFound)?;
+    if !contains_path(&real_instances, &real_saves) {
+        return Err(ImageError::Forbidden);
+    }
+    approve(&icon, &[saves])
 }
 
 // ---- remote icons ----

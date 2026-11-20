@@ -14,4 +14,8 @@ curseforgeApiKey?: string | null, blockedModsModrinthFallback?: boolean,
 /**
  * Absolute paths of existing folders.
  */
-blockedModsWatchDirs?: Array<string>, blockedModsCheckSubfolders?: boolean, };
+blockedModsWatchDirs?: Array<string>, blockedModsCheckSubfolders?: boolean, autoSnapshot?: boolean, 
+/**
+ * 1..50; out of range is rejected.
+ */
+backupKeep?: number, };

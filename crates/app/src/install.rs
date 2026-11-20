@@ -785,6 +785,18 @@ impl AppService {
                 to_install.push(p);
             }
         }
+        // Replacing a build that is installed already: keep a way back.
+        if let Some(replaced) = to_install
+            .iter()
+            .find(|p| installed_record(&profile, p.item.provider, &p.project.id).is_some())
+        {
+            self.auto_snapshot(
+                &profile_id,
+                crate::backups::BackupReason::BeforeUpdate,
+                format!("Before updating {}", replaced.item.title),
+            )
+            .await;
+        }
         let total = to_install.len() as u64;
         let by_project: HashMap<&str, &str> = to_install
             .iter()

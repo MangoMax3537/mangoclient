@@ -166,6 +166,10 @@ impl Paths {
     pub fn instances(&self) -> PathBuf {
         self.root.join("instances")
     }
+    /// World backups and snapshots of every instance (never inside one).
+    pub fn backups(&self) -> PathBuf {
+        self.root.join("backups")
+    }
     pub fn cache(&self) -> PathBuf {
         self.root.join("cache")
     }
@@ -220,6 +224,11 @@ impl Paths {
         Ok(self.instances().join(validate_profile_id(profile_id)?))
     }
 
+    /// `backups/<uuid>/`, where one instance's backups are kept.
+    pub fn backup_dir(&self, profile_id: &str) -> Result<PathBuf> {
+        Ok(self.backups().join(validate_profile_id(profile_id)?))
+    }
+
     /// The profile's background picture, `covers/<uuid>-bg.png`.
     pub fn background_file(&self, profile_id: &str) -> Result<PathBuf> {
         Ok(self
@@ -253,6 +262,10 @@ mod tests {
             .instance_dir("12345678-1234-1234-1234-123456789abc")
             .is_ok());
         assert!(p.instance_dir("../etc").is_err());
+        let id = "12345678-1234-1234-1234-123456789abc";
+        assert_eq!(p.backup_dir(id).unwrap(), p.backups().join(id));
+        assert!(p.backup_dir("../etc").is_err());
+        assert!(p.backup_dir("").is_err());
         assert!(p.cover_file("12345678123412341234123456789abc").is_err());
         assert!(p.instance_dir("").is_err());
     }

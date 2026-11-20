@@ -92,6 +92,11 @@ pub struct ConfigPatch {
     pub blocked_mods_watch_dirs: Option<Vec<String>>,
     #[ts(optional)]
     pub blocked_mods_check_subfolders: Option<bool>,
+    #[ts(optional)]
+    pub auto_snapshot: Option<bool>,
+    /// 1..50; out of range is rejected.
+    #[ts(optional)]
+    pub backup_keep: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -171,6 +176,8 @@ mod tests {
             blocked_mods_modrinth_fallback: Some(false),
             blocked_mods_watch_dirs: Some(vec![]),
             blocked_mods_check_subfolders: Some(false),
+            auto_snapshot: Some(true),
+            backup_keep: Some(5),
         };
         let ours = keys(serde_json::to_value(patch).unwrap_or(Value::Null));
         // `theme` is accepted by the core but not part of the UI contract.
@@ -204,10 +211,12 @@ mod tests {
             "blockedModsModrinthFallback",
             "blockedModsWatchDirs",
             "blockedModsCheckSubfolders",
+            "autoSnapshot",
+            "backupKeep",
         ] {
             assert!(ours.contains(k), "missing {k}");
         }
-        assert_eq!(ours.len(), 23);
+        assert_eq!(ours.len(), 25);
     }
 
     #[test]

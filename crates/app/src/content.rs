@@ -192,6 +192,18 @@ impl AppService {
         if !profile.mods.iter().any(|r| record_pid(r) == project_id) {
             return Err(content_not_found());
         }
+        let title = profile
+            .mods
+            .iter()
+            .find(|r| record_pid(r) == project_id)
+            .and_then(|r| r.title.clone())
+            .unwrap_or_else(|| project_id.clone());
+        self.auto_snapshot(
+            &profile_id,
+            crate::backups::BackupReason::BeforeDelete,
+            format!("Before removing {title}"),
+        )
+        .await;
         let outcome = modrinth::uninstall(
             &self.inner.modrinth,
             &shield_foreign(&profile.mods),
@@ -330,6 +342,14 @@ impl AppService {
             ));
         }
 
+        if profile.mods.iter().any(|r| record_pid(r) == project.id) {
+            self.auto_snapshot(
+                &profile_id,
+                crate::backups::BackupReason::BeforeUpdate,
+                format!("Before updating {}", project.title),
+            )
+            .await;
+        }
         let progress = InstallReporter::new(&self.inner, &profile_id, &project.id);
         progress.emit(0, 1, &project.title);
         let log = {

@@ -1037,6 +1037,74 @@ async fn null_download_url_is_fetched_from_the_download_endpoint_when_allowed() 
 }
 
 #[tokio::test]
+async fn updating_installed_content_takes_an_automatic_snapshot_first() {
+    use crate::backups::{BackupKind, BackupReason};
+    let (f, _, _) = cf_fx().await;
+    let fab = f.profile("Fab", "1.21.1", "fabric");
+    let first = || {
+        f.svc.install_apply(
+            Provider::Curseforge,
+            "100".into(),
+            Some("1000".into()),
+            fab.clone(),
+            vec![],
+        )
+    };
+    // A fresh install replaces nothing: no snapshot.
+    first().await.unwrap();
+    assert!(f.svc.backups_list(fab.clone()).await.unwrap().is_empty());
+
+    // The update does: the snapshot still holds the old jar.
+    f.svc
+        .install_apply(
+            Provider::Curseforge,
+            "100".into(),
+            Some("1001".into()),
+            fab.clone(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    let mods = f.dir(&fab).join("mods");
+    assert!(!mods.join("alpha-0.jar").exists() && mods.join("alpha-1.jar").exists());
+    let list = f.svc.backups_list(fab.clone()).await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].reason, BackupReason::BeforeUpdate);
+    assert_eq!(list[0].kind, BackupKind::Snapshot);
+    f.svc
+        .backup_restore(fab.clone(), list[0].id.clone(), None)
+        .await
+        .unwrap();
+    assert!(mods.join("alpha-0.jar").exists() && !mods.join("alpha-1.jar").exists());
+    assert_eq!(f.mods(&fab)[0].version_id.as_deref(), Some("1000"));
+
+    // Failure path (the backup folder cannot be created): the update still
+    // goes through and warns.
+    let backups = f.svc.paths().backups();
+    std::fs::remove_dir_all(&backups).unwrap();
+    std::fs::write(&backups, b"x").unwrap();
+    f.svc
+        .install_apply(
+            Provider::Curseforge,
+            "100".into(),
+            Some("1001".into()),
+            fab.clone(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert!(mods.join("alpha-1.jar").exists());
+    assert!(
+        f.sink
+            .warnings()
+            .iter()
+            .any(|w| w.contains("automatic snapshot")),
+        "{:?}",
+        f.sink.warnings()
+    );
+}
+
+#[tokio::test]
 async fn curseforge_items_toggle_update_and_uninstall_without_asking_modrinth() {
     let (f, _, _) = cf_fx().await;
     let fab = f.profile("Fab", "1.21.1", "fabric");

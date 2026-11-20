@@ -227,6 +227,13 @@ pub trait FileDialog: Send + Sync {
     async fn pick_image(&self, title: Option<String>) -> Option<std::path::PathBuf>;
     /// One folder, `None` when cancelled.
     async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf>;
+    /// A file to write, `None` when cancelled. `default_name` is the
+    /// suggested file name.
+    async fn pick_save(
+        &self,
+        title: Option<String>,
+        default_name: String,
+    ) -> Option<std::path::PathBuf>;
 }
 
 /// Always cancelled; the default until the shell provides dialogs.
@@ -241,6 +248,13 @@ impl FileDialog for NoFileDialog {
     async fn pick_folder(&self, _title: Option<String>) -> Option<std::path::PathBuf> {
         None
     }
+    async fn pick_save(
+        &self,
+        _title: Option<String>,
+        _default_name: String,
+    ) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 /// Answers with fixed paths and records the titles it was asked with (tests).
@@ -248,7 +262,10 @@ impl FileDialog for NoFileDialog {
 pub struct CannedFileDialog {
     pub image: Option<std::path::PathBuf>,
     pub folder: Option<std::path::PathBuf>,
+    /// What `pick_save` answers.
+    pub save: Option<std::path::PathBuf>,
     titles: Mutex<Vec<(&'static str, Option<String>)>>,
+    save_names: Mutex<Vec<String>>,
 }
 
 impl CannedFileDialog {
@@ -256,11 +273,27 @@ impl CannedFileDialog {
         Self {
             image,
             folder,
+            save: None,
             titles: Mutex::new(Vec::new()),
+            save_names: Mutex::new(Vec::new()),
         }
     }
 
-    /// `("image" | "folder", title)` of every call so far.
+    /// Answer `pick_save` with `path`.
+    pub fn with_save(mut self, path: Option<std::path::PathBuf>) -> Self {
+        self.save = path;
+        self
+    }
+
+    /// The default names `pick_save` was asked with.
+    pub fn save_names(&self) -> Vec<String> {
+        self.save_names
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// `("image" | "folder" | "save", title)` of every call so far.
     pub fn calls(&self) -> Vec<(&'static str, Option<String>)> {
         self.titles
             .lock()
@@ -284,6 +317,21 @@ impl FileDialog for CannedFileDialog {
             .unwrap_or_else(|e| e.into_inner())
             .push(("folder", title));
         self.folder.clone()
+    }
+    async fn pick_save(
+        &self,
+        title: Option<String>,
+        default_name: String,
+    ) -> Option<std::path::PathBuf> {
+        self.titles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(("save", title));
+        self.save_names
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(default_name);
+        self.save.clone()
     }
 }
 

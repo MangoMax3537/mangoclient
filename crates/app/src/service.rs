@@ -207,6 +207,8 @@ pub(crate) struct Inner {
     pub blocks_run: Mutex<crate::block_icons::BlocksRun>,
     /// Profiles with a panorama extraction in flight.
     pub pano_busy: Mutex<HashSet<String>>,
+    /// Serializes creating, pruning, restoring and deleting backups.
+    pub backup_gate: Mutex<()>,
 }
 
 impl Drop for Inner {
@@ -305,6 +307,7 @@ impl AppService {
                 blocked_gate: Mutex::new(()),
                 blocks_run: Mutex::new(crate::block_icons::BlocksRun::default()),
                 pano_busy: Mutex::new(HashSet::new()),
+                backup_gate: Mutex::new(()),
             }),
         };
         // Migrates legacy plaintext tokens into envelopes and scrubs them.
@@ -601,6 +604,34 @@ impl AppService {
         let dialog = self.inner.dialog.clone();
         Ok(dialog
             .pick_folder(title)
+            .await
+            .map(|p| p.display().to_string()))
+    }
+
+    /// Native "save as" picker; `None` = cancelled. `default_name` is only a
+    /// suggestion (reduced to a bare file name). The caller passes the chosen
+    /// path to the command that writes the file.
+    pub async fn pick_save_file(
+        &self,
+        title: Option<String>,
+        default_name: String,
+    ) -> Res<Option<String>> {
+        let name: String = Path::new(&default_name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(200)
+            .collect();
+        let name = if name.trim().is_empty() {
+            "export".to_string()
+        } else {
+            name
+        };
+        let dialog = self.inner.dialog.clone();
+        Ok(dialog
+            .pick_save(title, name)
             .await
             .map(|p| p.display().to_string()))
     }

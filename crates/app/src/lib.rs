@@ -6,6 +6,7 @@
 mod accounts;
 mod background;
 mod backgrounds;
+mod backups;
 pub mod bindings;
 mod block_icons;
 mod blocked;
@@ -26,6 +27,7 @@ mod servers;
 mod service;
 mod types;
 mod wire;
+mod worlds;
 
 #[cfg(test)]
 mod tests;
@@ -43,9 +45,12 @@ mod tests_p6;
 mod tests_p7;
 #[cfg(test)]
 mod tests_p8;
+#[cfg(test)]
+mod tests_p9;
 
 pub use accounts::LaunchCredentials;
 pub use backgrounds::{PanoramaSet, PanoramaSource};
+pub use backups::{Backup, BackupKind, BackupReason};
 pub use block_icons::{BlockIcon, BlockIconsStatus, BlocksState};
 pub use error::{AppError, Res};
 pub use events::{
@@ -74,3 +79,4 @@ pub use types::{
 pub use wire::{
     BlockFaces, ConfigPatch, Language, PerformancePreset, ProfilePatch, ProjectKind, SearchSort,
 };
+pub use worlds::{GameMode, World};
