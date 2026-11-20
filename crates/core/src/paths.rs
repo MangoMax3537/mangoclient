@@ -103,6 +103,11 @@ impl Paths {
                 return PathBuf::from(home);
             }
         }
+        Self::platform_default_root()
+    }
+
+    /// The per-user data dir of the real install, ignoring `MANGOCLIENT_HOME`.
+    pub fn platform_default_root() -> PathBuf {
         let home = || {
             std::env::var_os("HOME")
                 .or_else(|| std::env::var_os("USERPROFILE"))

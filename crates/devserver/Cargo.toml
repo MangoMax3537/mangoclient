@@ -1,0 +1,36 @@
+[package]
+name = "mango-devserver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Localhost HTTP/SSE bridge to the MangoClient service for developing the UI without Tauri. Never bundled."
+publish = false
+
+[lib]
+name = "mango_devserver"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mango-dev"
+path = "src/main.rs"
+
+[dependencies]
+mango-app = { path = "../app" }
+mango-core = { path = "../core" }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "query"] }
+tokio = { workspace = true, features = ["signal"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+mango-auth = { path = "../auth" }
+mango-net = { path = "../net" }
+tempfile.workspace = true
+reqwest.workspace = true
+futures-util = "0.3"
+
+[lints]
+workspace = true

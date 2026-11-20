@@ -1,7 +1,8 @@
 use mango_core::{Account, AccountType, Config, Loader, Paths, Profile};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum LaunchState {
     Preparing,
@@ -15,7 +16,7 @@ pub enum LaunchState {
     Crashed,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileView {
     pub id: String,
@@ -39,47 +40,56 @@ pub struct ProfileView {
     /// The block the automatic rule picks (gallery ready), else `null`.
     pub auto_block: Option<String>,
     /// `custom` | `modpack` while the icon is an image, else `null`.
+    #[ts(type = "'custom' | 'modpack' | null")]
     pub icon_source: Option<String>,
     pub background: ProfileBackground,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum InstanceIcon {
     Image,
     Block { block: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ProfileBackground {
     /// The version's panorama. `dim` (0..1) and `blur` (px, 0..24) override
     /// the defaults when present.
     Auto {
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         dim: Option<f64>,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         blur: Option<f64>,
     },
     /// A wallpaper bundled with the UI (`id` = file stem).
     Wallpaper {
         id: String,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         dim: Option<f64>,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         blur: Option<f64>,
     },
     /// Explicit panorama choice (same picture as `auto`).
     Panorama {
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         dim: Option<f64>,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         blur: Option<f64>,
     },
     Image {
         url: String,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         dim: Option<f64>,
+        #[ts(optional)]
         #[serde(skip_serializing_if = "Option::is_none")]
         blur: Option<f64>,
     },
@@ -146,7 +156,7 @@ impl From<&Profile> for ProfileView {
 }
 
 /// Account without any secret.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicAccount {
     pub uuid: String,
@@ -201,9 +211,10 @@ impl PublicAccount {
 }
 
 /// The config as the UI sees it (no `theme`).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigView {
+    #[ts(type = "'de' | 'en'")]
     pub language: String,
     pub ram: u32,
     pub java_path: String,
@@ -217,6 +228,7 @@ pub struct ConfigView {
     pub mango_config: bool,
     pub performance_mods: bool,
     pub concurrent_downloads: u32,
+    #[ts(type = "'potato' | 'balanced' | 'quality'")]
     pub performance_preset: String,
     pub selected_profile: Option<String>,
     pub selected_account: Option<String>,
@@ -257,7 +269,7 @@ impl From<&Config> for ConfigView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AppState {
     pub version: String,
@@ -269,22 +281,23 @@ pub struct AppState {
     pub root_dir: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionEntry {
     pub id: String,
     #[serde(rename = "type")]
+    #[ts(type = "'release' | 'snapshot' | 'old_beta' | 'old_alpha'")]
     pub kind: String,
     pub release_time: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct Latest {
     pub release: String,
     pub snapshot: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionManifest {
     pub latest: Latest,
@@ -292,13 +305,13 @@ pub struct VersionManifest {
     pub installed: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct LoaderVersion {
     pub version: String,
     pub stable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchResult {
     pub pid: u32,

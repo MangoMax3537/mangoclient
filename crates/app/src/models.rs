@@ -1,13 +1,15 @@
 //! Wire types of `docs/ipc.md` Part 2 (camelCase JSON).
 
+use crate::wire::{ProjectKind, SearchSort};
 use mango_core::ModType;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// `mod | shader | resourcepack | datapack`. Shares the stored type's names.
 pub type ContentType = ModType;
 
 /// Where a project comes from. A project id is only unique together with it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Provider {
     #[default]
@@ -36,7 +38,7 @@ impl Provider {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentItem {
     /// `null` = local jar.
@@ -59,7 +61,7 @@ pub struct ContentItem {
     pub installed_at: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectHit {
     pub provider: Provider,
@@ -70,6 +72,7 @@ pub struct ProjectHit {
     pub description: String,
     /// A content type or `modpack`.
     #[serde(rename = "type")]
+    #[ts(as = "ProjectKind")]
     pub kind: String,
     pub icon_url: Option<String>,
     pub downloads: u64,
@@ -82,7 +85,7 @@ pub struct ProjectHit {
     pub installed_in: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDetail {
     #[serde(flatten)]
@@ -94,7 +97,7 @@ pub struct ProjectDetail {
     pub issues_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub hits: Vec<ProjectHit>,
@@ -102,7 +105,7 @@ pub struct SearchResult {
     pub offset: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectVersion {
     pub provider: Provider,
@@ -111,6 +114,7 @@ pub struct ProjectVersion {
     pub name: String,
     /// `release | beta | alpha`.
     #[serde(rename = "type")]
+    #[ts(type = "'release' | 'beta' | 'alpha'")]
     pub kind: String,
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
@@ -119,7 +123,7 @@ pub struct ProjectVersion {
     pub compatible: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
     /// `null` = local jar (never reported, kept for the shared shape).
@@ -137,7 +141,7 @@ pub struct UpdateInfo {
     pub required_by: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ToggleResult {
     pub items: Vec<ContentItem>,
@@ -145,7 +149,7 @@ pub struct ToggleResult {
     pub affected: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UninstallResult {
     pub blocked: bool,
@@ -155,27 +159,36 @@ pub struct UninstallResult {
 }
 
 /// UI -> Rust search arguments.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchParams {
     /// The source; Modrinth when omitted.
     #[serde(default)]
+    #[ts(as = "Option<Provider>", optional)]
     pub provider: Provider,
     #[serde(default)]
+    #[ts(as = "Option<String>", optional)]
     pub query: String,
     /// A content type or `modpack`.
+    #[ts(as = "ProjectKind")]
     pub project_type: String,
     #[serde(default)]
+    #[ts(as = "Option<mango_core::Loader>", optional = nullable)]
     pub loader: Option<String>,
     #[serde(default)]
+    #[ts(optional = nullable)]
     pub mc_version: Option<String>,
     #[serde(default)]
+    #[ts(optional = nullable)]
     pub categories: Option<Vec<String>>,
     #[serde(default = "default_sort")]
+    #[ts(as = "Option<SearchSort>", optional)]
     pub sort: String,
     #[serde(default)]
+    #[ts(as = "Option<u32>", optional)]
     pub offset: u32,
     #[serde(default = "default_limit")]
+    #[ts(as = "Option<u32>", optional)]
     pub limit: u32,
 }
 
@@ -187,7 +200,7 @@ fn default_limit() -> u32 {
     30
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerEntry {
     pub id: String,
@@ -198,13 +211,13 @@ pub struct ServerEntry {
     pub icon_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ServerPlayers {
     pub online: i64,
     pub max: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerStatus {
     pub id: String,
@@ -215,7 +228,7 @@ pub struct ServerStatus {
     pub version: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Screenshot {
     pub name: String,
@@ -225,7 +238,7 @@ pub struct Screenshot {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ScreenshotAction {
     Delete,
@@ -247,7 +260,7 @@ impl<'de> Deserialize<'de> for ScreenshotAction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum LogKind {
     Game,
@@ -255,7 +268,7 @@ pub enum LogKind {
     Launcher,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LogEntry {
     pub id: String,
@@ -265,25 +278,25 @@ pub struct LogEntry {
     pub kind: LogKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LogText {
     pub text: String,
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct LogUpload {
     pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct StatsDay {
     pub date: String,
     pub ms: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsProfile {
     pub profile_id: String,
@@ -292,7 +305,7 @@ pub struct StatsProfile {
     pub sessions: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsSummary {
     pub days: Vec<StatsDay>,
@@ -302,7 +315,7 @@ pub struct StatsSummary {
     pub longest_ms: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageKey {
     Instances,
@@ -351,7 +364,7 @@ impl StorageKey {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageUsage {
     pub key: StorageKey,
@@ -360,19 +373,29 @@ pub struct StorageUsage {
 }
 
 /// `update:status` payload and the return of `update_status|update_check`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatus {
+    #[ts(
+        type = "'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error' | 'disabled'"
+    )]
     pub state: &'static str,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub percent: Option<u8>,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "'no-release' | 'offline' | 'other'")]
     pub error_code: Option<&'static str>,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "'dev' | 'unsupported'")]
     pub disabled_reason: Option<&'static str>,
 }
 
@@ -426,7 +449,7 @@ impl From<&mango_updater::UpdateStatus> for UpdateStatus {
 
 // ---------- Part 4: providers, install planning, modpacks ----------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum StatusReason {
     NoApiKey,
@@ -434,16 +457,17 @@ pub enum StatusReason {
     Disabled,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderStatus {
     pub provider: Provider,
     pub available: bool,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<StatusReason>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetState {
     Available,
@@ -451,7 +475,7 @@ pub enum TargetState {
     Incompatible,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetReason {
     Loader,
@@ -461,7 +485,7 @@ pub enum TargetReason {
     DistributionBlocked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallTarget {
     pub profile_id: String,
@@ -472,7 +496,7 @@ pub struct InstallTarget {
     pub required_deps: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum PlanRole {
     Requested,
@@ -481,7 +505,7 @@ pub enum PlanRole {
     Incompatible,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallPlanItem {
     pub provider: Provider,
@@ -500,7 +524,7 @@ pub struct InstallPlanItem {
     pub download_url: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanConflict {
     pub project_id: String,
@@ -509,7 +533,7 @@ pub struct PlanConflict {
     pub with: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallPlan {
     pub profile_id: String,
@@ -521,7 +545,7 @@ pub struct InstallPlan {
 }
 
 /// Where a blocked pack file stands (Part 5 of `docs/ipc.md`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockedState {
     /// The user has to fetch it from the CurseForge page.
@@ -534,7 +558,7 @@ pub enum BlockedState {
     Skipped,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockedModrinth {
     pub project_id: String,
@@ -542,7 +566,7 @@ pub struct BlockedModrinth {
     pub title: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockedFile {
     /// Display name (the project name when known, else the file name).
@@ -560,7 +584,7 @@ pub struct BlockedFile {
     pub found_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModpackPlan {
     pub provider: Provider,

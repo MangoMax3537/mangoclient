@@ -1,9 +1,10 @@
 use serde::Serialize;
+use ts_rs::TS;
 
 pub type Res<T> = Result<T, AppError>;
 
 /// The error every command returns. `code` is the stable key the UI localizes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error, TS)]
 #[error("{code}: {message}")]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {

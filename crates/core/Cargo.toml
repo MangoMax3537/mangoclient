@@ -9,6 +9,11 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# TypeScript binding derives for the types that cross the IPC boundary.
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 tempfile.workspace = true

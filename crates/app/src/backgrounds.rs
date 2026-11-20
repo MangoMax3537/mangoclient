@@ -12,19 +12,20 @@ use mango_core::Paths;
 use serde::Serialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
 /// Per-face size cap.
 pub const MAX_PANORAMA_BYTES: u64 = 8 * 1024 * 1024;
 const PNG_MAGIC: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum PanoramaSource {
     Own,
     Nearest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PanoramaSet {
     pub mc_version: String,

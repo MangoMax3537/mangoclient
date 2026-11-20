@@ -5,8 +5,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ProgressPhase {
     Client,
@@ -17,7 +18,7 @@ pub enum ProgressPhase {
     Done,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevelName {
     Info,
@@ -25,14 +26,14 @@ pub enum LogLevelName {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchStateEvent {
     pub profile_id: String,
     pub state: LaunchState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchProgressEvent {
     pub profile_id: String,
@@ -42,7 +43,7 @@ pub struct LaunchProgressEvent {
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchLogEvent {
     pub profile_id: String,
@@ -50,7 +51,7 @@ pub struct LaunchLogEvent {
     pub level: LogLevelName,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallProgressEvent {
     pub profile_id: String,
@@ -60,26 +61,26 @@ pub struct InstallProgressEvent {
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentChangedEvent {
     pub profile_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountsChangedEvent {
     pub uuid: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockedChangedEvent {
     pub profile_id: String,
     pub files: Vec<BlockedFile>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PanoramaReadyEvent {
     pub profile_id: String,

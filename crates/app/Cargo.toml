@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-mango-core = { path = "../core" }
+mango-core = { path = "../core", features = ["ts"] }
 mango-net = { path = "../net" }
 mango-archive = { path = "../archive" }
 mango-auth = { path = "../auth" }
@@ -21,6 +21,7 @@ mango-runtime = { path = "../runtime" }
 mango-updater = { path = "../updater" }
 serde.workspace = true
 serde_json.workspace = true
+ts-rs.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

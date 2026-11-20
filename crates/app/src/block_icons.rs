@@ -19,6 +19,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
 /// Grass colour of the plains biome.
 pub const PLAINS_TINT: [u8; 3] = [0x91, 0xBD, 0x59];
@@ -136,14 +137,15 @@ pub(crate) fn texture_names() -> Vec<&'static str> {
     out
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct BlockIcon {
     pub id: String,
     pub label: String,
+    #[ts(as = "crate::wire::BlockFaces")]
     pub faces: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum BlocksState {
     Missing,
@@ -152,12 +154,13 @@ pub enum BlocksState {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockIconsStatus {
     pub state: BlocksState,
     pub mc_version: Option<String>,
     pub blocks: Vec<BlockIcon>,
+    #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
 }

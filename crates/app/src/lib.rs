@@ -6,9 +6,11 @@
 mod accounts;
 mod background;
 mod backgrounds;
+pub mod bindings;
 mod block_icons;
 mod blocked;
 mod content;
+pub mod dispatch;
 mod error;
 mod events;
 mod host;
@@ -23,6 +25,7 @@ mod providers;
 mod servers;
 mod service;
 mod types;
+mod wire;
 
 #[cfg(test)]
 mod tests;
@@ -65,4 +68,7 @@ pub use service::{resolve_bundle_dir, AppService, ServiceOptions};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
     ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,
+};
+pub use wire::{
+    BlockFaces, ConfigPatch, Language, PerformancePreset, ProfilePatch, ProjectKind, SearchSort,
 };
