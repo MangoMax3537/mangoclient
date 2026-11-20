@@ -105,6 +105,8 @@ pub(crate) struct Req {
     pub(crate) method: String,
     pub(crate) path: String,
     pub(crate) body: Vec<u8>,
+    /// The raw request head (request line and headers).
+    pub(crate) head: String,
 }
 
 pub(crate) type Handler = Arc<dyn Fn(&Req) -> (u16, Vec<u8>) + Send + Sync>;
@@ -153,6 +155,7 @@ pub(crate) async fn serve(make: impl FnOnce(&str) -> Handler) -> (String, Arc<Mu
                     method: first.next().unwrap_or("").to_string(),
                     path: first.next().unwrap_or("/").to_string(),
                     body: buf[head_end..].to_vec(),
+                    head: head.clone(),
                 };
                 let (status, body) = handler(&req);
                 log.lock().unwrap().push(req);
@@ -259,12 +262,13 @@ fn new_events_have_contract_names_and_camel_case_payloads() {
         motd: "m".into(),
         players: Some(ServerPlayers { online: 1, max: 2 }),
         version: None,
+        icon_url: None,
     });
     assert_eq!(e.name(), "servers:pinged");
     assert_eq!(
         e.payload(),
         json!({"id": "s", "online": true, "ping": 5, "motd": "m",
-               "players": {"online": 1, "max": 2}, "version": null})
+               "players": {"online": 1, "max": 2}, "version": null, "iconUrl": null})
     );
     let e = Event::ContentChanged(ContentChangedEvent {
         profile_id: "p".into(),
@@ -1286,6 +1290,11 @@ async fn servers_list_without_a_servers_dat_is_just_the_partners() {
 }
 
 async fn slp_server(motd: &'static str) -> u16 {
+    slp_server_icon(motd, Arc::new(Mutex::new(None))).await
+}
+
+/// A fake server whose ping carries `favicon` (a `data:` URL) when given.
+async fn slp_server_icon(motd: &'static str, favicon: Arc<Mutex<Option<String>>>) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
@@ -1293,6 +1302,7 @@ async fn slp_server(motd: &'static str) -> u16 {
             let Ok((mut s, _)) = listener.accept().await else {
                 return;
             };
+            let favicon = favicon.lock().unwrap().clone();
             tokio::spawn(async move {
                 async fn varint(s: &mut TcpStream) -> usize {
                     let (mut n, mut shift) = (0usize, 0);
@@ -1310,8 +1320,12 @@ async fn slp_server(motd: &'static str) -> u16 {
                     let mut body = vec![0u8; len];
                     s.read_exact(&mut body).await.unwrap();
                 }
+                let icon = favicon
+                    .as_deref()
+                    .map(|f| format!(r#","favicon":"{f}""#))
+                    .unwrap_or_default();
                 let json = format!(
-                    r#"{{"version":{{"name":"1.21","protocol":767}},"players":{{"online":3,"max":20}},"description":{{"text":"{motd}"}}}}"#
+                    r#"{{"version":{{"name":"1.21","protocol":767}},"players":{{"online":3,"max":20}},"description":{{"text":"{motd}"}}{icon}}}"#
                 );
                 let mut body = Vec::new();
                 mango_servers::ping::write_varint(&mut body, 0);
@@ -2240,4 +2254,91 @@ fn folder_signature_tracks_names_sizes_and_mtimes() {
     assert_ne!(one, empty);
     std::fs::write(tmp.path().join("a.jar"), b"12").unwrap();
     assert_ne!(sig(tmp.path()), one);
+}
+
+async fn icon_of(svc: &AppService, addr: &str) -> Option<String> {
+    let list = svc.servers_list().await.unwrap();
+    list.into_iter()
+        .find(|e| e.address == addr)
+        .unwrap()
+        .icon_url
+}
+
+fn png_data_url(tag: u8) -> String {
+    use base64::Engine;
+    let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    bytes.extend_from_slice(&[tag; 16]);
+    format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+#[tokio::test]
+async fn ping_favicon_is_stored_exposed_durable_and_survives_restart() {
+    let first = png_data_url(1);
+    let fav = Arc::new(Mutex::new(Some(first.clone())));
+    let port = slp_server_icon("A", fav.clone()).await;
+    let f = fx_host(None, |o| o.ping.timeout = Duration::from_secs(3));
+    let addr = format!("127.0.0.1:{port}");
+    write_servers_dat(&f.dir(), vec![compound(&[("name", "A"), ("ip", &addr)])]).await;
+    assert_eq!(icon_of(&f.svc, &addr).await, None);
+
+    let s = f.svc.servers_ping(addr.clone()).await.unwrap();
+    let url = s.icon_url.clone().expect("icon after first ping");
+    assert!(url.starts_with("mangoimg://f/"));
+    // The route really serves it.
+    assert!(matches!(
+        crate::image_protocol::resolve(f.svc.paths(), &url),
+        Ok(crate::image_protocol::Image::File { .. })
+    ));
+    assert_eq!(icon_of(&f.svc, &addr).await, Some(url.clone()));
+
+    // A later, different favicon never replaces the first one.
+    *fav.lock().unwrap() = Some(png_data_url(2));
+    let s2 = f.svc.servers_ping(addr.clone()).await.unwrap();
+    assert_eq!(s2.icon_url, Some(url.clone()));
+
+    // Restart: a fresh service on the same data dir still lists it.
+    let svc2 = AppService::new(
+        f.svc.paths().clone(),
+        Arc::new(MockSink::default()),
+        ServiceOptions {
+            open_folders: false,
+            update_dev: true,
+            auto_update_check: false,
+            ..ServiceOptions::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(icon_of(&svc2, &addr).await, Some(url));
+}
+
+#[tokio::test]
+async fn ping_with_invalid_favicon_gives_no_icon() {
+    let port = slp_server_icon(
+        "A",
+        Arc::new(Mutex::new(Some("data:image/jpeg;base64,AAAA".into()))),
+    )
+    .await;
+    let f = fx_host(None, |o| o.ping.timeout = Duration::from_secs(3));
+    let s = f
+        .svc
+        .servers_ping(format!("127.0.0.1:{port}"))
+        .await
+        .unwrap();
+    assert!(s.online);
+    assert_eq!(s.icon_url, None);
+    // Valid data URL shape but not a PNG.
+    let port = slp_server_icon(
+        "A",
+        Arc::new(Mutex::new(Some("data:image/png;base64,AAAAAAAA".into()))),
+    )
+    .await;
+    let s = f
+        .svc
+        .servers_ping(format!("127.0.0.1:{port}"))
+        .await
+        .unwrap();
+    assert_eq!(s.icon_url, None);
 }

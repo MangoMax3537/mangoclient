@@ -143,8 +143,8 @@ fn no_part_files(dir: &Path) {
 
 // ---------------------------------------------------------------- groups and tags
 
-#[test]
-fn groups_and_tags_are_edited_through_profile_update() {
+#[tokio::test]
+async fn groups_and_tags_are_edited_through_profile_update() {
     let f = fx();
     let id = f.profile("A", "1.21.1", "vanilla", None);
     let v = f
@@ -153,6 +153,7 @@ fn groups_and_tags_are_edited_through_profile_update() {
             id.clone(),
             json!({"group": "  Survival ", "tags": [" smp ", "SMP", "pvp"]}),
         )
+        .await
         .unwrap();
     assert_eq!(v.group.as_deref(), Some("Survival"));
     assert_eq!(v.tags, ["smp", "pvp"]);
@@ -178,7 +179,8 @@ fn groups_and_tags_are_edited_through_profile_update() {
     // A whole view can be spread into a patch (derived fields are ignored).
     let again_patch = f
         .svc
-        .profile_update(id.clone(), serde_json::to_value(&v).unwrap_or_default());
+        .profile_update(id.clone(), serde_json::to_value(&v).unwrap_or_default())
+        .await;
     assert_eq!(
         again_patch.unwrap_err().code,
         "validation",
@@ -195,7 +197,11 @@ fn groups_and_tags_are_edited_through_profile_update() {
         json!({"tags": (0..13).map(|i| format!("t{i}")).collect::<Vec<_>>()}),
         json!({"tags": ["bad\u{7}tag"]}),
     ] {
-        let e = f.svc.profile_update(id.clone(), bad.clone()).unwrap_err();
+        let e = f
+            .svc
+            .profile_update(id.clone(), bad.clone())
+            .await
+            .unwrap_err();
         assert_eq!(e.code, "validation", "{bad}");
     }
     // Nothing changed by the failures; clearing works.
@@ -213,17 +219,15 @@ fn groups_and_tags_are_edited_through_profile_update() {
     let v = f
         .svc
         .profile_update(id.clone(), json!({"group": null, "tags": []}))
+        .await
         .unwrap();
     assert_eq!((v.group, v.tags), (None, Vec::<String>::new()));
     // Duplicating keeps them.
     f.svc
         .profile_update(id.clone(), json!({"group": "G", "tags": ["x"]}))
+        .await
         .unwrap();
-    let dup = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .unwrap()
-        .block_on(f.svc.profile_duplicate(id))
-        .unwrap();
+    let dup = f.svc.profile_duplicate(id).await.unwrap();
     assert_eq!(
         (dup.group.as_deref(), dup.tags),
         (Some("G"), vec!["x".to_string()])
@@ -1257,6 +1261,7 @@ async fn crash_analyze_picks_the_newest_crash_report_else_latest_log() {
     let id = f.profile("C", "1.20.1", "fabric", Some("0.16.9"));
     f.svc
         .profile_update(id.clone(), json!({"ram": 4096}))
+        .await
         .unwrap();
 
     // Nothing yet.
@@ -1661,6 +1666,7 @@ async fn prism_ram_hint_is_planned_and_applied_identically() {
     let v = f
         .svc
         .profile_update(view.id.clone(), json!({"ram": 4096}))
+        .await
         .unwrap();
     assert_eq!(
         (v.ram, v.ram_source, v.effective_ram_mb),
@@ -1694,8 +1700,8 @@ async fn mrpack_has_no_ram_hint_and_uses_the_default() {
     assert_eq!(view.effective_ram_mb, state.config.ram);
 }
 
-#[test]
-fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
+#[tokio::test]
+async fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
     let f = fx();
     let id = f.profile("R", "1.21.1", "vanilla", None);
     let state = f.svc.app_state().unwrap();
@@ -1716,6 +1722,7 @@ fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
     let v = f
         .svc
         .profile_update(id.clone(), json!({"ram": 2048}))
+        .await
         .unwrap();
     assert_eq!(
         (v.ram, v.ram_source, v.effective_ram_mb),
@@ -1728,11 +1735,13 @@ fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
             id.clone(),
             json!({"ram": 2048, "ramSource": "default", "ramHint": null, "effectiveRamMb": 1}),
         )
+        .await
         .unwrap();
     assert_eq!(again.ram_source, mango_core::RamSource::User);
     let v = f
         .svc
         .profile_update(id.clone(), json!({"ram": null}))
+        .await
         .unwrap();
     assert_eq!(
         (v.ram, v.ram_source, v.effective_ram_mb),
@@ -1742,6 +1751,7 @@ fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
         assert!(f
             .svc
             .profile_update(id.clone(), json!({"ram": bad}))
+            .await
             .is_err());
     }
 }

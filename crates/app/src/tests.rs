@@ -77,8 +77,8 @@ fn config_set_validates_and_persists() {
     assert_eq!(again.app_state().unwrap().config.language, "en");
 }
 
-#[test]
-fn profile_crud_and_select() {
+#[tokio::test]
+async fn profile_crud_and_select() {
     let (_t, svc, _) = setup();
     let p = new_profile(&svc, "Alpha");
     assert_eq!(p.loader_version, None);
@@ -86,7 +86,7 @@ fn profile_crud_and_select() {
         .profile_update(
             p.id.clone(),
             json!({"name": "Beta", "ram": 3072, "loaderVersion": "0.16.0", "modCount": 99, "coverUrl": "x"}),
-        )
+        ).await
         .unwrap();
     assert_eq!(u.name, "Beta");
     assert_eq!(u.ram, Some(3072));
@@ -94,13 +94,16 @@ fn profile_crud_and_select() {
     assert_eq!(u.mod_count, 0);
     let u = svc
         .profile_update(p.id.clone(), json!({"loaderVersion": null}))
+        .await
         .unwrap();
     assert_eq!(u.loader_version, None);
     assert!(svc
         .profile_update(p.id.clone(), json!({"loader": "bogus"}))
+        .await
         .is_err());
     assert_eq!(
         svc.profile_update("nope".into(), json!({}))
+            .await
             .unwrap_err()
             .code,
         "invalid_profile_id"

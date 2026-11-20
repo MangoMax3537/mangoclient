@@ -21,6 +21,15 @@ pub struct Endpoints {
     pub mc_profile: String,
     pub mc_entitlements: String,
     pub mc_skins: String,
+    /// `PUT` (body `{"capeId": ...}`) selects a cape, `DELETE` hides it.
+    pub mc_capes_active: String,
+    /// `GET <base>/<name>` -> `{id, name}` (404 = unknown). The current
+    /// Mojang endpoint (the older `users/profiles/minecraft/<name>` was
+    /// deprecated in its favour).
+    pub profile_lookup: String,
+    /// The older endpoint (`204` = unknown), tried when the current one
+    /// fails with anything but 404.
+    pub profile_lookup_legacy: String,
     /// Without trailing slash; the uuid is appended.
     pub session_profile: String,
     /// Retries after the first attempt (5xx, 429, network errors).
@@ -44,6 +53,10 @@ impl Default for Endpoints {
             mc_profile: "https://api.minecraftservices.com/minecraft/profile".into(),
             mc_entitlements: "https://api.minecraftservices.com/entitlements/mcstore".into(),
             mc_skins: "https://api.minecraftservices.com/minecraft/profile/skins".into(),
+            mc_capes_active: "https://api.minecraftservices.com/minecraft/profile/capes/active"
+                .into(),
+            profile_lookup: "https://api.mojang.com/minecraft/profile/lookup/name".into(),
+            profile_lookup_legacy: "https://api.mojang.com/users/profiles/minecraft".into(),
             session_profile: "https://sessionserver.mojang.com/session/minecraft/profile".into(),
             retries: 4,
             backoff: Duration::from_millis(400),

@@ -206,6 +206,7 @@ async fn profile_update_rejects_immutable_unknown_and_owned_keys() {
     ] {
         let e = svc
             .profile_update(p.id.clone(), json!({"name": "X", bad: 1}))
+            .await
             .unwrap_err();
         assert_eq!(e.code, "validation", "{bad}");
     }
@@ -218,10 +219,12 @@ async fn profile_update_rejects_immutable_unknown_and_owned_keys() {
             p.id.clone(),
             json!({"name": "B", "modCount": 3, "coverUrl": null}),
         )
+        .await
         .unwrap();
     assert_eq!(u.name, "B");
     let e = svc
         .profile_update(p.id.clone(), json!({"loader": "bogus"}))
+        .await
         .unwrap_err();
     assert_eq!(e.code, "validation");
     assert!(e.message.contains("bogus"));
@@ -393,6 +396,7 @@ async fn launch_runs_end_to_end_against_mock_endpoints() {
     assert_eq!(xmx().as_deref(), Some("-Xmx3072M"));
     let v = svc
         .profile_update(p.id.clone(), json!({"ram": 2048}))
+        .await
         .unwrap();
     assert_eq!(v.effective_ram_mb, 2048);
     svc.game_launch(p.id.clone(), None).await.unwrap();

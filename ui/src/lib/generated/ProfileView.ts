@@ -4,6 +4,7 @@ import type { Loader } from "./Loader";
 import type { ProfileBackground } from "./ProfileBackground";
 import type { RamHint } from "./RamHint";
 import type { RamSource } from "./RamSource";
+import type { WindowSettings } from "./WindowSettings";
 
 export type ProfileView = { id: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, color: string | null, coverUrl: string | null, 
 /**
@@ -21,7 +22,15 @@ ramHint: RamHint | null,
 /**
  * What a launch will use: `ram`, else the config default.
  */
-effectiveRamMb: number, javaArgs: string, mangoConfig: boolean | null, 
+effectiveRamMb: number, javaArgs: string, 
+/**
+ * This instance's own Java executable; `null` = automatic resolution.
+ */
+javaPath: string | null, 
+/**
+ * Game window override; `mode: default` = the global settings.
+ */
+window: WindowSettings, mangoConfig: boolean | null, 
 /**
  * Library group; `null` = ungrouped.
  */

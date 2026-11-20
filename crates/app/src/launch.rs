@@ -7,7 +7,7 @@ use crate::service::{lock, now_ms, AppService, Inner};
 use crate::types::{LaunchResult, LaunchState};
 use mango_content::{ContentError, ModrinthLookup, PerfOptions, ResolvedFile};
 use mango_core::{validate_profile_id, Config, Profile};
-use mango_java::{launch_executable, resolve_java, JavaInfo, Platform, ResolveOptions};
+use mango_java::{launch_executable, resolve_java, JavaInfo, Platform};
 use mango_loaders::{Loader, Loaders};
 use mango_mango::mangoconfig::{self, Bundle};
 use mango_minecraft::{
@@ -175,7 +175,9 @@ impl AppService {
         let base =
             resolve_version(paths, &profile.mc_version, &inner.opts.manifest_url, &fetch).await?;
         let required = mango_java::required_major_from_json(&base.version);
-        let java = self.resolve_java_for(&id, &config, required).await?;
+        let java = self
+            .resolve_java_for(&id, &config, profile.java_path.as_deref(), required)
+            .await?;
         log(&format!(
             "Java {} ({:?}): {}",
             java.major,
@@ -261,7 +263,8 @@ impl AppService {
         let merged = mango_java::required_major_from_json(&install.version);
         let java = if merged > java.major {
             state(LaunchState::Java);
-            self.resolve_java_for(&id, &config, merged).await?
+            self.resolve_java_for(&id, &config, profile.java_path.as_deref(), merged)
+                .await?
         } else {
             java
         };
@@ -271,6 +274,7 @@ impl AppService {
         state(LaunchState::Account);
 
         // 5. Arguments
+        let window = window_for(&profile, &config);
         let mut input = LaunchInput {
             java_path: java_exe,
             paths: paths.clone(),
@@ -288,9 +292,9 @@ impl AppService {
             preset: Preset::from_name(&config.performance_preset),
             global_java_args: config.java_args.clone(),
             profile_java_args: profile.java_args.clone(),
-            fullscreen: config.fullscreen,
-            width: config.width,
-            height: config.height,
+            fullscreen: window.0,
+            width: window.1,
+            height: window.2,
             quick_join,
             account: creds.to_launch_account(),
             launcher_version: inner.opts.app_version.clone(),
@@ -330,21 +334,15 @@ impl AppService {
         })
     }
 
-    async fn resolve_java_for(
+    pub(crate) async fn resolve_java_for(
         &self,
         profile_id: &str,
         config: &Config,
+        profile_java: Option<&str>,
         required: u32,
     ) -> Res<mango_java::Resolved> {
-        let paths = &self.inner.paths;
-        let mut opts = ResolveOptions::new(paths.runtimes(), paths.cache());
-        opts.adoptium_base = self.inner.opts.adoptium_base.clone();
-        if let Some(policy) = &self.inner.opts.download_policy {
-            opts.link_policy = policy.clone();
-        }
-        if !config.java_path.is_empty() {
-            opts.custom_path = Some(PathBuf::from(&config.java_path));
-        }
+        let mut opts = self.java_options();
+        opts.custom_path = crate::java_cmds::custom_java_path(profile_java, &config.java_path);
         let inner = Arc::clone(&self.inner);
         let id = profile_id.to_string();
         opts.progress = Some(Arc::new(move |done, total| {
@@ -446,6 +444,22 @@ pub(crate) fn handle_game_event(weak: &Weak<Inner>, profile_id: &str, event: Gam
             };
             inner.set_state(profile_id, state);
         }
+    }
+}
+
+/// `(fullscreen, width, height)` of a launch: the instance's own window
+/// setting, else the global config. Vanilla has no "start maximized" flag, so
+/// there is no such mode.
+pub(crate) fn window_for(profile: &Profile, config: &Config) -> (bool, u32, u32) {
+    use mango_core::WindowMode;
+    match profile.window {
+        Some(w) if w.mode == WindowMode::Fullscreen => (true, config.width, config.height),
+        Some(w) if w.mode == WindowMode::Size => (
+            false,
+            w.width.unwrap_or(config.width),
+            w.height.unwrap_or(config.height),
+        ),
+        _ => (config.fullscreen, config.width, config.height),
     }
 }
 

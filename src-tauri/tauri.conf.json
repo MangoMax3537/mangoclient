@@ -24,7 +24,9 @@
         "height": 800,
         "minWidth": 960,
         "minHeight": 600,
-        "decorations": true,
+        "resizable": true,
+        "decorations": false,
+        "shadow": true,
         "dragDropEnabled": true
       }
     ],

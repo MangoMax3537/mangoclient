@@ -4,12 +4,15 @@ import type { BlockIconsStatus } from "./BlockIconsStatus";
 import type { ContentChangedEvent } from "./ContentChangedEvent";
 import type { FilesDroppedEvent } from "./FilesDroppedEvent";
 import type { InstallProgressEvent } from "./InstallProgressEvent";
+import type { JavaProgressEvent } from "./JavaProgressEvent";
 import type { LaunchLogEvent } from "./LaunchLogEvent";
 import type { LaunchProgressEvent } from "./LaunchProgressEvent";
 import type { LaunchStateEvent } from "./LaunchStateEvent";
 import type { PanoramaReadyEvent } from "./PanoramaReadyEvent";
 import type { ServerStatus } from "./ServerStatus";
+import type { SkinUpdatedEvent } from "./SkinUpdatedEvent";
 import type { UpdateStatus } from "./UpdateStatus";
+import type { WindowStateEvent } from "./WindowStateEvent";
 
 /** Event name -> payload, as emitted by the service (Tauri event / SSE `name`). */
 export type EventMap = {
@@ -24,6 +27,9 @@ export type EventMap = {
   "blocks:status": BlockIconsStatus;
   "panorama:ready": PanoramaReadyEvent;
   "files:dropped": FilesDroppedEvent;
+  "skin:updated": SkinUpdatedEvent;
+  "java:progress": JavaProgressEvent;
+  "window:state": WindowStateEvent;
 };
 
 export type EventName = keyof EventMap;

@@ -35,7 +35,9 @@ pub use msa::{
 };
 pub use offline::offline_account;
 pub use skins::{
-    default_skin_png, get_cached_skin, get_skin, upload_skin, SkinResult, SkinSource, SkinVariant,
+    default_skin_png, fetch_profile_textures, fetch_public_skin, fetch_texture_bytes,
+    get_cached_skin, get_skin, lookup_player_uuid, set_active_cape, upload_skin, upload_skin_bytes,
+    ProfileTextures, SkinResult, SkinSource, SkinVariant,
 };
 pub use store::CredentialStore;
 #[cfg(feature = "keyring")]

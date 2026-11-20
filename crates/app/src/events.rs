@@ -79,6 +79,31 @@ pub struct PanoramaReadyEvent {
     pub profile_id: String,
 }
 
+/// A skin, cape or head of this account changed: reload its images.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinUpdatedEvent {
+    pub uuid: String,
+}
+
+/// Progress of a managed Java download (`java_install`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct JavaProgressEvent {
+    pub major: u32,
+    pub done: u64,
+    pub total: u64,
+}
+
+/// The launcher window changed state (custom title bar icons).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowStateEvent {
+    pub maximized: bool,
+    pub fullscreen: bool,
+    pub focused: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FilesDroppedEvent {
@@ -99,6 +124,9 @@ pub enum Event {
     BlocksStatus(BlockIconsStatus),
     PanoramaReady(PanoramaReadyEvent),
     FilesDropped(FilesDroppedEvent),
+    SkinUpdated(SkinUpdatedEvent),
+    JavaProgress(JavaProgressEvent),
+    WindowState(WindowStateEvent),
 }
 
 impl Event {
@@ -116,6 +144,9 @@ impl Event {
             Event::BlocksStatus(_) => "blocks:status",
             Event::PanoramaReady(_) => "panorama:ready",
             Event::FilesDropped(_) => "files:dropped",
+            Event::SkinUpdated(_) => "skin:updated",
+            Event::JavaProgress(_) => "java:progress",
+            Event::WindowState(_) => "window:state",
         }
     }
 
@@ -133,6 +164,9 @@ impl Event {
             Event::BlocksStatus(e) => serde_json::to_value(e),
             Event::PanoramaReady(e) => serde_json::to_value(e),
             Event::FilesDropped(e) => serde_json::to_value(e),
+            Event::SkinUpdated(e) => serde_json::to_value(e),
+            Event::JavaProgress(e) => serde_json::to_value(e),
+            Event::WindowState(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

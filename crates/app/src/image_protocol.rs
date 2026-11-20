@@ -7,7 +7,10 @@
 //! |---|---|
 //! | `cover/<uuid>` | `covers/<uuid>.png` |
 //! | `f/<base64url abs path>` | an image under `covers/`, `cache/mod-icons/`, `cache/server-icons/` or a profile's `screenshots/` |
-//! | `head/<uuid>` | the 8x8 face (+ hat) of the cached skin, 64x64 PNG |
+//! | `head/<uuid>[?v=<tag>]` | the 8x8 face (+ hat) of the cached skin, 64x64 PNG |
+//! | `skin/<uuid>[?v=<tag>]` | the account's cached skin PNG (default skin when none is cached) |
+//! | `cape/<uuid>/<capeId>[?v=<tag>]` | a cached cape PNG of the account, `cache/skins/<uuid>-capes/` |
+//! | `libskin/<id>` | a skin of the local skin library, `<root>/skins/<id>.png` |
 //! | `block/<id>/<top\|left\|right>` | a face of the block gallery, `cache/block-icons/` |
 //! | `panorama/<version>/<0..5>` | a title-screen panorama face, `cache/panoramas/` |
 //! | `world/<uuid>/<folder>` | `icon.png` of a world: `instances/<uuid>/saves/<folder>/icon.png`, folder percent-encoded |
@@ -106,6 +109,14 @@ pub fn head_url(uuid: &str) -> String {
     format!("mangoimg://head/{uuid}")
 }
 
+/// `url` with a `?v=<tag>` so the webview reloads a changed texture.
+pub fn with_version(url: String, tag: Option<&str>) -> String {
+    match tag {
+        Some(t) => format!("{url}?v={t}"),
+        None => url,
+    }
+}
+
 pub fn file_url(file: &Path) -> String {
     format!(
         "mangoimg://f/{}",
@@ -154,13 +165,26 @@ fn split_url(url: &str) -> Option<(&str, &str)> {
     ]
     .iter()
     .find_map(|p| url.strip_prefix(p))?;
+    // Only the textures of an account may carry a cache-busting `?v=<tag>`.
+    let (rest, query) = match rest.split_once('?') {
+        Some((base, q)) => (base, Some(q)),
+        None => (rest, None),
+    };
     if rest.contains(['?', '#', '\\', '\0']) {
         return None;
     }
     let rest = rest.trim_end_matches('/');
     let (kind, arg) = rest.split_once('/')?;
+    if let Some(q) = query {
+        let tag = q.strip_prefix("v=")?;
+        let tag_ok =
+            !tag.is_empty() && tag.len() <= 40 && tag.bytes().all(|b| b.is_ascii_alphanumeric());
+        if !tag_ok || !matches!(kind, "head" | "skin" | "cape") {
+            return None;
+        }
+    }
     // `block/<id>/<face>` and `panorama/<version>/<n>` carry two segments.
-    let segments = if matches!(kind, "block" | "panorama" | "world") {
+    let segments = if matches!(kind, "block" | "panorama" | "world" | "cape") {
         2
     } else {
         1
@@ -238,6 +262,22 @@ pub fn resolve(paths: &Paths, url: &str) -> Result<Image, ImageError> {
         }
         "world" => resolve_world_icon(paths, arg),
         "head" => render_head_for(paths, arg),
+        "skin" => skin_for(paths, arg),
+        "cape" => {
+            let (uuid, cape) = arg.split_once('/').ok_or(ImageError::BadUrl)?;
+            if !valid_head_id(uuid) || !crate::skins::valid_cape_id(cape) {
+                return Err(ImageError::BadUrl);
+            }
+            let root = crate::skins::cape_dir(paths, uuid);
+            approve(&root.join(format!("{cape}.png")), &[root])
+        }
+        "libskin" => {
+            if !crate::skins::valid_library_id(arg) {
+                return Err(ImageError::BadUrl);
+            }
+            let root = crate::skins::library_dir(paths);
+            approve(&root.join(format!("{arg}.png")), &[root])
+        }
         "icon" => {
             let raw = URL_SAFE_NO_PAD
                 .decode(arg.trim_end_matches('='))
@@ -372,18 +412,19 @@ pub fn is_alex(uuid: &str) -> bool {
     (((hilo >> 32) as u32) ^ (hilo as u32)) & 1 == 1
 }
 
-/// The bundled fallback skin. Only Steve ships today (`mango-auth`); Alex
-/// uses the same bytes until the asset exists.
+/// The bundled fallback skin. [`is_alex`] already follows Java's parity rule,
+/// but only Steve ships (no legitimately obtainable Alex texture), so both
+/// cases serve Steve.
 fn default_skin(uuid: &str) -> &'static [u8] {
     let _alex = is_alex(uuid);
     mango_auth::default_skin_png()
 }
 
-fn valid_head_id(id: &str) -> bool {
+pub(crate) fn valid_head_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 36 && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
 }
 
-fn cached_skin_png(paths: &Paths, uuid: &str) -> Option<Vec<u8>> {
+pub(crate) fn cached_skin_png(paths: &Paths, uuid: &str) -> Option<Vec<u8>> {
     let file = paths.cache().join("skins").join(format!("{uuid}.json"));
     let meta = std::fs::metadata(&file).ok()?;
     if !meta.is_file() || meta.len() > MAX_SKIN_JSON_BYTES {
@@ -394,6 +435,17 @@ fn cached_skin_png(paths: &Paths, uuid: &str) -> Option<Vec<u8>> {
     let b64 = skin.strip_prefix("data:image/png;base64,")?;
     let png = STANDARD.decode(b64).ok()?;
     (png.len() <= MAX_SKIN_BYTES).then_some(png)
+}
+
+fn skin_for(paths: &Paths, uuid: &str) -> Result<Image, ImageError> {
+    if !valid_head_id(uuid) {
+        return Err(ImageError::BadUrl);
+    }
+    let data = cached_skin_png(paths, uuid).unwrap_or_else(|| default_skin(uuid).to_vec());
+    Ok(Image::Bytes {
+        data,
+        mime: "image/png",
+    })
 }
 
 fn render_head_for(paths: &Paths, uuid: &str) -> Result<Image, ImageError> {

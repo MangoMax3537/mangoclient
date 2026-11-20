@@ -35,6 +35,10 @@ pub struct ProfileView {
     /// What a launch will use: `ram`, else the config default.
     pub effective_ram_mb: u32,
     pub java_args: String,
+    /// This instance's own Java executable; `null` = automatic resolution.
+    pub java_path: Option<String>,
+    /// Game window override; `mode: default` = the global settings.
+    pub window: mango_core::WindowSettings,
     pub mango_config: Option<bool>,
     /// Library group; `null` = ungrouped.
     pub group: Option<String>,
@@ -120,6 +124,8 @@ impl ProfileView {
             ram_hint: p.ram_hint.clone(),
             effective_ram_mb: p.effective_ram_mb(default_ram_mb),
             java_args: p.java_args.clone(),
+            java_path: p.java_path.clone(),
+            window: p.window.unwrap_or_default(),
             mango_config: p.mango_config,
             group: p.group.clone(),
             tags: p.tags.clone(),
@@ -188,6 +194,18 @@ pub struct PublicAccount {
     pub credentials_locked: bool,
     /// No usable refresh token: sign in again.
     pub needs_relogin: bool,
+}
+
+impl PublicAccount {
+    /// Adds the cache-busting `?v=` tag of the cached skin to `head_url`.
+    pub(crate) fn versioned(mut self, paths: &Paths) -> Self {
+        let tag = crate::skins::skin_version(paths, &self.uuid);
+        self.head_url = crate::image_protocol::with_version(
+            crate::image_protocol::head_url(&self.uuid),
+            tag.as_deref(),
+        );
+        self
+    }
 }
 
 /// Credential state of one account (never the secrets themselves).

@@ -126,13 +126,14 @@ impl AppService {
             let opts = inner.opts.ping.clone();
             let icons: Arc<dyn IconStore> = inner.icons.clone();
             let emit = Arc::clone(&inner);
+            let dir = server_icons_dir(&inner.paths);
             ping_all(
                 &targets,
                 &opts,
                 mango_servers::default_resolver(),
                 icons,
                 move |p| {
-                    emit.emit(Event::ServersPinged(status_of(&p.id, &p.status)));
+                    emit.emit(Event::ServersPinged(status_of(&dir, &p.id, &p.status)));
                 },
             )
             .await;
@@ -162,11 +163,12 @@ impl AppService {
             self.inner.icons.as_ref(),
         )
         .await;
-        Ok(status_of(&id, &status))
+        let dir = server_icons_dir(&self.inner.paths);
+        Ok(status_of(&dir, &id, &status))
     }
 }
 
-fn status_of(id: &str, s: &mango_servers::ServerStatus) -> ServerStatus {
+fn status_of(dir: &Path, id: &str, s: &mango_servers::ServerStatus) -> ServerStatus {
     ServerStatus {
         id: id.to_string(),
         online: s.online,
@@ -177,6 +179,11 @@ fn status_of(id: &str, s: &mango_servers::ServerStatus) -> ServerStatus {
             max: p.max,
         }),
         version: Some(s.version.clone()).filter(|v| !v.is_empty()),
+        // `ping_server_cached` already swapped in the durable first favicon.
+        icon_url: s
+            .favicon
+            .as_deref()
+            .and_then(|raw| materialize_icon(dir, raw)),
     }
 }
 

@@ -13,7 +13,7 @@ pub mod validation;
 pub use error::{Error, Result};
 pub use model::{
     Account, AccountType, Config, Loader, ModDependency, ModRecord, ModType, Profile, Secret,
-    Session,
+    Session, WindowMode, WindowSettings,
 };
 pub use paths::{validate_profile_id, Paths};
 pub use ram::{ram_limits, RamHint, RamHintSource, RamLimits, RamSource};

@@ -33,6 +33,7 @@ impl AppService {
             updater.spawn_periodic(mango_updater::RECHECK_INTERVAL);
         }
         self.spawn_mods_watcher();
+        self.spawn_skin_prefetch();
     }
 
     /// Start or stop telemetry to match `config.telemetry`. A no-op without a

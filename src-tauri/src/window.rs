@@ -8,11 +8,65 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
-use mango_app::{Activity, AppService, PolicyInput, WindowAction, WindowPolicy};
-use tauri::{AppHandle, Manager, WebviewWindowBuilder};
+use mango_app::{
+    Activity, AppService, Event, PolicyInput, WindowAction, WindowPolicy, WindowStateEvent,
+};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub const MAIN_LABEL: &str = "main";
+
+/// Window commands are for the launcher's own webview only.
+pub fn main_only(window: &tauri::WebviewWindow) -> Result<(), mango_app::AppError> {
+    if window.label() == MAIN_LABEL {
+        Ok(())
+    } else {
+        Err(mango_app::AppError::new(
+            "window.forbidden",
+            "Only the main window may control itself",
+        ))
+    }
+}
+
+pub fn resize_direction(d: mango_app::ResizeDirection) -> tauri_runtime::ResizeDirection {
+    use mango_app::ResizeDirection as R;
+    use tauri_runtime::ResizeDirection as T;
+    match d {
+        R::North => T::North,
+        R::South => T::South,
+        R::East => T::East,
+        R::West => T::West,
+        R::NorthEast => T::NorthEast,
+        R::NorthWest => T::NorthWest,
+        R::SouthEast => T::SouthEast,
+        R::SouthWest => T::SouthWest,
+    }
+}
+
+/// The last `window:state` that went out (only changes are emitted).
+#[derive(Default)]
+pub struct LastState(Mutex<Option<WindowStateEvent>>);
+
+/// Emit `window:state` when maximized / fullscreen / focused changed.
+pub fn emit_state_if_changed(app: &AppHandle, window: &tauri::Window) {
+    let state = WindowStateEvent {
+        maximized: window.is_maximized().unwrap_or(false),
+        fullscreen: window.is_fullscreen().unwrap_or(false),
+        focused: window.is_focused().unwrap_or(true),
+    };
+    let Some(last) = app.try_state::<LastState>() else {
+        return;
+    };
+    {
+        let mut slot = last.0.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.as_ref() == Some(&state) {
+            return;
+        }
+        *slot = Some(state.clone());
+    }
+    let event = Event::WindowState(state);
+    let _ = app.emit(event.name(), event.payload());
+}
 
 /// Managed state: the policy and the queue that feeds it from other threads.
 pub struct Lifecycle {
@@ -38,6 +92,7 @@ impl Lifecycle {
 /// (the async runtime is up by then).
 pub fn install(app: &AppHandle) {
     let (tx, rx) = unbounded_channel();
+    app.manage(LastState::default());
     app.manage(Lifecycle {
         policy: Mutex::new(WindowPolicy::new()),
         tx,

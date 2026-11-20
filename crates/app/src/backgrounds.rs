@@ -62,6 +62,24 @@ fn newest_extracted(paths: &Paths) -> Option<String> {
     found.pop().map(|(_, v)| v)
 }
 
+/// `(extracted, still to extract)` over the installed versions that have a
+/// client jar; both newest first (plain releases by release order, then the
+/// rest by name).
+fn pool_state(paths: &Paths) -> (Vec<String>, Vec<String>) {
+    let mut versions: Vec<(Option<Vec<u32>>, String)> = crate::types::installed_versions(paths)
+        .into_iter()
+        .filter(|v| safe_version_dir(v) && installed_jar(paths, v).is_some())
+        .map(|v| (release_key(&v), v))
+        .collect();
+    versions.sort();
+    versions.reverse();
+    let (ready, missing) = versions
+        .into_iter()
+        .map(|(_, v)| v)
+        .partition(|v| complete(paths, v));
+    (ready, missing)
+}
+
 fn set_of(version: &str, source: PanoramaSource) -> PanoramaSet {
     PanoramaSet {
         mc_version: version.to_string(),
@@ -116,6 +134,53 @@ impl AppService {
             self.spawn_panorama_job(id, own_jar.map(|_| own.to_string()));
         }
         Ok(nearest.map(|v| set_of(&v, PanoramaSource::Nearest)))
+    }
+
+    /// One set per installed Minecraft version that has a client jar: the ones
+    /// already extracted now (newest first), the rest in the background, each
+    /// announced with `panorama:ready` (empty `profileId`: re-read the pool).
+    pub async fn panorama_pool(&self) -> Res<Vec<PanoramaSet>> {
+        let paths = self.inner.paths.clone();
+        let (ready, missing) = tokio::task::spawn_blocking(move || pool_state(&paths)).await?;
+        if !missing.is_empty() {
+            self.spawn_pool_job(missing);
+        }
+        Ok(ready
+            .into_iter()
+            .map(|v| set_of(&v, PanoramaSource::Own))
+            .collect())
+    }
+
+    fn spawn_pool_job(&self, versions: Vec<String>) {
+        {
+            let mut busy = lock(&self.inner.pool_busy);
+            if *busy {
+                return;
+            }
+            *busy = true;
+        }
+        if tokio::runtime::Handle::try_current().is_err() {
+            *lock(&self.inner.pool_busy) = false;
+            return;
+        }
+        let svc = self.clone();
+        tokio::spawn(async move {
+            for version in versions {
+                let paths = svc.inner.paths.clone();
+                let v = version.clone();
+                let done = tokio::task::spawn_blocking(move || {
+                    let jar = installed_jar(&paths, &v)?;
+                    extract_panoramas(&jar, &paths, &v, false).ok()
+                })
+                .await;
+                if matches!(done, Ok(Some(()))) {
+                    svc.inner.emit(Event::PanoramaReady(PanoramaReadyEvent {
+                        profile_id: String::new(),
+                    }));
+                }
+            }
+            *lock(&svc.inner.pool_busy) = false;
+        });
     }
 
     /// `own`: extract from that installed version's jar; else from whatever

@@ -8,7 +8,8 @@ mod window;
 
 use mango_app::image_protocol::Image;
 use mango_app::{
-    AppError, AppService, AppState, Backup, BlockIconsStatus, ClipboardImage,
+    AppError, AppService, AppState, Backup, BlockIconsStatus, ClipboardImage, JavaInfo, LibrarySkin,
+    ResizeDirection, SkinInfo, SkinVariantName,
     ConfigView, ContentItem, ContentType, CrashReport, Event, EventSink, ExportFormat, FileDialog,
     FileExport, Host, ImportPlan, InstallPlan, InstallTarget, LaunchResult, LoaderVersion,
     LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, PolicyInput,
@@ -84,7 +85,7 @@ async fn profile_create(
 
 #[tauri::command]
 async fn profile_update(svc: Svc<'_>, id: String, patch: Value) -> Res<ProfileView> {
-    svc.profile_update(id, patch)
+    svc.profile_update(id, patch).await
 }
 
 #[tauri::command]
@@ -625,6 +626,141 @@ async fn update_install(svc: Svc<'_>) -> Res<bool> {
     svc.update_install()
 }
 
+// ---- skins, java, panorama pool ----
+
+#[tauri::command]
+async fn skin_get(svc: Svc<'_>, uuid: String) -> Res<SkinInfo> {
+    svc.skin_get(uuid).await
+}
+
+#[tauri::command]
+async fn skin_upload(
+    svc: Svc<'_>,
+    uuid: String,
+    file_path: String,
+    variant: SkinVariantName,
+) -> Res<SkinInfo> {
+    svc.skin_upload(uuid, file_path, variant).await
+}
+
+#[tauri::command]
+async fn skin_use_username(
+    svc: Svc<'_>,
+    uuid: String,
+    name: String,
+    variant: Option<SkinVariantName>,
+) -> Res<SkinInfo> {
+    svc.skin_use_username(uuid, name, variant).await
+}
+
+#[tauri::command]
+async fn skin_set_cape(svc: Svc<'_>, uuid: String, cape_id: Option<String>) -> Res<SkinInfo> {
+    svc.skin_set_cape(uuid, cape_id).await
+}
+
+#[tauri::command]
+async fn skin_library_list(svc: Svc<'_>) -> Res<Vec<LibrarySkin>> {
+    svc.skin_library_list().await
+}
+
+#[tauri::command]
+async fn skin_library_add(
+    svc: Svc<'_>,
+    file_path: String,
+    name: Option<String>,
+    variant: SkinVariantName,
+) -> Res<LibrarySkin> {
+    svc.skin_library_add(file_path, name, variant).await
+}
+
+#[tauri::command]
+async fn skin_library_save_current(
+    svc: Svc<'_>,
+    uuid: String,
+    name: Option<String>,
+) -> Res<LibrarySkin> {
+    svc.skin_library_save_current(uuid, name).await
+}
+
+#[tauri::command]
+async fn skin_library_remove(svc: Svc<'_>, id: String) -> Res<Vec<LibrarySkin>> {
+    svc.skin_library_remove(id).await
+}
+
+#[tauri::command]
+async fn skin_library_apply(svc: Svc<'_>, uuid: String, id: String) -> Res<SkinInfo> {
+    svc.skin_library_apply(uuid, id).await
+}
+
+#[tauri::command]
+async fn java_list(svc: Svc<'_>) -> Res<Vec<JavaInfo>> {
+    svc.java_list().await
+}
+
+#[tauri::command]
+async fn java_install(svc: Svc<'_>, major: u32) -> Res<JavaInfo> {
+    svc.java_install(major).await
+}
+
+#[tauri::command]
+async fn panorama_pool(svc: Svc<'_>) -> Res<Vec<PanoramaSet>> {
+    svc.panorama_pool().await
+}
+
+// ---- window controls (custom title bar), main window only ----
+
+type MainWindow = tauri::WebviewWindow;
+
+fn window_err(e: tauri::Error) -> AppError {
+    AppError::new("window.failed", e.to_string())
+}
+
+#[tauri::command]
+fn window_minimize(window: MainWindow) -> Res<()> {
+    window::main_only(&window)?;
+    window.minimize().map_err(window_err)
+}
+
+#[tauri::command]
+fn window_toggle_maximize(window: MainWindow) -> Res<()> {
+    window::main_only(&window)?;
+    if window.is_maximized().map_err(window_err)? {
+        window.unmaximize().map_err(window_err)
+    } else {
+        window.maximize().map_err(window_err)
+    }
+}
+
+/// Same path as the user closing the window: `CloseRequested`, then the exit
+/// guard (`WindowPolicy`) decides whether the process ends.
+#[tauri::command]
+fn window_close(window: MainWindow) -> Res<()> {
+    window::main_only(&window)?;
+    window.close().map_err(window_err)
+}
+
+#[tauri::command]
+fn window_is_maximized(window: MainWindow) -> Res<bool> {
+    window::main_only(&window)?;
+    window.is_maximized().map_err(window_err)
+}
+
+#[tauri::command]
+fn window_start_drag(window: MainWindow) -> Res<()> {
+    window::main_only(&window)?;
+    window.start_dragging().map_err(window_err)
+}
+
+#[tauri::command]
+fn window_start_resize(window: MainWindow, direction: ResizeDirection) -> Res<()> {
+    window::main_only(&window)?;
+    window
+        .as_ref()
+        .window()
+        .start_resize_dragging(window::resize_direction(direction))
+        .map_err(window_err)
+}
+
 // ---- clipboard and the mangoimg:// protocol ----
 
 /// Screenshot copy: the picture itself goes on the system clipboard.
@@ -898,6 +1034,13 @@ pub fn run() {
             if window.label() != window::MAIN_LABEL {
                 return;
             }
+            // Maximize/fullscreen/focus changes for the custom title bar.
+            if matches!(
+                event,
+                WindowEvent::Resized(_) | WindowEvent::Focused(_) | WindowEvent::ScaleFactorChanged { .. }
+            ) {
+                window::emit_state_if_changed(window.app_handle(), window);
+            }
             if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
                 if let Some(svc) = window.app_handle().try_state::<AppService>() {
                     let svc: AppService = svc.inner().clone();
@@ -1025,6 +1168,24 @@ pub fn run() {
             update_status,
             update_check,
             update_install,
+            skin_get,
+            skin_upload,
+            skin_use_username,
+            skin_set_cape,
+            skin_library_list,
+            skin_library_add,
+            skin_library_save_current,
+            skin_library_remove,
+            skin_library_apply,
+            java_list,
+            java_install,
+            panorama_pool,
+            window_minimize,
+            window_toggle_maximize,
+            window_close,
+            window_is_maximized,
+            window_start_drag,
+            window_start_resize,
         ])
         .build(tauri::generate_context!());
     let app = match built {

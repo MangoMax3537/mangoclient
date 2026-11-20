@@ -34,6 +34,9 @@ pub fn event_signatures(cfg: &Config) -> Vec<(&'static str, String)> {
         e::<BlockIconsStatus>("blocks:status", cfg),
         e::<PanoramaReadyEvent>("panorama:ready", cfg),
         e::<FilesDroppedEvent>("files:dropped", cfg),
+        e::<SkinUpdatedEvent>("skin:updated", cfg),
+        e::<JavaProgressEvent>("java:progress", cfg),
+        e::<WindowStateEvent>("window:state", cfg),
     ]
 }
 
@@ -92,6 +95,13 @@ fn export_roots(cfg: &Config) -> Result<(), ts_rs::ExportError> {
         AccountsChangedEvent,
         PanoramaReadyEvent,
         FilesDroppedEvent,
+        SkinUpdatedEvent,
+        JavaProgressEvent,
+        WindowStateEvent,
+        // skins, java, window, panorama pool
+        SkinInfo,
+        LibrarySkin,
+        JavaInfo,
     );
     Ok(())
 }
@@ -190,6 +200,14 @@ pub fn generate(dir: &Path) -> Result<(), String> {
         LogFileArgs,
         StatsSummaryArgs,
         StorageClearArgs,
+        SkinUploadArgs,
+        SkinUseUsernameArgs,
+        SkinSetCapeArgs,
+        SkinLibraryAddArgs,
+        SkinLibrarySaveCurrentArgs,
+        SkinLibraryApplyArgs,
+        JavaInstallArgs,
+        WindowStartResizeArgs,
     );
 
     let known: BTreeSet<String> = std::fs::read_dir(dir)
@@ -331,7 +349,10 @@ mod tests {
                 | Event::AccountsChanged(_)
                 | Event::BlocksStatus(_)
                 | Event::PanoramaReady(_)
-                | Event::FilesDropped(_) => e.name(),
+                | Event::FilesDropped(_)
+                | Event::SkinUpdated(_)
+                | Event::JavaProgress(_)
+                | Event::WindowState(_) => e.name(),
             }
         }
         let samples = [
@@ -365,6 +386,7 @@ mod tests {
                 motd: String::new(),
                 players: None,
                 version: None,
+                icon_url: None,
             }),
             Event::UpdateStatus(UpdateStatus {
                 state: "idle",
@@ -390,6 +412,19 @@ mod tests {
                 profile_id: String::new(),
             }),
             Event::FilesDropped(FilesDroppedEvent { paths: vec![] }),
+            Event::SkinUpdated(SkinUpdatedEvent {
+                uuid: String::new(),
+            }),
+            Event::JavaProgress(JavaProgressEvent {
+                major: 0,
+                done: 0,
+                total: 0,
+            }),
+            Event::WindowState(WindowStateEvent {
+                maximized: false,
+                fullscreen: false,
+                focused: true,
+            }),
         ];
         for s in &samples {
             assert!(names.contains(&name_of(s)), "{} missing", s.name());

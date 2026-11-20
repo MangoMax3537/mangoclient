@@ -123,6 +123,14 @@ pub struct ProfilePatch {
     pub ram: Option<u32>,
     #[ts(optional)]
     pub java_args: Option<String>,
+    /// Absolute path of a runnable Java; `null` or blank = automatic. Refused
+    /// with `java.not_runnable` when it does not run.
+    #[ts(optional = nullable)]
+    pub java_path: Option<String>,
+    /// `size` needs width 640..16384 and height 480..16384; `default` uses the
+    /// global config values; there is no maximized mode (vanilla has no flag).
+    #[ts(optional)]
+    pub window: Option<mango_core::WindowSettings>,
     #[ts(optional = nullable)]
     pub mango_config: Option<bool>,
     /// At most 48 chars; `null` or blank = no group.
@@ -217,6 +225,8 @@ mod tests {
             color: Some("#aabbcc".into()),
             ram: Some(2048),
             java_args: Some(String::new()),
+            java_path: Some(String::new()),
+            window: Some(mango_core::WindowSettings::default()),
             mango_config: Some(true),
             group: Some(String::new()),
             tags: Some(vec![]),
@@ -230,6 +240,8 @@ mod tests {
             "color",
             "ram",
             "javaArgs",
+            "javaPath",
+            "window",
             "mangoConfig",
             "group",
             "tags",

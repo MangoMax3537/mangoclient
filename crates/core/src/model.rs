@@ -220,6 +220,41 @@ pub struct Session {
     pub started_at: u64,
 }
 
+/// How the game window opens for one instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(rename_all = "lowercase")]
+pub enum WindowMode {
+    /// Use the global `fullscreen` / `width` / `height` settings.
+    #[default]
+    Default,
+    /// An explicit window size (`width` and `height` set).
+    Size,
+    Fullscreen,
+}
+
+/// Per-instance game window settings; absent on a profile = `default`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSettings {
+    pub mode: WindowMode,
+    /// 640..=16384; only with `mode: size`.
+    pub width: Option<u32>,
+    /// 480..=16384; only with `mode: size`.
+    pub height: Option<u32>,
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        WindowSettings {
+            mode: WindowMode::Default,
+            width: None,
+            height: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
@@ -255,6 +290,13 @@ pub struct Profile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ram_hint: Option<RamHint>,
     pub java_args: String,
+    /// Absolute path of this instance's own Java executable; `None` = the
+    /// automatic resolution (config path, managed or system runtime).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub java_path: Option<String>,
+    /// Game window override; `None` = the global settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowSettings>,
     pub mods: Vec<ModRecord>,
     pub mango_config: Option<bool>,
     /// Library group (at most 48 chars); `None` = ungrouped.
@@ -288,6 +330,8 @@ impl Profile {
             ram_source: None,
             ram_hint: None,
             java_args: String::new(),
+            java_path: None,
+            window: None,
             mods: Vec::new(),
             mango_config: None,
             group: None,

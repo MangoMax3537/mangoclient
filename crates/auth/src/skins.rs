@@ -1,4 +1,4 @@
-use crate::account::{Account, AccountType};
+use crate::account::{Account, AccountType, Texture};
 use crate::endpoints::Endpoints;
 use crate::error::AuthError;
 use crate::http::send_json;
@@ -160,7 +160,11 @@ pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> S
         result.source = SkinSource::Default;
     }
 
-    if let Some(file) = cache_file(cache_root, &account.uuid) {
+    // A failed lookup (offline, server down) must not replace a skin that was
+    // cached earlier with the default one.
+    let keep_existing =
+        result.source == SkinSource::Default && cached_file_exists(cache_root, &account.uuid);
+    if let Some(file) = cache_file(cache_root, &account.uuid).filter(|_| !keep_existing) {
         let write = async {
             if let Some(dir) = file.parent() {
                 tokio::fs::create_dir_all(dir).await?;
@@ -176,13 +180,133 @@ pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> S
     result
 }
 
+fn cached_file_exists(cache_root: &Path, uuid: &str) -> bool {
+    cache_file(cache_root, uuid).is_some_and(|f| f.is_file())
+}
+
 pub async fn get_cached_skin(cache_root: &Path, uuid: &str) -> Option<SkinResult> {
     let file = cache_file(cache_root, uuid)?;
     let data = tokio::fs::read(file).await.ok()?;
     serde_json::from_slice(&data).ok()
 }
 
-/// Upload a PNG as the signed-in account's skin; returns the API's profile JSON.
+/// The skin and cape lists of the signed-in account.
+#[derive(Debug, Clone, Default)]
+pub struct ProfileTextures {
+    pub skins: Vec<Texture>,
+    pub capes: Vec<Texture>,
+}
+
+/// Map a non-success status of an authenticated Minecraft services call.
+fn services_error(status: u16) -> AuthError {
+    match status {
+        401 | 403 => AuthError::NeedsRelogin,
+        404 => AuthError::NoProfile,
+        s => AuthError::ProfileHttp(s),
+    }
+}
+
+fn require_microsoft(account: &Account) -> Result<(), AuthError> {
+    if account.kind == AccountType::Offline {
+        return Err(AuthError::OfflineSkin);
+    }
+    if account.access_token.is_empty() {
+        return Err(AuthError::NeedsRelogin);
+    }
+    Ok(())
+}
+
+/// `GET /minecraft/profile` with the account's access token: the current
+/// skins and capes (with ids and aliases).
+pub async fn fetch_profile_textures(
+    ep: &Endpoints,
+    account: &Account,
+) -> Result<ProfileTextures, AuthError> {
+    require_microsoft(account)?;
+    let (status, json) = send_json(ep, |c| {
+        c.get(&ep.mc_profile)
+            .bearer_auth(&account.access_token)
+            .header("Accept", "application/json")
+    })
+    .await?;
+    if !(200..300).contains(&status) {
+        return Err(services_error(status));
+    }
+    let list = |k: &str| -> Vec<Texture> {
+        json.get(k)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default()
+    };
+    Ok(ProfileTextures {
+        skins: list("skins"),
+        capes: list("capes"),
+    })
+}
+
+/// Download one texture PNG (a skin or cape URL from the profile APIs).
+pub async fn fetch_texture_bytes(ep: &Endpoints, url: &str) -> Result<Vec<u8>, AuthError> {
+    Ok(get_bytes(url, &ep.fetch_opts(vec![])).await?)
+}
+
+/// A player's public skin (PNG bytes, slim model) from the session server.
+/// `None` when the profile carries no skin texture.
+pub async fn fetch_public_skin(
+    ep: &Endpoints,
+    uuid: &str,
+) -> Result<Option<(Vec<u8>, bool)>, AuthError> {
+    let clean = uuid.replace('-', "");
+    if clean.is_empty() || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(AuthError::InvalidAccount);
+    }
+    let url = format!("{}/{clean}?unsigned=false", ep.session_profile);
+    let prof: Value = get_json(&url, &ep.fetch_opts(vec![])).await?;
+    let textures = prof
+        .get("properties")
+        .and_then(Value::as_array)
+        .and_then(|a| {
+            a.iter()
+                .find(|p| p.get("name").and_then(Value::as_str) == Some("textures"))
+        })
+        .and_then(|p| p.get("value").and_then(Value::as_str))
+        .and_then(decode_textures);
+    let Some((Some(skin_url), _, slim)) = textures else {
+        return Ok(None);
+    };
+    Ok(Some((fetch_texture_bytes(ep, &skin_url).await?, slim)))
+}
+
+/// Resolve a Minecraft Java username to its uuid (dashless). `None` = no such
+/// player. Tries the current Mojang endpoint, then the older one when the
+/// current one is unavailable (anything but 404).
+pub async fn lookup_player_uuid(ep: &Endpoints, name: &str) -> Result<Option<String>, AuthError> {
+    let valid = (3..=16).contains(&name.len())
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    if !valid {
+        return Err(AuthError::InvalidUsername);
+    }
+    let mut last = None;
+    for base in [&ep.profile_lookup, &ep.profile_lookup_legacy] {
+        let url = format!("{}/{name}", base.trim_end_matches('/'));
+        let attempt = send_json(ep, |c| c.get(&url).header("Accept", "application/json")).await;
+        match attempt {
+            Ok((200, json)) => {
+                let id = json
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .filter(|i| i.len() == 32 && i.bytes().all(|b| b.is_ascii_hexdigit()));
+                return Ok(id.map(str::to_string));
+            }
+            // Unknown name on either endpoint.
+            Ok((404 | 204, _)) => return Ok(None),
+            Ok((status, _)) => last = Some(AuthError::ProfileHttp(status)),
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(last.unwrap_or(AuthError::ProfileHttp(0)))
+}
+
+/// Upload a PNG file as the signed-in account's skin; returns the API's
+/// profile JSON.
 pub async fn upload_skin(
     ep: &Endpoints,
     account: &Account,
@@ -193,13 +317,32 @@ pub async fn upload_skin(
         return Err(AuthError::OfflineSkin);
     }
     let data = tokio::fs::read(png_path).await?;
-    let filename: String = png_path
+    let filename = png_path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("skin.png")
+        .unwrap_or("skin.png");
+    upload_skin_bytes(ep, account, &data, variant, filename).await
+}
+
+/// Upload PNG bytes as the signed-in account's skin (multipart: `variant`
+/// and `file`). The bearer token only travels in the request header.
+pub async fn upload_skin_bytes(
+    ep: &Endpoints,
+    account: &Account,
+    data: &[u8],
+    variant: SkinVariant,
+    filename: &str,
+) -> Result<Value, AuthError> {
+    require_microsoft(account)?;
+    let filename: String = filename
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
         .collect();
+    let filename = if filename.is_empty() {
+        "skin.png".to_string()
+    } else {
+        filename
+    };
     let boundary = format!(
         "----mangoclient{:016x}",
         data.len() as u64 ^ 0x6d61_6e67_6f00
@@ -214,7 +357,7 @@ pub async fn upload_skin(
         )
         .as_bytes(),
     );
-    body.extend_from_slice(&data);
+    body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
     let ep_one = Endpoints {
@@ -232,7 +375,43 @@ pub async fn upload_skin(
     })
     .await?;
     if !(200..300).contains(&status) {
-        return Err(AuthError::SkinUpload(status));
+        return Err(if matches!(status, 401 | 403) {
+            AuthError::NeedsRelogin
+        } else {
+            AuthError::SkinUpload(status)
+        });
+    }
+    Ok(json)
+}
+
+/// Select the active cape (`Some(id)`) or hide it (`None`).
+pub async fn set_active_cape(
+    ep: &Endpoints,
+    account: &Account,
+    cape_id: Option<&str>,
+) -> Result<Value, AuthError> {
+    require_microsoft(account)?;
+    let ep_one = Endpoints {
+        retries: 0,
+        ..ep.clone()
+    };
+    let (status, json) = send_json(&ep_one, |c| {
+        let req = match cape_id {
+            Some(id) => c
+                .put(&ep.mc_capes_active)
+                .json(&serde_json::json!({ "capeId": id })),
+            None => c.delete(&ep.mc_capes_active),
+        };
+        req.bearer_auth(&account.access_token)
+            .header("Accept", "application/json")
+    })
+    .await?;
+    if !(200..300).contains(&status) {
+        return Err(if matches!(status, 401 | 403) {
+            AuthError::NeedsRelogin
+        } else {
+            AuthError::SkinUpload(status)
+        });
     }
     Ok(json)
 }

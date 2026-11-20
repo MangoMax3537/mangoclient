@@ -186,6 +186,9 @@ pub struct ServerStatus {
     pub motd: String,
     pub players: Option<ServerPlayers>,
     pub version: Option<String>,
+    /// `mangoimg://` URL of the server's durable favicon (first valid one
+    /// wins), once any ping has returned one.
+    pub icon_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

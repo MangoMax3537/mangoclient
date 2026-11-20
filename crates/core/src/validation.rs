@@ -366,6 +366,11 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
         },
         "ramHint" => ram_hint(v),
         "javaArgs" => text(v, "profile javaArgs", 8192, true),
+        "javaPath" => match v {
+            Value::Null => Ok(Value::Null),
+            _ => text_str(v, "profile javaPath", 1024, false).map(|s| json!(s)),
+        },
+        "window" => window_settings(v),
         "mods" => {
             validate_mods(v).and_then(|m| serde_json::to_value(m).map_err(|_| invalid("mods")))
         }
@@ -383,6 +388,45 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
         "playTimeMs" => integer(v, "playTimeMs", 0, MAX_SAFE_INT),
         _ => return None,
     })
+}
+
+/// `null` or `{mode, width, height}`: `size` needs width 640..=16384 and
+/// height 480..=16384, the other modes carry no size. Never clamped.
+fn window_settings(v: &Value) -> R<Value> {
+    let bad = || invalid("window");
+    if v.is_null() {
+        return Ok(Value::Null);
+    }
+    let obj = v.as_object().ok_or_else(bad)?;
+    if obj
+        .keys()
+        .any(|k| !matches!(k.as_str(), "mode" | "width" | "height"))
+    {
+        return Err(bad());
+    }
+    let dim = |k: &str, min: i64| -> R<Option<i64>> {
+        match obj.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(n) => match int_val(n) {
+                Some(i) if (min..=16384).contains(&i) => Ok(Some(i)),
+                _ => Err(invalid("window")),
+            },
+        }
+    };
+    let (w, h) = (dim("width", 640)?, dim("height", 480)?);
+    match obj.get("mode").and_then(Value::as_str) {
+        Some("default") if w.is_none() && h.is_none() => {
+            Ok(json!({"mode": "default", "width": null, "height": null}))
+        }
+        Some("fullscreen") if w.is_none() && h.is_none() => {
+            Ok(json!({"mode": "fullscreen", "width": null, "height": null}))
+        }
+        Some("size") => match (w, h) {
+            (Some(w), Some(h)) => Ok(json!({"mode": "size", "width": w, "height": h})),
+            _ => Err(bad()),
+        },
+        _ => Err(bad()),
+    }
 }
 
 /// `null` or a hint whose numbers are all in range (re-sanitised).
@@ -472,6 +516,44 @@ mod tests {
 
     fn msg<T: std::fmt::Debug>(r: R<T>) -> String {
         r.unwrap_err().to_string()
+    }
+
+    #[test]
+    fn profile_window_and_java_path_are_validated_never_clamped() {
+        let ok = |v: Value| profile_patch(&json!({ "window": v })).map(|m| m["window"].clone());
+        assert_eq!(
+            ok(json!({"mode": "size", "width": 640, "height": 480})).unwrap(),
+            json!({"mode": "size", "width": 640, "height": 480})
+        );
+        assert_eq!(ok(json!(null)).unwrap(), json!(null));
+        assert_eq!(
+            ok(json!({"mode": "fullscreen"})).unwrap(),
+            json!({"mode": "fullscreen", "width": null, "height": null})
+        );
+        for bad in [
+            json!({"mode": "size", "width": 639, "height": 480}),
+            json!({"mode": "size", "width": 640, "height": 479}),
+            json!({"mode": "size", "width": 16385, "height": 480}),
+            json!({"mode": "size", "width": 640}),
+            json!({"mode": "default", "width": 640, "height": 480}),
+            json!({"mode": "maximized"}),
+            json!({"mode": "default", "x": 1}),
+            json!(3),
+        ] {
+            assert!(ok(bad.clone()).is_err(), "{bad}");
+        }
+        let java = |v: Value| profile_patch(&json!({ "javaPath": v }));
+        assert!(java(json!("/usr/bin/java")).is_ok() && java(json!(null)).is_ok());
+        assert!(java(json!(3)).is_err() && java(json!("a\0b")).is_err());
+        assert!(java(json!("x".repeat(1025))).is_err());
+        // Stored profiles load tolerantly: a bad value falls back to default.
+        let p = crate::Profile::from_stored(
+            &json!({"id": "123e4567-e89b-42d3-a456-426614174000",
+                    "window": {"mode": "size", "width": 1}, "javaPath": "/j"}),
+            0,
+        )
+        .unwrap();
+        assert_eq!((p.window, p.java_path.as_deref()), (None, Some("/j")));
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub mod image_protocol;
 mod images;
 mod import;
 mod install;
+mod java_cmds;
 mod launch;
 mod media;
 mod models;
@@ -31,8 +32,10 @@ mod scrub;
 mod servers;
 mod service;
 mod shell;
+mod skins;
 mod source;
 mod types;
+mod window_cmds;
 mod window_policy;
 mod wire;
 mod worlds;
@@ -43,6 +46,8 @@ mod tests;
 mod tests_p10;
 #[cfg(test)]
 mod tests_p11;
+#[cfg(test)]
+mod tests_p13;
 #[cfg(test)]
 mod tests_p2;
 #[cfg(test)]
@@ -66,8 +71,8 @@ pub use crash::{Confidence, CrashCause, CrashReport};
 pub use error::{AppError, Res};
 pub use events::{
     AccountsChangedEvent, ContentChangedEvent, Event, EventSink, FilesDroppedEvent,
-    InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName,
-    PanoramaReadyEvent, ProgressPhase,
+    InstallProgressEvent, JavaProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent,
+    LogLevelName, PanoramaReadyEvent, ProgressPhase, SkinUpdatedEvent, WindowStateEvent,
 };
 pub use export::ExportFormat;
 pub use host::{
@@ -76,6 +81,7 @@ pub use host::{
     NoFileDialog, NoLoginWindow, OpenFolder, SystemExternal, SystemOpener,
 };
 pub use import::{ImportKind, ImportPlan};
+pub use java_cmds::{JavaInfo, JavaSourceName};
 pub use models::{
     ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, LogKind,
     LogText, LogUpload, ModpackPlan, PlanConflict, PlanRole, ProjectDetail, ProjectHit,
@@ -87,10 +93,12 @@ pub use outfile::FileExport;
 pub use path_grants::DEFAULT_GRANT_TTL;
 pub use service::{resolve_bundle_dir, updates_dir, AppService, ServiceOptions};
 pub use shell::Activity;
+pub use skins::{CapeInfo, LibrarySkin, SkinInfo, SkinSourceName, SkinVariantName};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
     ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,
 };
+pub use window_cmds::{window_unsupported, ResizeDirection};
 pub use window_policy::{PolicyInput, WindowAction, WindowPolicy};
 pub use wire::{
     BlockFaces, ConfigPatch, Language, PerformancePreset, ProfilePatch, ProjectKind, SearchSort,

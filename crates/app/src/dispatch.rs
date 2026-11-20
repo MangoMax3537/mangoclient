@@ -211,6 +211,40 @@ args! {
     LogFileArgs { profile_id: String, id: String }
     StatsSummaryArgs { days: u32 }
     StorageClearArgs { key: StorageKey }
+    SkinUploadArgs {
+        uuid: String,
+        /// A path from `pick_image_file`; a 64x64 or 64x32 PNG up to 1 MB.
+        file_path: String,
+        variant: crate::skins::SkinVariantName,
+    }
+    SkinUseUsernameArgs {
+        uuid: String,
+        /// The player whose public skin is copied (3..16 of `A-Za-z0-9_`).
+        name: String,
+        /// Absent = the model the source skin uses.
+        #[ts(optional = nullable)]
+        variant: Option<crate::skins::SkinVariantName>,
+    }
+    SkinSetCapeArgs {
+        uuid: String,
+        /// `null` hides the cape.
+        #[ts(type = "string | null")]
+        cape_id: Option<String>,
+    }
+    SkinLibraryAddArgs {
+        file_path: String,
+        #[ts(optional = nullable)]
+        name: Option<String>,
+        variant: crate::skins::SkinVariantName,
+    }
+    SkinLibrarySaveCurrentArgs {
+        uuid: String,
+        #[ts(optional = nullable)]
+        name: Option<String>,
+    }
+    SkinLibraryApplyArgs { uuid: String, id: String }
+    JavaInstallArgs { major: u32 }
+    WindowStartResizeArgs { direction: crate::window_cmds::ResizeDirection }
 }
 
 fn parse<T: DeserializeOwned>(command: &str, args: Value) -> Result<T, AppError> {
@@ -269,7 +303,7 @@ table! {
     "config_set": ConfigSetArgs => ConfigView = |s, a| s.config_set(a.patch);
     "profile_create": ProfileCreateArgs => ProfileView =
         |s, a| s.profile_create(a.name, a.mc_version, a.loader, a.loader_version);
-    "profile_update": ProfileUpdateArgs => ProfileView = |s, a| s.profile_update(a.id, a.patch);
+    "profile_update": ProfileUpdateArgs => ProfileView = |s, a| s.profile_update(a.id, a.patch).await;
     "profile_delete": IdArgs => () = |s, a| s.profile_delete(a.id);
     "profile_select": IdArgs => ConfigView = |s, a| s.profile_select(a.id);
     "profile_duplicate": IdArgs => ProfileView = |s, a| s.profile_duplicate(a.id).await;
@@ -393,4 +427,29 @@ table! {
     "update_status": NoArgs => UpdateStatus = |s, _a| Ok(s.update_status());
     "update_check": NoArgs => UpdateStatus = |s, _a| s.update_check().await;
     "update_install": NoArgs => bool = |s, _a| s.update_install();
+    "skin_get": UuidArgs => SkinInfo = |s, a| s.skin_get(a.uuid).await;
+    "skin_upload": SkinUploadArgs => SkinInfo =
+        |s, a| s.skin_upload(a.uuid, a.file_path, a.variant).await;
+    "skin_use_username": SkinUseUsernameArgs => SkinInfo =
+        |s, a| s.skin_use_username(a.uuid, a.name, a.variant).await;
+    "skin_set_cape": SkinSetCapeArgs => SkinInfo =
+        |s, a| s.skin_set_cape(a.uuid, a.cape_id).await;
+    "skin_library_list": NoArgs => Vec<LibrarySkin> = |s, _a| s.skin_library_list().await;
+    "skin_library_add": SkinLibraryAddArgs => LibrarySkin =
+        |s, a| s.skin_library_add(a.file_path, a.name, a.variant).await;
+    "skin_library_save_current": SkinLibrarySaveCurrentArgs => LibrarySkin =
+        |s, a| s.skin_library_save_current(a.uuid, a.name).await;
+    "skin_library_remove": IdArgs => Vec<LibrarySkin> =
+        |s, a| s.skin_library_remove(a.id).await;
+    "skin_library_apply": SkinLibraryApplyArgs => SkinInfo =
+        |s, a| s.skin_library_apply(a.uuid, a.id).await;
+    "java_list": NoArgs => Vec<JavaInfo> = |s, _a| s.java_list().await;
+    "java_install": JavaInstallArgs => JavaInfo = |s, a| s.java_install(a.major).await;
+    "panorama_pool": NoArgs => Vec<PanoramaSet> = |s, _a| s.panorama_pool().await;
+    "window_minimize": NoArgs => () = |_s, _a| window_unsupported();
+    "window_toggle_maximize": NoArgs => () = |_s, _a| window_unsupported();
+    "window_close": NoArgs => () = |_s, _a| window_unsupported();
+    "window_is_maximized": NoArgs => bool = |_s, _a| window_unsupported();
+    "window_start_drag": NoArgs => () = |_s, _a| window_unsupported();
+    "window_start_resize": WindowStartResizeArgs => () = |_s, _a| window_unsupported();
 }

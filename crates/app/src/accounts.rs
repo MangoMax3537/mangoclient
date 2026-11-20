@@ -203,14 +203,14 @@ impl Inner {
         state
     }
 
-    fn record(&self, uuid: &str) -> Option<CoreAccount> {
+    pub(crate) fn record(&self, uuid: &str) -> Option<CoreAccount> {
         self.with_store(|s| s.accounts.iter().find(|a| a.uuid == uuid).cloned())
     }
 
     pub(crate) fn public_account(&self, uuid: &str) -> Res<PublicAccount> {
         let rec = self.record(uuid).ok_or_else(account_not_found)?;
         let creds = self.ingest(&rec);
-        Ok(PublicAccount::from_account(&rec, now_ms() as i64, creds))
+        Ok(PublicAccount::from_account(&rec, now_ms() as i64, creds).versioned(&self.paths))
     }
 
     /// Write a vault result into the store and remember the runtime account.
@@ -250,6 +250,43 @@ impl Inner {
 }
 
 impl AppService {
+    /// The runtime account (tokens in memory) of `uuid`.
+    pub(crate) fn session_account(&self, uuid: &str) -> Res<AuthAccount> {
+        let rec = self.inner.record(uuid).ok_or_else(account_not_found)?;
+        self.inner.ingest(&rec);
+        lock(&self.inner.sessions)
+            .get(uuid)
+            .map(|s| s.account.clone())
+            .ok_or_else(account_not_found)
+    }
+
+    /// Remember fresh skin/cape lists; persists them (they are part of the
+    /// stored record, no secrets) only when they changed.
+    pub(crate) async fn store_textures(
+        &self,
+        uuid: &str,
+        skins: Vec<mango_auth::Texture>,
+        capes: Vec<mango_auth::Texture>,
+    ) {
+        let changed = {
+            let mut sessions = lock(&self.inner.sessions);
+            match sessions.get_mut(uuid) {
+                Some(s) if s.account.skins != skins || s.account.capes != capes => {
+                    s.account.skins = skins;
+                    s.account.capes = capes;
+                    Some(s.account.clone())
+                }
+                _ => None,
+            }
+        };
+        if let Some(acc) = changed {
+            if let Err(e) = self.persist_account(acc).await {
+                tracing::warn!("could not persist the account textures: {}", e.code);
+            }
+            self.inner.emit_changed(uuid);
+        }
+    }
+
     /// Startup: ingest every stored account (migrates and scrubs).
     pub(crate) fn load_accounts(&self) {
         let records = self.inner.with_store(|s| s.accounts.clone());
@@ -279,7 +316,7 @@ impl AppService {
 
     /// Vault encryption off the async threads (the first call may talk to the
     /// OS keystore), then store + session update.
-    async fn persist_account(&self, mut acc: AuthAccount) -> Res<PublicAccount> {
+    pub(crate) async fn persist_account(&self, mut acc: AuthAccount) -> Res<PublicAccount> {
         if acc.encrypted_credentials.is_none() {
             // Keep an existing (unreadable) envelope when the keystore is
             // unavailable right now.
@@ -352,6 +389,7 @@ impl AppService {
         let uuid = acc.uuid.clone();
         let public = self.persist_account(acc).await?;
         inner.emit_changed(&uuid);
+        self.spawn_skin_refresh(uuid, true);
         Ok(Some(public))
     }
 
@@ -359,6 +397,7 @@ impl AppService {
     /// refresh token.
     pub async fn account_refresh(&self, uuid: String) -> Res<PublicAccount> {
         self.refresh_session(&uuid, true).await?;
+        self.spawn_skin_refresh(uuid.clone(), true);
         self.inner.public_account(&uuid)
     }
 
@@ -375,7 +414,7 @@ impl AppService {
         })
     }
 
-    async fn refresh_session(&self, uuid: &str, force: bool) -> Res<AuthAccount> {
+    pub(crate) async fn refresh_session(&self, uuid: &str, force: bool) -> Res<AuthAccount> {
         let inner = &self.inner;
         let rec = inner.record(uuid).ok_or_else(account_not_found)?;
         inner.ingest(&rec);

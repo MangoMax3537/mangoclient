@@ -80,6 +80,12 @@ pub struct ServiceOptions {
     pub icon_allow_http: bool,
     /// Microsoft / Xbox / Minecraft services endpoints.
     pub auth_endpoints: mango_auth::Endpoints,
+    /// Where system JVMs are looked for. `None` = PATH, JAVA_HOME and the
+    /// usual JVM folders (tests point this at a temp dir).
+    pub java_roots: Option<mango_java::SearchRoots>,
+    /// Pause before the startup skin fetch of each Microsoft account (the
+    /// fetches run one after the other and never block startup).
+    pub skin_prefetch_delay: Duration,
     /// Path-taking commands (import, export, picture, watch folder) accept
     /// only paths a `pick_*` command returned recently. On in the Tauri
     /// shell, off in the dev server and tests (the browser flow types paths).
@@ -119,6 +125,8 @@ impl Default for ServiceOptions {
             icon_hosts: vec!["cdn.modrinth.com".to_string()],
             icon_allow_http: false,
             auth_endpoints: mango_auth::Endpoints::default(),
+            java_roots: None,
+            skin_prefetch_delay: Duration::from_millis(1500),
             strict_paths: false,
             path_grant_ttl: crate::path_grants::DEFAULT_GRANT_TTL,
         }
@@ -203,6 +211,10 @@ pub(crate) struct Inner {
     pub backup_gate: Mutex<()>,
     /// Paths the user picked in native dialogs (see `path_grants`).
     pub grants: crate::path_grants::PathGrants,
+    /// Serializes edits of the local skin library.
+    pub skin_gate: Mutex<()>,
+    /// Serializes panorama-pool extraction runs.
+    pub pool_busy: Mutex<bool>,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -302,6 +314,8 @@ impl AppService {
                 pano_busy: Mutex::new(HashSet::new()),
                 backup_gate: Mutex::new(()),
                 grants,
+                skin_gate: Mutex::new(()),
+                pool_busy: Mutex::new(false),
             }),
         };
         // Migrates legacy plaintext tokens into envelopes and scrubs them.
@@ -330,7 +344,7 @@ impl AppService {
         let now = now_ms() as i64;
         let accounts = records
             .iter()
-            .map(|a| PublicAccount::from_account(a, now, inner.ingest(a)))
+            .map(|a| PublicAccount::from_account(a, now, inner.ingest(a)).versioned(&inner.paths))
             .collect();
         Ok(AppState {
             version: inner.opts.app_version.clone(),
@@ -377,7 +391,17 @@ impl AppService {
     /// ignored so a UI may spread a whole view into the patch; keys that are
     /// immutable (`id`, `created`), have their own command (`icon`,
     /// `background`) or are unknown are rejected with a `validation` error.
-    pub fn profile_update(&self, id: String, patch: Value) -> Res<ProfileView> {
+    pub async fn profile_update(&self, id: String, patch: Value) -> Res<ProfileView> {
+        let mut patch = patch;
+        // The one key that needs I/O: the instance's own Java must run.
+        if let Some(v) = patch.get("javaPath").cloned() {
+            let checked = self.check_java_path(&v).await?;
+            patch["javaPath"] = checked;
+        }
+        self.profile_update_checked(id, patch)
+    }
+
+    fn profile_update_checked(&self, id: String, patch: Value) -> Res<ProfileView> {
         validate_profile_id(&id)?;
         let Some(obj) = patch.as_object() else {
             return Err(AppError::new("validation", "Patch must be an object"));
@@ -386,7 +410,7 @@ impl AppService {
         for (key, v) in obj {
             match key.as_str() {
                 "name" | "mcVersion" | "color" | "ram" | "javaArgs" | "mangoConfig" | "group"
-                | "tags" => {
+                | "tags" | "javaPath" | "window" => {
                     clean.insert(key.clone(), v.clone());
                 }
                 "loader" => {
@@ -484,6 +508,8 @@ impl AppService {
             "mangoConfig": src.mango_config,
             "group": src.group,
             "tags": src.tags,
+            "javaPath": src.java_path,
+            "window": src.window,
         });
         if data["name"]
             .as_str()
