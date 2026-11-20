@@ -8,7 +8,7 @@ use crate::error::{AppError, Res};
 use crate::events::{Event, InstallProgressEvent};
 use crate::image_protocol::remote_url;
 use crate::models::{
-    ContentItem, ProjectDetail, ProjectHit, ProjectVersion, Provider, SearchParams, SearchResult,
+    ContentItem, ProjectDetail, ProjectHit, ProjectVersion, SearchParams, SearchResult,
     ToggleResult, UninstallResult, UpdateInfo,
 };
 use crate::service::{lock, AppService, Inner};
@@ -71,7 +71,6 @@ fn to_item(rec: &ModRecord, all: &[ModRecord], newer: Option<&String>) -> Conten
         })
         .unwrap_or_default();
     ContentItem {
-        provider: Provider::of_record(rec),
         project_id: pid.to_string(),
         slug: rec.slug.clone().filter(|s| !s.is_empty()),
         title: rec
@@ -90,7 +89,7 @@ fn to_item(rec: &ModRecord, all: &[ModRecord], newer: Option<&String>) -> Conten
         version_number: rec.version_number.clone(),
         filename,
         enabled: rec.enabled != Some(false),
-        local: rec.local == Some(true),
+        local: rec.local == Some(true) || has_foreign_provider(rec),
         icon_url: rec.icon.as_deref().and_then(public_icon),
         required_by: modrinth::installed_dependents(all, pid)
             .into_iter()
@@ -235,13 +234,13 @@ impl AppService {
 
     pub async fn content_check_updates(&self, profile_id: String) -> Res<Vec<UpdateInfo>> {
         let mut profile = self.profile(&profile_id)?;
-        // Modrinth's checker only ever sees Modrinth records (it would ask
-        // Modrinth about CurseForge file ids otherwise).
+        // Modrinth's checker only ever sees Modrinth records (records of a
+        // source this version no longer knows are local jars to it).
         let mut mr_profile = profile.clone();
         mr_profile.mods = profile
             .mods
             .iter()
-            .filter(|r| !is_curseforge(r))
+            .filter(|r| !has_foreign_provider(r))
             .cloned()
             .collect();
         // Backfill dependency metadata once and keep it, so later checks and
@@ -250,7 +249,7 @@ impl AppService {
             modrinth::hydrate_dependency_metadata(&self.inner.modrinth, &mr_profile.mods).await?;
         if hydrated.changed {
             let mut fresh = hydrated.mods.iter();
-            for rec in profile.mods.iter_mut().filter(|r| !is_curseforge(r)) {
+            for rec in profile.mods.iter_mut().filter(|r| !has_foreign_provider(r)) {
                 if let Some(h) = fresh.next() {
                     *rec = h.clone();
                 }
@@ -268,7 +267,6 @@ impl AppService {
                 }
             }
             out.push(UpdateInfo {
-                provider: Some(Provider::Modrinth),
                 project_id: u.project_id,
                 title: u.title,
                 kind: u.kind,
@@ -279,10 +277,6 @@ impl AppService {
                 conflict: u.conflict,
                 required_by: u.required_by.into_iter().map(|r| r.project_id).collect(),
             });
-        }
-        for u in self.check_curseforge_updates(&profile).await {
-            newer.insert(u.project_id.clone(), u.to.clone());
-            out.push(u);
         }
         lock(&self.inner.updates).insert(profile_id, newer);
         Ok(out)
@@ -295,20 +289,16 @@ impl AppService {
         Ok(dir.display().to_string())
     }
 
-    // ---- Modrinth browsing (deprecated aliases of the provider commands) ----
+    // ---- Modrinth browsing (deprecated aliases of the browsing commands) ----
 
     /// Deprecated alias of [`AppService::search_projects`].
     pub async fn modrinth_search(&self, params: SearchParams) -> Res<SearchResult> {
-        self.search_projects(SearchParams {
-            provider: Provider::Modrinth,
-            ..params
-        })
-        .await
+        self.search_projects(params).await
     }
 
     /// Deprecated alias of [`AppService::project_detail`].
     pub async fn modrinth_project(&self, project_id: String) -> Res<ProjectDetail> {
-        self.project_detail(Provider::Modrinth, project_id).await
+        self.project_detail(project_id).await
     }
 
     /// Deprecated alias of [`AppService::project_versions`].
@@ -317,8 +307,7 @@ impl AppService {
         project_id: String,
         profile_id: Option<String>,
     ) -> Res<Vec<ProjectVersion>> {
-        self.project_versions(Provider::Modrinth, project_id, profile_id)
-            .await
+        self.project_versions(project_id, profile_id).await
     }
 
     pub async fn modrinth_install(
@@ -525,13 +514,14 @@ impl AppService {
     }
 }
 
-pub(crate) fn is_curseforge(r: &ModRecord) -> bool {
-    r.provider.as_deref() == Some("curseforge")
+/// Records written by older versions for another source (`provider` other
+/// than `modrinth`, e.g. the removed CurseForge integration). Their ids mean
+/// nothing to Modrinth, so they are handled as local jars: shown as such,
+/// never looked up, never updated. The files stay where they are.
+pub(crate) fn has_foreign_provider(r: &ModRecord) -> bool {
+    r.provider.as_deref().is_some_and(|p| p != "modrinth")
 }
 
-/// A copy of the list in which CurseForge records carry an (empty) dependency
-/// list when they have none stored, so Modrinth's metadata backfill never asks
-/// Modrinth about CurseForge ids.
 impl AppService {
     /// Withhold the `file` of every record that no longer passes the store's
     /// safety check (outside the instance, a symlink, behind a symlinked
@@ -552,11 +542,14 @@ impl AppService {
     }
 }
 
+/// A copy of the list in which foreign records carry an (empty) dependency
+/// list when they have none stored, so Modrinth's metadata backfill never asks
+/// Modrinth about their ids.
 pub(crate) fn shield_foreign(mods: &[ModRecord]) -> Vec<ModRecord> {
     mods.iter()
         .cloned()
         .map(|mut r| {
-            if is_curseforge(&r) && r.required_dependencies.is_none() {
+            if has_foreign_provider(&r) && r.required_dependencies.is_none() {
                 r.required_dependencies = Some(Vec::new());
             }
             r
@@ -619,7 +612,6 @@ pub(crate) fn hit_from_search(
         _ => "mod",
     };
     Some(ProjectHit {
-        provider: Provider::Modrinth,
         installed_in: installed.get(&project_id).cloned().unwrap_or_default(),
         project_id,
         slug: s("slug"),

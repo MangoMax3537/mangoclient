@@ -8,7 +8,7 @@
 //! `CommandMap` is generated from the same table (see `bindings`).
 
 use crate::error::AppError;
-use crate::models::{ContentType, Provider, ScreenshotAction, SearchParams, StorageKey};
+use crate::models::{ContentType, ScreenshotAction, SearchParams, StorageKey};
 use crate::service::AppService;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -97,29 +97,25 @@ args! {
         #[ts(optional = nullable)]
         name: Option<String>,
     }
-    ProjectDetailArgs { provider: Provider, project_id: String }
+    ProjectDetailArgs { project_id: String }
     ProjectVersionsArgs {
-        provider: Provider,
         project_id: String,
         #[ts(optional = nullable)]
         profile_id: Option<String>,
     }
     /// Also the arguments of `modpack_plan`.
     InstallTargetsArgs {
-        provider: Provider,
         project_id: String,
         #[ts(optional = nullable)]
         version_id: Option<String>,
     }
     InstallPlanArgs {
-        provider: Provider,
         project_id: String,
         #[ts(optional = nullable)]
         version_id: Option<String>,
         profile_id: String,
     }
     InstallApplyArgs {
-        provider: Provider,
         project_id: String,
         #[ts(optional = nullable)]
         version_id: Option<String>,
@@ -128,14 +124,12 @@ args! {
         include: Vec<String>,
     }
     ModpackInstallArgs {
-        provider: Provider,
         project_id: String,
         #[ts(optional = nullable)]
         version_id: Option<String>,
         #[ts(optional = nullable)]
         name: Option<String>,
     }
-    BlockedSkipArgs { profile_id: String, file_name: String }
     BlockIconsPrepareArgs {
         #[ts(optional = nullable)]
         force: Option<bool>,
@@ -313,31 +307,23 @@ table! {
         |s, a| s.modrinth_install(a.profile_id, a.project_id, a.version_id).await;
     "modrinth_install_modpack": ModrinthInstallModpackArgs => ProfileView =
         |s, a| s.modrinth_install_modpack(a.project_id, a.version_id, a.name).await;
-    "providers_status": NoArgs => Vec<ProviderStatus> = |s, _a| s.providers_status();
     "search_projects": SearchArgs => SearchResult = |s, a| s.search_projects(a.params).await;
     "project_detail": ProjectDetailArgs => ProjectDetail =
-        |s, a| s.project_detail(a.provider, a.project_id).await;
+        |s, a| s.project_detail(a.project_id).await;
     "project_versions": ProjectVersionsArgs => Vec<ProjectVersion> =
-        |s, a| s.project_versions(a.provider, a.project_id, a.profile_id).await;
+        |s, a| s.project_versions(a.project_id, a.profile_id).await;
     "install_targets": InstallTargetsArgs => Vec<InstallTarget> =
-        |s, a| s.install_targets(a.provider, a.project_id, a.version_id).await;
+        |s, a| s.install_targets(a.project_id, a.version_id).await;
     "install_plan": InstallPlanArgs => InstallPlan =
-        |s, a| s.install_plan(a.provider, a.project_id, a.version_id, a.profile_id).await;
+        |s, a| s.install_plan(a.project_id, a.version_id, a.profile_id).await;
     "install_apply": InstallApplyArgs => Vec<ContentItem> = |s, a| {
-        s.install_apply(a.provider, a.project_id, a.version_id, a.profile_id, a.include)
+        s.install_apply(a.project_id, a.version_id, a.profile_id, a.include)
             .await
     };
     "modpack_plan": InstallTargetsArgs => ModpackPlan =
-        |s, a| s.modpack_plan(a.provider, a.project_id, a.version_id).await;
+        |s, a| s.modpack_plan(a.project_id, a.version_id).await;
     "modpack_install": ModpackInstallArgs => ProfileView =
-        |s, a| s.modpack_install(a.provider, a.project_id, a.version_id, a.name).await;
-    "blocked_files": ProfileIdArgs => Vec<BlockedFile> = |s, a| s.blocked_files(a.profile_id);
-    "blocked_watch_start": ProfileIdArgs => Vec<String> =
-        |s, a| s.blocked_watch_start(a.profile_id).await;
-    "blocked_watch_stop": ProfileIdArgs => () = |s, a| s.blocked_watch_stop(a.profile_id);
-    "blocked_skip": BlockedSkipArgs => Vec<BlockedFile> =
-        |s, a| s.blocked_skip(a.profile_id, a.file_name);
-    "blocked_open_folder": NoArgs => String = |s, _a| s.blocked_open_folder();
+        |s, a| s.modpack_install(a.project_id, a.version_id, a.name).await;
     "block_icons_status": NoArgs => BlockIconsStatus = |s, _a| Ok(s.block_icons_status());
     "block_icons_prepare": BlockIconsPrepareArgs => BlockIconsStatus =
         |s, a| s.block_icons_prepare(a.force.unwrap_or(false)).await;

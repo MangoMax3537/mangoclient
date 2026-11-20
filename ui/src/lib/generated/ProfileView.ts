@@ -27,10 +27,6 @@ effectiveRamMb: number, javaArgs: string, mangoConfig: boolean | null,
  */
 group: string | null, tags: Array<string>, lastPlayed: number | null, playTimeMs: number, created: number, modCount: number, 
 /**
- * Blocked pack files still waiting for the user (pending or found).
- */
-pendingBlocked: number, 
-/**
  * `null` = automatic.
  */
 icon: InstanceIcon | null, 

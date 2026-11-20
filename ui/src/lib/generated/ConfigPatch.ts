@@ -4,17 +4,9 @@ import type { PerformancePreset } from "./PerformancePreset";
 
 /**
  * `config_set` patch: every field optional, unknown keys are rejected by the
- * core. `curseforgeApiKey` is write-only (never returned).
+ * core.
  */
-export type ConfigPatch = { language?: Language, ram?: number, javaPath?: string, javaArgs?: string, fullscreen?: boolean, width?: number, height?: number, keepLauncherOpen?: boolean, hideOnLaunch?: boolean, showSnapshots?: boolean, mangoConfig?: boolean, performanceMods?: boolean, concurrentDownloads?: number, performancePreset?: PerformancePreset, selectedProfile?: string | null, selectedAccount?: string | null, firstRunDone?: boolean, telemetry?: boolean, sidebarOpen?: boolean, 
-/**
- * Write-only; `null` or `""` clears it.
- */
-curseforgeApiKey?: string | null, blockedModsModrinthFallback?: boolean, 
-/**
- * Absolute paths of existing folders.
- */
-blockedModsWatchDirs?: Array<string>, blockedModsCheckSubfolders?: boolean, autoSnapshot?: boolean, 
+export type ConfigPatch = { language?: Language, ram?: number, javaPath?: string, javaArgs?: string, fullscreen?: boolean, width?: number, height?: number, keepLauncherOpen?: boolean, hideOnLaunch?: boolean, showSnapshots?: boolean, mangoConfig?: boolean, performanceMods?: boolean, concurrentDownloads?: number, performancePreset?: PerformancePreset, selectedProfile?: string | null, selectedAccount?: string | null, firstRunDone?: boolean, telemetry?: boolean, sidebarOpen?: boolean, autoSnapshot?: boolean, 
 /**
  * 1..50; out of range is rejected.
  */

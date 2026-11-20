@@ -30,7 +30,6 @@ impl Fx {
             open_folders: false,
             manifest_url: format!("{DEAD}/manifest.json"),
             modrinth_api: DEAD.into(),
-            curseforge_api: DEAD.into(),
             mclogs_api: format!("{DEAD}/log"),
             update_manifest_url: format!("{DEAD}/latest.json"),
             auto_update_check: false,
@@ -172,10 +171,8 @@ async fn real_flow_over_http_matches_the_generated_types() {
     // Result types of commands that work offline.
     for (cmd, ty, args) in [
         ("storage_usage", "StorageUsage", json!({})),
-        ("providers_status", "ProviderStatus", json!({})),
         ("servers_list", "ServerEntry", json!({})),
         ("content_list", "ContentItem", json!({"profileId": id})),
-        ("blocked_files", "BlockedFile", json!({"profileId": id})),
         ("screenshots_list", "Screenshot", json!({"profileId": id})),
         ("logs_list", "LogEntry", json!({"profileId": id})),
     ] {

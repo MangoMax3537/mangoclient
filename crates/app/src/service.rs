@@ -38,14 +38,6 @@ pub struct ServiceOptions {
     pub open_folders: bool,
     /// Modrinth API base (no trailing slash).
     pub modrinth_api: String,
-    /// CurseForge Core API base (no trailing slash).
-    pub curseforge_api: String,
-    /// CurseForge key baked in at build time (`CURSEFORGE_API_KEY`) or read
-    /// from the environment at startup. The config field `curseforgeApiKey`
-    /// overrides it.
-    pub curseforge_key: Option<mango_core::Secret>,
-    /// Retry/timeout/CDN policy of the CurseForge client.
-    pub curseforge: mango_curseforge::Options,
     /// mclo.gs log upload endpoint.
     pub mclogs_api: String,
     /// Retry/timeout policy for the service's own HTTP calls (also used by
@@ -82,11 +74,6 @@ pub struct ServiceOptions {
     pub api_base: Option<String>,
     /// How often the `mods/` watcher looks at the selected/running profiles.
     pub watch_interval: Duration,
-    /// How often a blocked-files watcher looks at the watched folders.
-    pub blocked_poll_interval: Duration,
-    /// Watch folder used when the config lists none. `None` = the OS
-    /// Downloads folder.
-    pub downloads_dir: Option<PathBuf>,
     /// Hosts remote images (Modrinth icons, gallery) may be fetched from.
     pub icon_hosts: Vec<String>,
     /// Allow plain http for remote images (tests only).
@@ -110,9 +97,6 @@ impl Default for ServiceOptions {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             open_folders: true,
             modrinth_api: mango_modrinth::API.to_string(),
-            curseforge_api: mango_curseforge::API.to_string(),
-            curseforge_key: default_curseforge_key(),
-            curseforge: mango_curseforge::Options::default(),
             mclogs_api: "https://api.mclo.gs/1/log".to_string(),
             fetch: FetchOptions::default(),
             resources_url: mango_minecraft::RESOURCES_URL.to_string(),
@@ -132,12 +116,7 @@ impl Default for ServiceOptions {
             auto_update_check: true,
             api_base: None,
             watch_interval: Duration::from_secs(2),
-            blocked_poll_interval: Duration::from_secs(1),
-            downloads_dir: None,
-            icon_hosts: vec![
-                "cdn.modrinth.com".to_string(),
-                "media.forgecdn.net".to_string(),
-            ],
+            icon_hosts: vec!["cdn.modrinth.com".to_string()],
             icon_allow_http: false,
             auth_endpoints: mango_auth::Endpoints::default(),
             strict_paths: false,
@@ -190,16 +169,6 @@ fn dev_bundle_dir() -> PathBuf {
     std::env::temp_dir().join("mangoclient-no-bundle")
 }
 
-/// Build-time key first (`option_env!`), then the environment at startup.
-fn default_curseforge_key() -> Option<mango_core::Secret> {
-    option_env!("CURSEFORGE_API_KEY")
-        .map(str::to_string)
-        .or_else(|| std::env::var("CURSEFORGE_API_KEY").ok())
-        .map(|k| k.trim().to_string())
-        .filter(|k| !k.is_empty())
-        .map(mango_core::Secret::new)
-}
-
 pub(crate) struct Inner {
     pub paths: Paths,
     pub store: Mutex<Store>,
@@ -211,8 +180,6 @@ pub(crate) struct Inner {
     pub throttle: Mutex<ProgressThrottle>,
     pub host: Host,
     pub modrinth: mango_modrinth::Client,
-    /// The CurseForge client for the key it was built with.
-    pub curseforge: Mutex<Option<(String, Arc<mango_curseforge::Client>)>>,
     pub icons: Arc<ServerIcons>,
     pub updater: Updater,
     pub telemetry: Mutex<Option<mango_mango::telemetry::Telemetry>>,
@@ -228,10 +195,6 @@ pub(crate) struct Inner {
     pub signing_in: AtomicBool,
     /// Installs, imports and restores in flight (see `shell::BusyGuard`).
     pub busy_ops: std::sync::atomic::AtomicUsize,
-    /// Running blocked-files watchers by profile id.
-    pub watchers: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
-    /// Serializes read-modify-write cycles of the blocked-files sidecars.
-    pub blocked_gate: Mutex<()>,
     /// State of the block-gallery job.
     pub blocks_run: Mutex<crate::block_icons::BlocksRun>,
     /// Profiles with a panorama extraction in flight.
@@ -240,16 +203,6 @@ pub(crate) struct Inner {
     pub backup_gate: Mutex<()>,
     /// Paths the user picked in native dialogs (see `path_grants`).
     pub grants: crate::path_grants::PathGrants,
-}
-
-impl Drop for Inner {
-    fn drop(&mut self) {
-        // A watcher must not outlive the service it reports to.
-        let watchers = self.watchers.get_mut().unwrap_or_else(|e| e.into_inner());
-        for (_, handle) in watchers.drain() {
-            handle.abort();
-        }
-    }
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -287,7 +240,7 @@ impl Inner {
     /// The UI's profile (never call this inside `with_store`).
     pub(crate) fn view(&self, p: &Profile) -> ProfileView {
         let ram = self.with_store(|s| s.config.ram);
-        crate::blocked::view_of(&self.paths, p, ram)
+        crate::types::view_of(&self.paths, p, ram)
     }
 }
 
@@ -334,7 +287,6 @@ impl AppService {
                 throttle: Mutex::new(ProgressThrottle::default()),
                 host,
                 modrinth,
-                curseforge: Mutex::new(None),
                 icons,
                 updater,
                 telemetry: Mutex::new(None),
@@ -346,8 +298,6 @@ impl AppService {
                 refresh_gate: tokio::sync::Mutex::new(()),
                 signing_in: AtomicBool::new(false),
                 busy_ops: std::sync::atomic::AtomicUsize::new(0),
-                watchers: Mutex::new(HashMap::new()),
-                blocked_gate: Mutex::new(()),
                 blocks_run: Mutex::new(crate::block_icons::BlocksRun::default()),
                 pano_busy: Mutex::new(HashSet::new()),
                 backup_gate: Mutex::new(()),
@@ -371,7 +321,7 @@ impl AppService {
                 ConfigView::from(&s.config),
                 s.profiles
                     .iter()
-                    .map(|p| crate::blocked::view_of(&s.paths, p, s.config.ram))
+                    .map(|p| crate::types::view_of(&s.paths, p, s.config.ram))
                     .collect(),
                 s.accounts.clone(),
             )
@@ -396,18 +346,6 @@ impl AppService {
     }
 
     pub fn config_set(&self, patch: Value) -> Res<ConfigView> {
-        // New watched folders must come from the folder picker.
-        if let Some(Value::Array(dirs)) = patch.get("blockedModsWatchDirs") {
-            let current = self
-                .inner
-                .with_store(|s| s.config.blocked_mods_watch_dirs.clone());
-            for d in dirs.iter().filter_map(Value::as_str) {
-                if !current.iter().any(|c| c == d) {
-                    crate::path_grants::reject_special_path(d)?;
-                    self.inner.grants.consume(GrantKind::Folder, d)?;
-                }
-            }
-        }
         let view = self
             .inner
             .with_store(|s| s.set_config(&patch).map(ConfigView::from))?;
@@ -462,8 +400,9 @@ impl AppService {
                     let v = if v.is_null() { json!("") } else { v.clone() };
                     clean.insert(key.clone(), v);
                 }
-                "coverUrl" | "lastPlayed" | "playTimeMs" | "modCount" | "pendingBlocked"
-                | "autoBlock" | "iconSource" | "ramSource" | "ramHint" | "effectiveRamMb" => {}
+                "coverUrl" | "lastPlayed" | "playTimeMs" | "modCount" | "autoBlock"
+                | "pendingBlocked" // removed field; a stale spread view may still carry it
+                | "iconSource" | "ramSource" | "ramHint" | "effectiveRamMb" => {}
                 "id" | "created" => {
                     return Err(AppError::new(
                         "validation",
@@ -503,7 +442,7 @@ impl AppService {
                 .update_profile(&id, &Value::Object(clean))?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::blocked::view_of(&s.paths, &p, s.config.ram))
+            Ok(crate::types::view_of(&s.paths, &p, s.config.ram))
         })
     }
 
@@ -590,7 +529,7 @@ impl AppService {
                 .update_profile(&created.id, &patch)?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::blocked::view_of(&s.paths, &p, s.config.ram))
+            Ok(crate::types::view_of(&s.paths, &p, s.config.ram))
         })
     }
 
@@ -671,8 +610,7 @@ impl AppService {
         Ok(self.grant_picked(GrantKind::Image, picked))
     }
 
-    /// Native picker for a file to import (`.mrpack`, CurseForge `.zip`,
-    /// Prism/MultiMC `.zip`); `None` = cancelled. The path goes to
+    /// Native picker for a file to import (`.mrpack`, Prism/MultiMC `.zip`); `None` = cancelled. The path goes to
     /// `instance_import_plan` / `instance_import`.
     pub async fn pick_import_file(&self, title: Option<String>) -> Res<Option<String>> {
         let dialog = self.inner.dialog.clone();
@@ -688,7 +626,7 @@ impl AppService {
     }
 
     /// Native folder picker; `None` = cancelled. The caller stores the path
-    /// through `config_set` (`blockedModsWatchDirs`), which validates it.
+    /// through the command that needs the folder, which validates it.
     pub async fn pick_folder(&self, title: Option<String>) -> Res<Option<String>> {
         let dialog = self.inner.dialog.clone();
         let picked = dialog.pick_folder(title).await;

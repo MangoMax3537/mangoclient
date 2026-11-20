@@ -43,8 +43,6 @@ pub struct ProfileView {
     pub play_time_ms: u64,
     pub created: u64,
     pub mod_count: usize,
-    /// Blocked pack files still waiting for the user (pending or found).
-    pub pending_blocked: usize,
     /// `null` = automatic.
     pub icon: Option<InstanceIcon>,
     /// The block the automatic rule picks (gallery ready), else `null`.
@@ -129,7 +127,6 @@ impl ProfileView {
             play_time_ms: p.play_time_ms,
             created: p.created,
             mod_count: p.mods.len(),
-            pending_blocked: 0,
             icon: if p.cover {
                 Some(InstanceIcon::Image)
             } else {
@@ -251,9 +248,6 @@ pub struct ConfigView {
     pub first_run_done: bool,
     pub telemetry: bool,
     pub sidebar_open: bool,
-    pub blocked_mods_modrinth_fallback: bool,
-    pub blocked_mods_watch_dirs: Vec<String>,
-    pub blocked_mods_check_subfolders: bool,
     pub auto_snapshot: bool,
     /// 1..50.
     pub backup_keep: u32,
@@ -281,9 +275,6 @@ impl From<&Config> for ConfigView {
             first_run_done: c.first_run_done,
             telemetry: c.telemetry,
             sidebar_open: c.sidebar_open,
-            blocked_mods_modrinth_fallback: c.blocked_mods_modrinth_fallback,
-            blocked_mods_watch_dirs: c.blocked_mods_watch_dirs.clone(),
-            blocked_mods_check_subfolders: c.blocked_mods_check_subfolders,
             auto_snapshot: c.auto_snapshot,
             backup_keep: c.backup_keep,
         }
@@ -374,4 +365,20 @@ pub(crate) fn installed_versions(paths: &Paths) -> Vec<String> {
     }
     out.sort();
     out
+}
+
+/// The UI's profile with the derived fields (`autoBlock`, background) filled in.
+pub(crate) fn view_of(paths: &Paths, p: &Profile, default_ram_mb: u32) -> ProfileView {
+    let mut view = ProfileView::new(p, default_ram_mb);
+    view.auto_block = crate::block_icons::auto_block(paths, &p.id);
+    // A recorded picture whose file is gone means automatic.
+    if matches!(view.background, ProfileBackground::Image { .. })
+        && !paths.background_file(&p.id).is_ok_and(|f| f.is_file())
+    {
+        view.background = ProfileBackground::Auto {
+            dim: p.background_dim,
+            blur: p.background_blur,
+        };
+    }
+    view
 }

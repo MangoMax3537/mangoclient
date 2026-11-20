@@ -54,18 +54,6 @@ pub struct Config {
     pub selected_account: Option<String>,
     pub first_run_done: bool,
     pub telemetry: bool,
-    /// Optional CurseForge API key supplied by the user. Never sent to the UI.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub curseforge_api_key: Option<Secret>,
-    /// Look blocked CurseForge pack files up on Modrinth by hash.
-    #[serde(default = "default_true")]
-    pub blocked_mods_modrinth_fallback: bool,
-    /// Folders watched for files the user downloads by hand.
-    #[serde(default)]
-    pub blocked_mods_watch_dirs: Vec<String>,
-    /// Look into sub-folders of the watched folders too.
-    #[serde(default)]
-    pub blocked_mods_check_subfolders: bool,
     /// Take an automatic snapshot before content is updated or removed.
     #[serde(default = "default_true")]
     pub auto_snapshot: bool,
@@ -105,13 +93,6 @@ impl Config {
             selected_account: None,
             first_run_done: false,
             telemetry: true,
-            curseforge_api_key: None,
-            blocked_mods_modrinth_fallback: true,
-            blocked_mods_watch_dirs: crate::paths::default_downloads_dir()
-                .map(|d| d.display().to_string())
-                .into_iter()
-                .collect(),
-            blocked_mods_check_subfolders: false,
             auto_snapshot: true,
             backup_keep: default_backup_keep(),
         }
@@ -221,8 +202,10 @@ pub struct ModRecord {
     pub loaders: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_dependencies: Option<Vec<ModDependency>>,
-    /// `modrinth` or `curseforge`. Absent means `modrinth` (records written
-    /// before providers existed).
+    /// Legacy: the source a record came from. Only `modrinth` (or absent) is
+    /// a Modrinth record; any other value (the removed CurseForge
+    /// integration wrote `curseforge`) marks a file the launcher handles as
+    /// a local jar. Read and written back unchanged, never interpreted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
     #[serde(flatten)]

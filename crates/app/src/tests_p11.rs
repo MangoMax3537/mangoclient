@@ -259,7 +259,7 @@ async fn strict_icon_image_needs_the_picker_and_expires() {
 }
 
 #[tokio::test]
-async fn strict_import_and_watch_folder_need_their_pickers() {
+async fn strict_import_needs_its_picker() {
     let tmp = tempfile::tempdir().unwrap();
     let pack = tmp.path().join("p.mrpack");
     std::fs::write(&pack, b"not a zip").unwrap();
@@ -283,11 +283,6 @@ async fn strict_import_and_watch_folder_need_their_pickers() {
         .await
         .unwrap_err();
     assert_eq!(e.code, "path.not_granted");
-    let patch = serde_json::json!({"blockedModsWatchDirs": [dl.display().to_string()]});
-    assert_eq!(
-        f.svc.config_set(patch.clone()).unwrap_err().code,
-        "path.not_granted"
-    );
 
     f.svc.pick_import_file(None).await.unwrap().unwrap();
     // Granted: gets past the allow-list (and fails later as a bad archive).
@@ -297,11 +292,6 @@ async fn strict_import_and_watch_folder_need_their_pickers() {
         .await
         .unwrap_err();
     assert_ne!(e.code, "path.not_granted");
-
-    f.svc.pick_folder(None).await.unwrap().unwrap();
-    f.svc.config_set(patch.clone()).unwrap();
-    // A folder already in the config may stay when the list is saved again.
-    f.svc.config_set(patch).unwrap();
 }
 
 #[tokio::test]

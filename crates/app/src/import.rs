@@ -3,20 +3,18 @@
 //! The kind is detected from the archive's content, never from its name:
 //!
 //! * Modrinth `.mrpack`: `modrinth.index.json` at the root,
-//! * CurseForge zip: `manifest.json` whose `manifestType` is `minecraftModpack`,
 //! * Prism / MultiMC instance zip: `instance.cfg` + `mmc-pack.json` (at the
 //!   root or inside one top-level folder); `.minecraft/` or `minecraft/` is
 //!   the overrides folder.
 //!
-//! The first two go through the same code as installing a pack from the
-//! provider (`finish_modrinth_info`, `install_curse_pack`), so downloads,
-//! hash checks, the safe extraction of overrides, blocked CurseForge files
-//! and the Modrinth fallback behave identically.
+//! A `.mrpack` goes through the same code as installing a pack from Modrinth
+//! (`finish_modrinth_info`), so downloads, hash checks and the safe extraction
+//! of overrides behave identically. A CurseForge pack zip (`manifest.json`
+//! with `manifestType` `minecraftModpack`) is recognised only to be refused
+//! with `import.unsupported_curseforge`: that format is not supported.
 
 use crate::content::InstallReporter;
 use crate::error::{AppError, Res};
-use crate::install::CursePack;
-use crate::models::{BlockedFile, ModpackPlan, Provider};
 use crate::service::AppService;
 use crate::types::ProfileView;
 use mango_archive::{extract_zip_subtree, scan_zip_subtree, ArchiveError, Limits};
@@ -43,7 +41,6 @@ const MRPACK_INDEX: &str = "modrinth.index.json";
 #[serde(rename_all = "lowercase")]
 pub enum ImportKind {
     Mrpack,
-    Curseforge,
     Prism,
 }
 
@@ -60,9 +57,7 @@ pub struct ImportPlan {
     /// instance, its files).
     pub file_count: u64,
     pub size_bytes: Option<u64>,
-    /// CurseForge files that need the user (see `docs/ipc.md` Part 5).
-    pub blocked_files: Vec<BlockedFile>,
-    /// The pack's memory wish (CurseForge, Prism), else `null`.
+    /// The pack's memory wish (Prism), else `null`.
     pub ram: Option<mango_core::RamHint>,
     /// The heap the new instance gets after clamping; `null` without a hint.
     pub applied_ram_mb: Option<u32>,
@@ -250,7 +245,6 @@ fn prism_skip(rel: &str) -> bool {
 
 enum Scanned {
     Mrpack(modrinth::PackSummary),
-    Curseforge(mango_curseforge::Manifest),
     Prism {
         info: PrismInfo,
         /// Prefix of the overrides folder inside the zip, if any.
@@ -263,6 +257,13 @@ enum Scanned {
 struct Scan {
     what: Scanned,
     icon: Option<Vec<u8>>,
+}
+
+/// Is `manifest.json` a CurseForge pack manifest? (Only used to refuse it.)
+fn is_curseforge_manifest(zip: &mut zip::ZipArchive<File>) -> bool {
+    read_entry(zip, "manifest.json", MAX_META_BYTES)
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .is_some_and(|v| v.get("manifestType").and_then(Value::as_str) == Some("minecraftModpack"))
 }
 
 /// Blocking: classify the archive and validate what can be validated without
@@ -283,28 +284,12 @@ fn scan_archive(path: &Path) -> Res<Scan> {
             icon,
         });
     }
-    if has("manifest.json") {
-        let is_curse = read_entry(&mut zip, "manifest.json", MAX_META_BYTES)
-            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-            .is_some_and(|v| {
-                v.get("manifestType").and_then(Value::as_str) == Some("minecraftModpack")
-            });
-        if is_curse {
-            let manifest = mango_curseforge::read_manifest(path)?;
-            scan_zip_subtree(
-                File::open(path)?,
-                &format!("{}/", manifest.overrides),
-                &scratch,
-                &Limits::default(),
-                &|_| false,
-            )
-            .map_err(archive_err)?;
-            let icon = read_entry(&mut zip, "icon.png", MAX_ICON_BYTES);
-            return Ok(Scan {
-                what: Scanned::Curseforge(manifest),
-                icon,
-            });
-        }
+    if has("manifest.json") && is_curseforge_manifest(&mut zip) {
+        return Err(AppError::new(
+            "import.unsupported_curseforge",
+            "CurseForge modpack files are not supported; import a Modrinth .mrpack or a \
+             Prism/MultiMC instance instead",
+        ));
     }
     if let Some(root) = prism_root(&names) {
         let cfg = read_entry(&mut zip, &format!("{root}instance.cfg"), MAX_META_BYTES)
@@ -340,13 +325,12 @@ fn scan_archive(path: &Path) -> Res<Scan> {
     }
     Err(AppError::new(
         "import.unsupported_format",
-        "This archive is not a Modrinth, CurseForge or Prism/MultiMC pack",
+        "This archive is not a Modrinth or Prism/MultiMC pack",
     ))
 }
 
 enum How {
     Mrpack,
-    Curse(Box<CursePack>),
     Prism { overrides: Option<String> },
 }
 
@@ -404,58 +388,10 @@ impl AppService {
                         .then_some(info.loader_version),
                     file_count: info.file_count as u64,
                     size_bytes: Some(summary.download_bytes),
-                    blocked_files: Vec::new(),
                     ram: None,
                     applied_ram_mb: None,
                 };
                 (plan, How::Mrpack)
-            }
-            Scanned::Curseforge(manifest) => {
-                check_versions(&manifest.mc_version, &manifest.loader_version)?;
-                let client = self.curseforge_client()?;
-                let (manifest, resolved) = Self::resolve_pack_zip(&client, &path).await?;
-                let blocked = self.blocked_entries(&resolved).await;
-                let name = manifest
-                    .name
-                    .as_deref()
-                    .map(clean_name)
-                    .filter(|n| !n.is_empty())
-                    .unwrap_or(stem);
-                let pack_plan = ModpackPlan {
-                    provider: Provider::Curseforge,
-                    project_id: String::new(),
-                    version_id: String::new(),
-                    name: name.clone(),
-                    mc_version: manifest.mc_version.clone(),
-                    loader: manifest.loader,
-                    loader_version: (!manifest.loader_version.is_empty())
-                        .then(|| manifest.loader_version.clone()),
-                    file_count: (resolved.entries.len() + resolved.missing.len()) as u64,
-                    size_bytes: Some(resolved.download_bytes()),
-                    icon_url: None,
-                    blocked_files: blocked.iter().map(|b| b.file.clone()).collect(),
-                    ram: manifest.ram_hint.clone(),
-                    applied_ram_mb: crate::install::applied_ram_mb(manifest.ram_hint.as_ref()),
-                };
-                let plan = ImportPlan {
-                    kind: ImportKind::Curseforge,
-                    name,
-                    mc_version: pack_plan.mc_version.clone(),
-                    loader: pack_plan.loader,
-                    loader_version: pack_plan.loader_version.clone(),
-                    file_count: pack_plan.file_count,
-                    size_bytes: pack_plan.size_bytes,
-                    blocked_files: pack_plan.blocked_files.clone(),
-                    ram: pack_plan.ram.clone(),
-                    applied_ram_mb: pack_plan.applied_ram_mb,
-                };
-                let pack = CursePack {
-                    plan: pack_plan,
-                    zip: path.clone(),
-                    resolved,
-                    blocked,
-                };
-                (plan, How::Curse(Box::new(pack)))
             }
             Scanned::Prism {
                 info,
@@ -477,7 +413,6 @@ impl AppService {
                         .then(|| info.loader_version.clone()),
                     file_count: files as u64,
                     size_bytes: Some(bytes),
-                    blocked_files: Vec::new(),
                     ram: info.ram_hint.clone(),
                     applied_ram_mb: crate::install::applied_ram_mb(info.ram_hint.as_ref()),
                 };
@@ -492,8 +427,7 @@ impl AppService {
         })
     }
 
-    /// What importing `file_path` would create. Reads the archive (and, for
-    /// CurseForge, asks the API about its files); changes nothing.
+    /// What importing `file_path` would create. Reads the archive; changes nothing.
     pub async fn instance_import_plan(&self, file_path: String) -> Res<ImportPlan> {
         self.checked_in_path(&file_path, crate::path_grants::GrantKind::File)?;
         Ok(self.prepare_import(&file_path).await?.plan)
@@ -522,8 +456,6 @@ impl AppService {
             "loaderVersion": plan.loader_version.clone().unwrap_or_default(),
         });
         if let (Some(hint), Some(mb)) = (&plan.ram, plan.applied_ram_mb) {
-            // Prism applies here; a CurseForge pack applies it again,
-            // identically, when its manifest is installed.
             crate::install::ram_patch(&mut data, hint, mb);
         }
         let created = self.inner.with_store(|s| s.add_profile(&data))?;
@@ -546,7 +478,7 @@ impl AppService {
     async fn run_import(&self, profile: &Profile, prepared: &mut Prepared) -> Res<()> {
         let reporter = InstallReporter::new(&self.inner, &profile.id, "import");
         reporter.emit(0, 1, "import");
-        match &mut prepared.how {
+        match &prepared.how {
             How::Mrpack => {
                 let progress: Arc<modrinth::ProgressFn> = {
                     let r = reporter.clone();
@@ -563,9 +495,6 @@ impl AppService {
                 )
                 .await?;
                 self.finish_modrinth_info(profile, &reporter, info).await?;
-            }
-            How::Curse(pack) => {
-                self.install_curse_pack(profile, &reporter, pack).await?;
             }
             How::Prism { overrides } => {
                 let game_dir = self.inner.paths.instance_dir(&profile.id)?;

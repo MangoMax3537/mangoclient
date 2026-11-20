@@ -31,7 +31,6 @@ pub fn event_signatures(cfg: &Config) -> Vec<(&'static str, String)> {
         e::<UpdateStatus>("update:status", cfg),
         e::<ContentChangedEvent>("content:changed", cfg),
         e::<AccountsChangedEvent>("accounts:changed", cfg),
-        e::<BlockedChangedEvent>("blocked:changed", cfg),
         e::<BlockIconsStatus>("blocks:status", cfg),
         e::<PanoramaReadyEvent>("panorama:ready", cfg),
         e::<FilesDroppedEvent>("files:dropped", cfg),
@@ -62,11 +61,9 @@ fn export_roots(cfg: &Config) -> Result<(), ts_rs::ExportError> {
         SearchResult,
         ProjectDetail,
         ProjectVersion,
-        ProviderStatus,
         InstallTarget,
         InstallPlan,
         ModpackPlan,
-        BlockedFile,
         BlockIconsStatus,
         PanoramaSet,
         ServerEntry,
@@ -93,7 +90,6 @@ fn export_roots(cfg: &Config) -> Result<(), ts_rs::ExportError> {
         InstallProgressEvent,
         ContentChangedEvent,
         AccountsChangedEvent,
-        BlockedChangedEvent,
         PanoramaReadyEvent,
         FilesDroppedEvent,
     );
@@ -170,7 +166,6 @@ pub fn generate(dir: &Path) -> Result<(), String> {
         InstallPlanArgs,
         InstallApplyArgs,
         ModpackInstallArgs,
-        BlockedSkipArgs,
         BlockIconsPrepareArgs,
         ProfileIconSetBlockArgs,
         ProfileImageFileArgs,
@@ -334,7 +329,6 @@ mod tests {
                 | Event::UpdateStatus(_)
                 | Event::ContentChanged(_)
                 | Event::AccountsChanged(_)
-                | Event::BlockedChanged(_)
                 | Event::BlocksStatus(_)
                 | Event::PanoramaReady(_)
                 | Event::FilesDropped(_) => e.name(),
@@ -385,10 +379,6 @@ mod tests {
             }),
             Event::AccountsChanged(AccountsChangedEvent {
                 uuid: String::new(),
-            }),
-            Event::BlockedChanged(BlockedChangedEvent {
-                profile_id: String::new(),
-                files: vec![],
             }),
             Event::BlocksStatus(BlockIconsStatus {
                 state: BlocksState::Missing,

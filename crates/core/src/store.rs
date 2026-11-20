@@ -186,14 +186,12 @@ impl Store {
 
     pub fn save_config(&self) -> Result<()> {
         let file = self.paths.config_file();
-        // A changed or removed API key must not survive in `config.json.bak`.
-        let old_key = read_json_value(&file)
+        // A config written by an older version may still hold the removed
+        // CurseForge API key; it must not survive in `config.json.bak`.
+        let has_legacy_key = read_json_value(&file)
             .and_then(|v| v.get("curseforgeApiKey").cloned())
-            .filter(|v| !v.is_null());
-        let new_key = serde_json::to_value(&self.config)
-            .ok()
-            .and_then(|v| v.get("curseforgeApiKey").cloned());
-        if old_key.is_some() && old_key != new_key {
+            .is_some_and(|v| !v.is_null());
+        if has_legacy_key {
             return write_json_scrubbed(&file, &self.config);
         }
         write_json_atomic(&file, &self.config)
@@ -333,21 +331,22 @@ mod tests {
     }
 
     #[test]
-    fn changing_the_api_key_leaves_no_old_key_in_the_config_bak() {
+    fn a_legacy_api_key_leaves_no_trace_after_the_next_save() {
         let dir = tempfile::tempdir().unwrap();
-        let mut store = open(dir.path());
-        store.config.curseforge_api_key = Some(crate::model::Secret::new("OLD-KEY-123"));
+        let store = open(dir.path());
         store.save_config().unwrap();
-        store.config.curseforge_api_key = Some(crate::model::Secret::new("NEW-KEY-456"));
+        let file = dir.path().join("config.json");
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        raw["curseforgeApiKey"] = json!("OLD-KEY-1234567890");
+        std::fs::write(&file, serde_json::to_string(&raw).unwrap()).unwrap();
+        let store = open(dir.path());
+        assert_eq!(store.config.language, raw["language"]);
         store.save_config().unwrap();
-        store.config.curseforge_api_key = None;
         store.save_config().unwrap();
         for name in ["config.json", "config.json.bak"] {
             let text = std::fs::read_to_string(dir.path().join(name)).unwrap();
-            assert!(
-                !text.contains("OLD-KEY-123") && !text.contains("NEW-KEY-456"),
-                "{name}"
-            );
+            assert!(!text.contains("OLD-KEY-1234567890"), "{name}");
         }
     }
 

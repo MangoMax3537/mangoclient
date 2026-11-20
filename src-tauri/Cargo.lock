@@ -2724,7 +2724,6 @@ dependencies = [
  "mango-auth",
  "mango-content",
  "mango-core",
- "mango-curseforge",
  "mango-java",
  "mango-loaders",
  "mango-mango",
@@ -2808,21 +2807,6 @@ dependencies = [
  "thiserror 2.0.21",
  "ts-rs",
  "uuid",
-]
-
-[[package]]
-name = "mango-curseforge"
-version = "2.0.0-dev"
-dependencies = [
- "mango-archive",
- "mango-core",
- "mango-net",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "zip",
 ]
 
 [[package]]

@@ -15,7 +15,7 @@ pub use model::{
     Account, AccountType, Config, Loader, ModDependency, ModRecord, ModType, Profile, Secret,
     Session,
 };
-pub use paths::{default_downloads_dir, downloads_dir_in, validate_profile_id, Paths};
+pub use paths::{validate_profile_id, Paths};
 pub use ram::{ram_limits, RamHint, RamHintSource, RamLimits, RamSource};
 pub use store::{mod_record_is_safe, Store};
 pub use validation::{

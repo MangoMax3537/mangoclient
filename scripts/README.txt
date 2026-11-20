@@ -36,8 +36,6 @@ Secrets (GitHub repository secrets; every one is optional)
 ----------------------------------------------------------
 UPDATE_PRIVATE_KEY        Base64 Ed25519 seed (32 bytes). Without it no latest.json is
                           produced and in-app updates stay off. Never printed, masked.
-CURSEFORGE_API_KEY        Compiled into the build (option_env!). Without it CurseForge
-                          browsing is disabled in that build.
 WINDOWS_CERTIFICATE       Base64 of the Authenticode .pfx.        } both needed, else
 WINDOWS_CERTIFICATE_PASSWORD                                      } Windows is unsigned
 APPLE_CERTIFICATE         Base64 of the Developer ID Application .p12.  } all three needed

@@ -59,7 +59,7 @@
     "licenseFile": "../LICENSE",
     "homepage": "https://mangoclient.com/",
     "shortDescription": "Minecraft launcher with profiles, Modrinth and Microsoft accounts",
-    "longDescription": "MangoClient is a Minecraft launcher: profiles for vanilla, Fabric, Quilt, Forge and NeoForge, Modrinth and CurseForge content, Microsoft and offline accounts, automatic Java and the bundled MangoConfig mod.",
+    "longDescription": "MangoClient is a Minecraft launcher: profiles for vanilla, Fabric, Quilt, Forge and NeoForge, Modrinth content, Microsoft and offline accounts, automatic Java and the bundled MangoConfig mod.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

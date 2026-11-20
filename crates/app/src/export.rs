@@ -5,18 +5,11 @@
 //! * Content files (mods, resource packs, shader packs, datapacks) are looked
 //!   up on Modrinth by SHA-1, in one batch call. A file Modrinth hosts becomes
 //!   an entry of `files` with its hashes, size and Modrinth's download URL, so
-//!   nothing is redistributed. This covers records installed from Modrinth,
-//!   local jars (a pack imported earlier, say) and files that came from
-//!   CurseForge but that Modrinth also hosts.
+//!   nothing is redistributed. This covers records installed from Modrinth
+//!   and local jars (a pack imported earlier, say).
 //! * A file Modrinth does not host goes into `overrides/` when it is a local
-//!   jar or a Modrinth record changed since it was installed.
-//! * A file that came from CurseForge (a record with that provider, or a
-//!   name on the instance's blocked-files list) and that Modrinth does not
-//!   host is left out, and a warning says so: CurseForge's rules do not
-//!   allow passing those files on. The importer of the pack gets them from
-//!   CurseForge. (Files a CurseForge pack installed that the author allowed
-//!   to be downloaded become ordinary local records, so they travel as
-//!   `overrides/`; their provenance is not kept.)
+//!   jar (records written by older versions for other sources count as local
+//!   jars) or a Modrinth record changed since it was installed.
 //! * `includeConfig` adds `config/`, `defaultconfigs/`, `kubejs/`,
 //!   `scripts/`, `options.txt` (without its `lastServer:` line),
 //!   `optionsof.txt`, `optionsshaders.txt` and the shader packs' `*.txt`
@@ -33,7 +26,6 @@
 
 use crate::backups::zip_name_ok;
 use crate::error::{AppError, Res};
-use crate::models::BlockedFile;
 use crate::outfile::{add_bytes, add_file, write_zip_atomic, FileExport};
 use crate::service::AppService;
 use mango_archive::Limits;
@@ -77,8 +69,6 @@ struct Item {
     sha512: String,
     /// What to call it in a warning.
     label: String,
-    /// Came from CurseForge (record provider or blocked list).
-    curse: bool,
     /// A record installed from Modrinth.
     from_modrinth: bool,
 }
@@ -221,15 +211,9 @@ fn is_private_config(rel: &str) -> bool {
 }
 
 /// Blocking part: find, hash and classify what is in the instance.
-fn gather(
-    paths: &mango_core::Paths,
-    profile: &Profile,
-    blocked: &[BlockedFile],
-    include_config: bool,
-) -> Res<Gathered> {
+fn gather(paths: &mango_core::Paths, profile: &Profile, include_config: bool) -> Res<Gathered> {
     let instance = paths.instance_dir(&profile.id)?;
     let real_instance = fs::canonicalize(&instance).unwrap_or_else(|_| instance.clone());
-    let blocked_names: HashSet<&str> = blocked.iter().map(|b| b.file_name.as_str()).collect();
     let mut warnings = Vec::new();
     let mut items = Vec::new();
     let mut seen = HashSet::new();
@@ -247,9 +231,6 @@ fn gather(
             continue;
         }
         let (sha1, sha512, size) = hash_file(&abs)?;
-        let name = rel.rsplit('/').next().unwrap_or("");
-        let curse = crate::content::is_curseforge(rec)
-            || blocked_names.contains(mango_content::jar_name(name).as_str());
         items.push(Item {
             rel,
             abs,
@@ -257,9 +238,8 @@ fn gather(
             sha1,
             sha512,
             label,
-            curse,
             from_modrinth: rec.local != Some(true)
-                && rec.provider.as_deref() != Some("curseforge")
+                && !crate::content::has_foreign_provider(rec)
                 && rec
                     .project_id
                     .as_deref()
@@ -299,7 +279,6 @@ fn gather(
                 size,
                 sha1,
                 sha512,
-                curse: false,
                 from_modrinth: false,
             });
         }
@@ -453,11 +432,9 @@ impl AppService {
 
         let loader_version = self.export_loader_version(&profile).await?;
 
-        let blocked = crate::blocked::load(&self.inner.paths, &profile.id);
         let (paths, p2) = (self.inner.paths.clone(), profile.clone());
         let mut gathered =
-            tokio::task::spawn_blocking(move || gather(&paths, &p2, &blocked, include_config))
-                .await??;
+            tokio::task::spawn_blocking(move || gather(&paths, &p2, include_config)).await??;
 
         // One batch lookup for everything that could be on Modrinth.
         let hashes: Vec<String> = gathered.items.iter().map(|i| i.sha1.clone()).collect();
@@ -507,11 +484,6 @@ impl AppService {
                     "downloads": [url],
                     "fileSize": item.size,
                 })),
-                None if item.curse => gathered.warnings.push(format!(
-                    "{} comes from CurseForge, whose rules do not allow passing it on; it was \
-                     left out. Whoever imports the pack has to get it from CurseForge.",
-                    item.label
-                )),
                 None => {
                     if item.from_modrinth {
                         gathered.warnings.push(format!(

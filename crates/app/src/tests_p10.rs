@@ -2,12 +2,10 @@
 //! Part 9 (second group): instance import/export, crash analysis,
 //! diagnostics export, groups and tags. Temp dirs and mock servers only.
 
-use crate::blocked;
-use crate::models::{BlockedFile, BlockedState, ContentType};
 use crate::tests_p2::{json_ok, serve, Handler, Req};
-use crate::tests_p4::{cf_file, cf_project, cf_server, zip_bytes, Sink, KEY};
+use crate::tests_p4::{zip_bytes, Sink};
 use crate::*;
-use mango_core::{Loader, Paths, Secret};
+use mango_core::{Loader, Paths};
 use serde_json::{json, Value};
 use sha1::{Digest, Sha1};
 use sha2::Sha512;
@@ -26,7 +24,7 @@ fn dead() -> String {
     "http://127.0.0.1:1".to_string()
 }
 
-fn fx_with(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
+fn fx_with(modrinth: &str) -> Fx {
     let tmp = tempfile::tempdir().unwrap();
     let sink = Arc::new(Sink::default());
     let opts = ServiceOptions {
@@ -41,13 +39,6 @@ fn fx_with(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
         icon_hosts: Vec::new(),
         modrinth_api: modrinth.to_string(),
         download_policy: Some(mango_net::HostPolicy::allow_all()),
-        curseforge_api: curse.to_string(),
-        curseforge_key: key.map(Secret::new),
-        curseforge: mango_curseforge::Options {
-            retries: 0,
-            strict_download_urls: false,
-            ..mango_curseforge::Options::default()
-        },
         loader_endpoints: mango_loaders::Endpoints {
             fabric_meta: "http://127.0.0.1:1/v2".into(),
             quilt_meta: "http://127.0.0.1:1/v3".into(),
@@ -61,7 +52,7 @@ fn fx_with(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
 }
 
 fn fx() -> Fx {
-    fx_with(&dead(), &dead(), None)
+    fx_with(&dead())
 }
 
 impl Fx {
@@ -396,20 +387,6 @@ fn cf_manifest_json() -> Vec<u8> {
     .unwrap()
 }
 
-async fn cf_fx() -> Fx {
-    let projects = vec![
-        cf_project(100, "alpha", 6, Some(true)),
-        cf_project(500, "secret", 6, Some(false)),
-    ];
-    let fab = ["1.21.1", "Fabric", "Client"];
-    let files = vec![
-        cf_file(1001, 100, "alpha-1.jar", &fab),
-        cf_file(5001, 500, "secret-1.jar", &fab),
-    ];
-    let (base, _) = serve(cf_server(projects, files, |_, _| None)).await;
-    fx_with(&dead(), &base, Some(KEY))
-}
-
 // ---------------------------------------------------------------- import: plans
 
 #[tokio::test]
@@ -441,7 +418,7 @@ async fn plans_detect_the_kind_by_content_not_by_name() {
     assert_eq!(
         serde_json::to_value(&plan).unwrap(),
         json!({"kind": "mrpack", "name": "MR Pack", "mcVersion": "1.21.1", "loader": "fabric",
-               "loaderVersion": "0.16.9", "fileCount": 1, "sizeBytes": 100, "blockedFiles": [],
+               "loaderVersion": "0.16.9", "fileCount": 1, "sizeBytes": 100,
                "ram": null, "appliedRamMb": null})
     );
 
@@ -514,11 +491,10 @@ async fn plans_detect_the_kind_by_content_not_by_name() {
         .unwrap();
     assert_eq!((plan.loader, plan.loader_version), (Loader::Vanilla, None));
 
-    // A CurseForge pack under a .zip name needs the API: blocked files come back.
-    let cf = cf_fx().await;
-    let cf_before = cf.profile_ids();
-    let dir = cf.scratch();
-    let p = write_zip(
+    // A CurseForge pack is recognised only to be refused, with its own code;
+    // planning changes nothing.
+    let before = f.profile_ids();
+    let cf = write_zip(
         &dir,
         "x.zip",
         &[
@@ -526,51 +502,14 @@ async fn plans_detect_the_kind_by_content_not_by_name() {
             ("overrides/config/x.toml", b"x"),
         ],
     );
-    let plan = cf
+    let err = f
         .svc
-        .instance_import_plan(p.display().to_string())
+        .instance_import_plan(cf.display().to_string())
         .await
-        .unwrap();
-    assert_eq!(
-        (
-            plan.kind,
-            plan.name.as_str(),
-            plan.loader,
-            plan.loader_version.as_deref(),
-            plan.file_count
-        ),
-        (
-            ImportKind::Curseforge,
-            "CF Pack",
-            Loader::Fabric,
-            Some("0.16.9"),
-            2
-        )
-    );
-    assert_eq!(plan.blocked_files.len(), 1);
-    let b = &plan.blocked_files[0];
-    assert_eq!(
-        (b.file_name.as_str(), b.state),
-        ("secret-1.jar", BlockedState::Pending)
-    );
-    // Planning changes nothing.
-    assert_eq!(cf.profile_ids(), cf_before);
-    // Without a CurseForge key the plan says so with a stable code.
-    let keyless = fx();
-    let p2 = write_zip(
-        &keyless.scratch(),
-        "x.zip",
-        &[("manifest.json", &cf_manifest_json())],
-    );
-    assert_eq!(
-        keyless
-            .svc
-            .instance_import_plan(p2.display().to_string())
-            .await
-            .unwrap_err()
-            .code,
-        "curseforge.no_api_key"
-    );
+        .unwrap_err();
+    assert_eq!(err.code, "import.unsupported_curseforge");
+    assert!(err.message.contains("not supported"), "{}", err.message);
+    assert_eq!(f.profile_ids(), before);
 }
 
 #[tokio::test]
@@ -746,24 +685,6 @@ async fn hostile_archives_are_rejected_before_anything_is_written() {
         "import.unsafe_archive"
     );
 
-    // CurseForge overrides with traversal (checked without any API call).
-    let cf = cf_fx().await;
-    let evil_cf = write_zip(
-        &cf.scratch(),
-        "evil-cf.zip",
-        &[
-            ("manifest.json", &cf_manifest_json()),
-            ("overrides/../../escape.txt", b"no"),
-        ],
-    );
-    assert_eq!(
-        cf.svc
-            .instance_import_plan(evil_cf.display().to_string())
-            .await
-            .unwrap_err()
-            .code,
-        "import.unsafe_archive"
-    );
     assert_eq!(f.profile_ids(), before, "no profile was created");
     assert!(!dir.parent().unwrap().join("escape.txt").exists());
     assert!(!f.paths().instances().join("escape.txt").exists());
@@ -835,7 +756,7 @@ async fn importing_a_prism_instance_creates_the_profile_and_its_files() {
 async fn importing_a_modrinth_pack_downloads_checks_and_cleans_up_after_failure() {
     let jar = b"mr:a.jar".to_vec();
     let (base, seen) = serve(mr_files_server(vec![("a.jar", jar.clone())])).await;
-    let f = fx_with(&base, &dead(), None);
+    let f = fx_with(&base);
     let dir = f.scratch();
     let file = |hash: &str| {
         json!({"path": "mods/a.jar", "hashes": {"sha512": hash},
@@ -917,56 +838,24 @@ async fn importing_a_modrinth_pack_downloads_checks_and_cleans_up_after_failure(
 }
 
 #[tokio::test]
-async fn importing_a_curseforge_pack_keeps_blocked_files_for_the_user() {
-    let f = cf_fx().await;
-    let dir = f.scratch();
+async fn importing_a_curseforge_pack_is_refused_and_leaves_nothing_behind() {
+    let f = fx();
+    let before = f.profile_ids();
     let p = write_zip(
-        &dir,
+        &f.scratch(),
         "cf.zip",
         &[
             ("manifest.json", &cf_manifest_json()),
             ("overrides/config/x.toml", b"x = 1"),
-            ("overrides/.mangoclient-blocked.json", b"{\"files\": []}"),
         ],
     );
-    let view = f
+    let err = f
         .svc
         .instance_import(p.display().to_string(), None)
         .await
-        .unwrap();
-    assert_eq!(
-        (
-            view.name.as_str(),
-            view.mc_version.as_str(),
-            view.loader,
-            view.loader_version.as_deref()
-        ),
-        ("CF Pack", "1.21.1", Loader::Fabric, Some("0.16.9"))
-    );
-    let inst = f.inst(&view.id);
-    assert_eq!(
-        std::fs::read(inst.join("mods/alpha-1.jar")).unwrap(),
-        crate::tests_p4::cf_bytes("alpha-1.jar")
-    );
-    assert_eq!(std::fs::read(inst.join("config/x.toml")).unwrap(), b"x = 1");
-    assert!(!inst.join("mods/secret-1.jar").exists());
-    // Persisted like modpack_install does: the sidecar lists the blocked file.
-    let blocked = f.svc.blocked_files(view.id.clone()).unwrap();
-    assert_eq!(blocked.len(), 1);
-    assert_eq!(blocked[0].file_name, "secret-1.jar");
-    assert_eq!(blocked[0].state, BlockedState::Pending);
-    assert_eq!(
-        f.svc
-            .app_state()
-            .unwrap()
-            .profiles
-            .iter()
-            .find(|p| p.id == view.id)
-            .unwrap()
-            .pending_blocked,
-        1
-    );
-    assert!(f.sink.warnings().iter().any(|w| w.contains("secret-1.jar")));
+        .unwrap_err();
+    assert_eq!(err.code, "import.unsupported_curseforge");
+    assert_eq!(f.profile_ids(), before, "no profile was created");
     assert!(p.exists(), "the user's file is kept");
 }
 
@@ -986,7 +875,7 @@ async fn export_world() -> ExportWorld {
         ("cfmatched.jar", b"cfmatched-bytes".to_vec()),
     ]))
     .await;
-    let f = fx_with(&base, &dead(), None);
+    let f = fx_with(&base);
     let id = f.profile("My Pack", "1.20.1", "fabric", Some("0.16.9"));
     f.put(&id, "mods/matched.jar", b"matched-bytes");
     f.put(&id, "mods/cfmatched.jar", b"cfmatched-bytes");
@@ -1010,7 +899,8 @@ async fn export_world() -> ExportWorld {
     f.put(&id, "crash-reports/crash.txt", b"crash");
     f.put(&id, "screenshots/s.png", b"png");
     f.put(&id, ".mangoclient-blocked.json", b"{}");
-    // Reconcile, then mark the CurseForge-sourced records.
+    // Reconcile, then mark records the way the removed CurseForge integration
+    // stored them (they are plain local files now).
     f.svc.content_list(id.clone()).await.unwrap();
     let mut mods = f.svc.profile(&id).unwrap().mods;
     for m in &mut mods {
@@ -1021,22 +911,6 @@ async fn export_world() -> ExportWorld {
         }
     }
     f.svc.save_mods(&id, &mods).unwrap();
-    blocked::save(
-        &f.paths(),
-        &id,
-        &[BlockedFile {
-            name: "Manual".into(),
-            file_name: "manual-cf.jar".into(),
-            url: "https://www.curseforge.com/minecraft/mc-mods/manual".into(),
-            sha1: None,
-            size: None,
-            kind: ContentType::Mod,
-            state: BlockedState::Installed,
-            modrinth: None,
-            found_path: None,
-        }],
-    )
-    .unwrap();
     ExportWorld { f, id, base }
 }
 
@@ -1072,7 +946,7 @@ async fn export_policy_modrinth_files_by_reference_local_files_as_overrides() {
     assert_eq!(
         paths,
         ["mods/cfmatched.jar", "mods/matched.jar"],
-        "hosted on Modrinth, sorted"
+        "hosted on Modrinth, sorted (the legacy CurseForge record counts as a local file)"
     );
     let m = &files[1];
     assert_eq!(m["hashes"]["sha1"], sha1_hex(b"matched-bytes"));
@@ -1087,27 +961,21 @@ async fn export_policy_modrinth_files_by_reference_local_files_as_overrides() {
         json!({"client": "required", "server": "required"})
     );
 
-    // Local content that Modrinth does not host travels as overrides; nothing
-    // from CurseForge, no launcher or private data, no config without the flag.
+    // Local content that Modrinth does not host travels as overrides (records
+    // of the removed CurseForge integration included); no launcher or private
+    // data, no config without the flag.
     assert_eq!(
         zip_names(&out),
         [
             "modrinth.index.json",
+            "overrides/mods/cf-only.jar",
+            "overrides/mods/manual-cf.jar",
             "overrides/mods/mine.jar",
             "overrides/mods/off.jar.disabled",
             "overrides/resourcepacks/pack.zip",
         ]
     );
-    // The warning names the CurseForge files that were left out.
-    let w1 = res.warnings.join("\n");
-    assert!(w1.contains("cf only"), "{w1}");
-    assert!(w1.contains("CurseForge"));
-    assert!(
-        w1.contains("manual cf"),
-        "a hand-fetched blocked file is left out too: {w1}"
-    );
-    assert_eq!(res.warnings.len(), 2, "{:?}", res.warnings);
-    assert!(w.f.sink.warnings().iter().any(|l| l.contains("CurseForge")));
+    assert!(res.warnings.is_empty(), "{:?}", res.warnings);
 }
 
 #[tokio::test]
@@ -1135,8 +1003,6 @@ async fn export_with_config_adds_settings_but_never_private_data() {
         "MangoConfig",
         "mangoconfig",
         "accounts",
-        "cf-only",
-        "manual-cf",
     ] {
         assert!(
             !names.iter().any(|n| n.contains(never)),
@@ -1303,7 +1169,6 @@ async fn export_then_import_gives_the_same_instance() {
         )
     );
     assert_eq!(plan.file_count, 2);
-    assert!(plan.blocked_files.is_empty());
 
     let view =
         w.f.svc
@@ -1333,7 +1198,10 @@ async fn export_then_import_gives_the_same_instance() {
         b"my-own-jar"
     );
     assert_eq!(std::fs::read(inst.join("config/x.toml")).unwrap(), b"a = 1");
-    assert!(!inst.join("mods/cf-only.jar").exists());
+    assert_eq!(
+        std::fs::read(inst.join("mods/cf-only.jar")).unwrap(),
+        b"cf-only-bytes"
+    );
     assert!(!inst.join("servers.dat").exists());
     assert!(view.cover_url.is_some(), "the icon travels");
     // And a second export of the copy plans identically (stable round trip).

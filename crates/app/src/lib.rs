@@ -9,7 +9,6 @@ mod backgrounds;
 mod backups;
 pub mod bindings;
 mod block_icons;
-mod blocked;
 mod content;
 mod crash;
 pub mod dispatch;
@@ -27,12 +26,12 @@ mod media;
 mod models;
 mod outfile;
 mod path_grants;
-mod providers;
 mod reports;
 mod scrub;
 mod servers;
 mod service;
 mod shell;
+mod source;
 mod types;
 mod window_policy;
 mod wire;
@@ -51,8 +50,6 @@ mod tests_p3;
 #[cfg(test)]
 mod tests_p4;
 #[cfg(test)]
-mod tests_p5;
-#[cfg(test)]
 mod tests_p6;
 #[cfg(test)]
 mod tests_p7;
@@ -68,9 +65,9 @@ pub use block_icons::{BlockIcon, BlockIconsStatus, BlocksState};
 pub use crash::{Confidence, CrashCause, CrashReport};
 pub use error::{AppError, Res};
 pub use events::{
-    AccountsChangedEvent, BlockedChangedEvent, ContentChangedEvent, Event, EventSink,
-    FilesDroppedEvent, InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent,
-    LogLevelName, PanoramaReadyEvent, ProgressPhase,
+    AccountsChangedEvent, ContentChangedEvent, Event, EventSink, FilesDroppedEvent,
+    InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName,
+    PanoramaReadyEvent, ProgressPhase,
 };
 pub use export::ExportFormat;
 pub use host::{
@@ -80,11 +77,10 @@ pub use host::{
 };
 pub use import::{ImportKind, ImportPlan};
 pub use models::{
-    BlockedFile, BlockedModrinth, BlockedState, ContentItem, ContentType, InstallPlan,
-    InstallPlanItem, InstallTarget, LogEntry, LogKind, LogText, LogUpload, ModpackPlan,
-    PlanConflict, PlanRole, ProjectDetail, ProjectHit, ProjectVersion, Provider, ProviderStatus,
-    Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerPlayers,
-    ServerStatus, StatsDay, StatsProfile, StatsSummary, StatusReason, StorageKey, StorageUsage,
+    ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, LogKind,
+    LogText, LogUpload, ModpackPlan, PlanConflict, PlanRole, ProjectDetail, ProjectHit,
+    ProjectVersion, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,
+    ServerPlayers, ServerStatus, StatsDay, StatsProfile, StatsSummary, StorageKey, StorageUsage,
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
 pub use outfile::FileExport;

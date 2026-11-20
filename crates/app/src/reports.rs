@@ -260,7 +260,7 @@ fn mods_json(mods: &[ModRecord]) -> Res<String> {
                 "file": m.filename,
                 "version": m.version_number,
                 "type": m.kind,
-                "provider": if m.local == Some(true) { Some("local") } else { m.provider.as_deref().or(Some("modrinth")) },
+                "provider": if m.local == Some(true) || crate::content::has_foreign_provider(m) { "local" } else { "modrinth" },
                 "projectId": m.project_id,
                 "enabled": m.enabled.unwrap_or(true),
                 "dependency": m.dependency.unwrap_or(false),

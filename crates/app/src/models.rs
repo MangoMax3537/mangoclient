@@ -8,41 +8,9 @@ use ts_rs::TS;
 /// `mod | shader | resourcepack | datapack`. Shares the stored type's names.
 pub type ContentType = ModType;
 
-/// Where a project comes from. A project id is only unique together with it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum Provider {
-    #[default]
-    Modrinth,
-    Curseforge,
-}
-
-impl Provider {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Provider::Modrinth => "modrinth",
-            Provider::Curseforge => "curseforge",
-        }
-    }
-
-    /// The provider a stored record belongs to. Records written before
-    /// providers existed (no `provider`) are Modrinth's. Local jars have none.
-    pub fn of_record(rec: &mango_core::ModRecord) -> Option<Provider> {
-        if rec.local == Some(true) {
-            return None;
-        }
-        Some(match rec.provider.as_deref() {
-            Some("curseforge") => Provider::Curseforge,
-            _ => Provider::Modrinth,
-        })
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentItem {
-    /// `null` = local jar.
-    pub provider: Option<Provider>,
     pub project_id: String,
     pub slug: Option<String>,
     pub title: String,
@@ -64,7 +32,6 @@ pub struct ContentItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectHit {
-    pub provider: Provider,
     pub project_id: String,
     pub slug: String,
     pub title: String,
@@ -108,7 +75,6 @@ pub struct SearchResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectVersion {
-    pub provider: Provider,
     pub version_id: String,
     pub version_number: String,
     pub name: String,
@@ -126,8 +92,6 @@ pub struct ProjectVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
-    /// `null` = local jar (never reported, kept for the shared shape).
-    pub provider: Option<Provider>,
     pub project_id: String,
     pub title: String,
     #[serde(rename = "type")]
@@ -162,10 +126,6 @@ pub struct UninstallResult {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchParams {
-    /// The source; Modrinth when omitted.
-    #[serde(default)]
-    #[ts(as = "Option<Provider>", optional)]
-    pub provider: Provider,
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
     pub query: String,
@@ -447,25 +407,7 @@ impl From<&mango_updater::UpdateStatus> for UpdateStatus {
     }
 }
 
-// ---------- Part 4: providers, install planning, modpacks ----------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum StatusReason {
-    NoApiKey,
-    Offline,
-    Disabled,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderStatus {
-    pub provider: Provider,
-    pub available: bool,
-    #[ts(optional)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<StatusReason>,
-}
+// ---------- Part 4: install planning, modpacks ----------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -482,7 +424,6 @@ pub enum TargetReason {
     McVersion,
     ContentType,
     NoCompatibleVersion,
-    DistributionBlocked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -508,7 +449,6 @@ pub enum PlanRole {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallPlanItem {
-    pub provider: Provider,
     pub project_id: String,
     pub version_id: String,
     pub title: String,
@@ -518,10 +458,7 @@ pub struct InstallPlanItem {
     pub role: PlanRole,
     pub already_installed: bool,
     pub installed_version: Option<String>,
-    pub distribution_blocked: bool,
     pub size_bytes: Option<u64>,
-    /// Only set when `distribution_blocked`: the page the user must use.
-    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -539,55 +476,14 @@ pub struct InstallPlan {
     pub profile_id: String,
     pub items: Vec<InstallPlanItem>,
     /// Bytes the default selection would download (requested + required items
-    /// that are not installed yet, minus blocked ones).
+    /// that are not installed yet).
     pub total_bytes: u64,
     pub conflicts: Vec<PlanConflict>,
-}
-
-/// Where a blocked pack file stands (Part 5 of `docs/ipc.md`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum BlockedState {
-    /// The user has to fetch it from the CurseForge page.
-    Pending,
-    /// Found on Modrinth by hash: will be, or was, installed from there.
-    MatchedModrinth,
-    /// A matching file turned up in a watched folder; being copied.
-    Found,
-    Installed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct BlockedModrinth {
-    pub project_id: String,
-    pub version_id: String,
-    pub title: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct BlockedFile {
-    /// Display name (the project name when known, else the file name).
-    pub name: String,
-    /// The bare file name the pack expects; the key for `blocked_skip`.
-    pub file_name: String,
-    /// The CurseForge page to fetch it from.
-    pub url: String,
-    pub sha1: Option<String>,
-    pub size: Option<u64>,
-    #[serde(rename = "type")]
-    pub kind: ContentType,
-    pub state: BlockedState,
-    pub modrinth: Option<BlockedModrinth>,
-    pub found_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModpackPlan {
-    pub provider: Provider,
     pub project_id: String,
     pub version_id: String,
     pub name: String,
@@ -597,8 +493,7 @@ pub struct ModpackPlan {
     pub file_count: u64,
     pub size_bytes: Option<u64>,
     pub icon_url: Option<String>,
-    pub blocked_files: Vec<BlockedFile>,
-    /// The pack's memory wish (CurseForge only), else `null`.
+    /// The pack's memory wish (Prism), else `null`.
     pub ram: Option<mango_core::RamHint>,
     /// The heap the new instance gets after clamping; `null` without a hint.
     pub applied_ram_mb: Option<u32>,

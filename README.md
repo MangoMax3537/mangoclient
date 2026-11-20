@@ -100,7 +100,7 @@ Set `MANGOCLIENT_HOME` to use a separate data directory while developing.
 
 | Path | Purpose |
 | --- | --- |
-| `crates/` | Rust crates: core, auth, net, java, minecraft, loaders, modrinth, curseforge, content, servers, mango, archive, updater, runtime, app (service layer), cli |
+| `crates/` | Rust crates: core, auth, net, java, minecraft, loaders, modrinth, content, servers, mango, archive, updater, runtime, app (service layer), cli |
 | `src-tauri/` | Tauri 2 desktop shell |
 | `ui/` | Svelte 5 + TypeScript frontend |
 | `bundle/mangoconfig/` | Prebuilt MangoConfig jars shipped with the launcher |

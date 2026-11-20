@@ -8,11 +8,11 @@ mod window;
 
 use mango_app::image_protocol::Image;
 use mango_app::{
-    AppError, AppService, AppState, Backup, BlockIconsStatus, BlockedFile, ClipboardImage,
+    AppError, AppService, AppState, Backup, BlockIconsStatus, ClipboardImage,
     ConfigView, ContentItem, ContentType, CrashReport, Event, EventSink, ExportFormat, FileDialog,
     FileExport, Host, ImportPlan, InstallPlan, InstallTarget, LaunchResult, LoaderVersion,
     LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, PolicyInput,
-    ProfileView, ProjectDetail, ProjectVersion, Provider, ProviderStatus, PublicAccount,
+    ProfileView, ProjectDetail, ProjectVersion, PublicAccount,
     Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus,
     ServiceOptions, StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult,
     UpdateInfo, UpdateStatus, VersionManifest, World,
@@ -29,7 +29,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 
 /// Emits the service events (`accounts:changed`, `launch:*`, `install:progress`, `servers:pinged`,
-/// `update:status`, `content:changed`, `blocked:changed`, `blocks:status`, `panorama:ready`).
+/// `update:status`, `content:changed`, `blocks:status`, `panorama:ready`).
 struct TauriSink(AppHandle);
 
 impl EventSink for TauriSink {
@@ -262,12 +262,7 @@ async fn modrinth_install_modpack(
         .await
 }
 
-// ---- providers (Modrinth + CurseForge), install planning, modpacks ----
-
-#[tauri::command]
-async fn providers_status(svc: Svc<'_>) -> Res<Vec<ProviderStatus>> {
-    svc.providers_status()
-}
+// ---- Modrinth browsing, install planning, modpacks ----
 
 #[tauri::command]
 async fn search_projects(svc: Svc<'_>, params: SearchParams) -> Res<SearchResult> {
@@ -277,104 +272,70 @@ async fn search_projects(svc: Svc<'_>, params: SearchParams) -> Res<SearchResult
 #[tauri::command]
 async fn project_detail(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
 ) -> Res<ProjectDetail> {
-    svc.project_detail(provider, project_id).await
+    svc.project_detail(project_id).await
 }
 
 #[tauri::command]
 async fn project_versions(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     profile_id: Option<String>,
 ) -> Res<Vec<ProjectVersion>> {
-    svc.project_versions(provider, project_id, profile_id).await
+    svc.project_versions(project_id, profile_id).await
 }
 
 #[tauri::command]
 async fn install_targets(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     version_id: Option<String>,
 ) -> Res<Vec<InstallTarget>> {
-    svc.install_targets(provider, project_id, version_id).await
+    svc.install_targets(project_id, version_id).await
 }
 
 #[tauri::command]
 async fn install_plan(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     version_id: Option<String>,
     profile_id: String,
 ) -> Res<InstallPlan> {
-    svc.install_plan(provider, project_id, version_id, profile_id)
+    svc.install_plan(project_id, version_id, profile_id)
         .await
 }
 
 #[tauri::command]
 async fn install_apply(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     version_id: Option<String>,
     profile_id: String,
     include: Vec<String>,
 ) -> Res<Vec<ContentItem>> {
-    svc.install_apply(provider, project_id, version_id, profile_id, include)
+    svc.install_apply(project_id, version_id, profile_id, include)
         .await
 }
 
 #[tauri::command]
 async fn modpack_plan(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     version_id: Option<String>,
 ) -> Res<ModpackPlan> {
-    svc.modpack_plan(provider, project_id, version_id).await
+    svc.modpack_plan(project_id, version_id).await
 }
 
 #[tauri::command]
 async fn modpack_install(
     svc: Svc<'_>,
-    provider: Provider,
     project_id: String,
     version_id: Option<String>,
     name: Option<String>,
 ) -> Res<ProfileView> {
-    svc.modpack_install(provider, project_id, version_id, name)
+    svc.modpack_install(project_id, version_id, name)
         .await
-}
-
-// ---- blocked CurseForge files (Part 5) ----
-
-#[tauri::command]
-fn blocked_files(svc: Svc<'_>, profile_id: String) -> Res<Vec<BlockedFile>> {
-    svc.blocked_files(profile_id)
-}
-
-#[tauri::command]
-async fn blocked_watch_start(svc: Svc<'_>, profile_id: String) -> Res<Vec<String>> {
-    svc.blocked_watch_start(profile_id).await
-}
-
-#[tauri::command]
-fn blocked_watch_stop(svc: Svc<'_>, profile_id: String) -> Res<()> {
-    svc.blocked_watch_stop(profile_id)
-}
-
-#[tauri::command]
-fn blocked_skip(svc: Svc<'_>, profile_id: String, file_name: String) -> Res<Vec<BlockedFile>> {
-    svc.blocked_skip(profile_id, file_name)
-}
-
-#[tauri::command]
-fn blocked_open_folder(svc: Svc<'_>) -> Res<String> {
-    svc.blocked_open_folder()
 }
 
 // ---- instance icons and backgrounds (Parts 6 and 7) ----
@@ -1012,7 +973,6 @@ pub fn run() {
             modrinth_versions,
             modrinth_install,
             modrinth_install_modpack,
-            providers_status,
             search_projects,
             project_detail,
             project_versions,
@@ -1021,11 +981,6 @@ pub fn run() {
             install_apply,
             modpack_plan,
             modpack_install,
-            blocked_files,
-            blocked_watch_start,
-            blocked_watch_stop,
-            blocked_skip,
-            blocked_open_folder,
             block_icons_status,
             block_icons_prepare,
             profile_icon_set_block,

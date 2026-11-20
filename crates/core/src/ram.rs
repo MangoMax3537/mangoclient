@@ -59,14 +59,30 @@ pub fn default_ram_mb(total_mb: u64) -> u32 {
     base.clamp(limits.min_mb, limits.max_mb)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum RamHintSource {
-    Curseforge,
     Prism,
     Modrinth,
     User,
+}
+
+impl<'de> Deserialize<'de> for RamHintSource {
+    /// Hints stored by older versions as `curseforge` (the removed CurseForge
+    /// importer) load as `modrinth`, a pack author's hint.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        match s.as_str() {
+            "prism" => Ok(RamHintSource::Prism),
+            "modrinth" | "curseforge" => Ok(RamHintSource::Modrinth),
+            "user" => Ok(RamHintSource::User),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &["prism", "modrinth", "user"],
+            )),
+        }
+    }
 }
 
 /// Who chose a profile's heap.
@@ -136,23 +152,6 @@ impl RamHint {
         }
         v.clamp(limits.min_mb, limits.max_mb.max(limits.min_mb))
     }
-}
-
-/// CurseForge `manifest.json`: `minecraft.recommendedRam` (integer MB).
-/// Missing, non-integer or out-of-range values give `None`.
-pub fn parse_curseforge_ram(manifest: &serde_json::Value) -> Option<RamHint> {
-    let v = manifest.get("minecraft")?.get("recommendedRam")?;
-    let mb = v.as_u64().or_else(|| {
-        v.as_f64()
-            .filter(|f| f.fract() == 0.0 && *f >= 0.0)
-            .map(|f| f as u64)
-    })?;
-    RamHint::new(
-        u32::try_from(mb).ok(),
-        None,
-        None,
-        RamHintSource::Curseforge,
-    )
 }
 
 /// Prism/MultiMC `instance.cfg` (`key=value` lines). `MinMemAlloc` is the
@@ -292,24 +291,13 @@ mod tests {
     }
 
     #[test]
-    fn parses_curseforge_hint_and_tolerates_garbage() {
-        let h = parse_curseforge_ram(&json!({"minecraft": {"recommendedRam": 6144}})).unwrap();
+    fn legacy_curseforge_hint_source_still_loads() {
+        let h: RamHint = serde_json::from_value(
+            json!({"recommendedMb": 6144, "minMb": null, "maxMb": null, "source": "curseforge"}),
+        )
+        .unwrap();
+        assert_eq!(h.source, RamHintSource::Modrinth);
         assert_eq!(h.recommended_mb, Some(6144));
-        assert_eq!(h.source, RamHintSource::Curseforge);
-        assert!(parse_curseforge_ram(&json!({"minecraft": {"recommendedRam": 6144.0}})).is_some());
-        for bad in [
-            json!({}),
-            json!({"minecraft": {}}),
-            json!({"minecraft": {"recommendedRam": "lots"}}),
-            json!({"minecraft": {"recommendedRam": -5}}),
-            json!({"minecraft": {"recommendedRam": 12.5}}),
-            json!({"minecraft": {"recommendedRam": 0}}),
-            json!({"minecraft": {"recommendedRam": 99999999999u64}}),
-            json!({"minecraft": {"recommendedRam": null}}),
-            json!("junk"),
-        ] {
-            assert_eq!(parse_curseforge_ram(&bad), None, "{bad}");
-        }
     }
 
     #[test]
@@ -334,7 +322,7 @@ mod tests {
     }
 
     fn hint(rec: Option<u32>, min: Option<u32>, max: Option<u32>) -> RamHint {
-        RamHint::new(rec, min, max, RamHintSource::Curseforge).unwrap()
+        RamHint::new(rec, min, max, RamHintSource::Modrinth).unwrap()
     }
 
     #[test]

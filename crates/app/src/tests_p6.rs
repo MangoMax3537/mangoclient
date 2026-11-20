@@ -7,9 +7,9 @@ use crate::backgrounds::{extract_panoramas, panoramas_root};
 use crate::block_icons::{blocks_root, extract_blocks, local_jar, texture_names, BLOCKS, FACES};
 use crate::image_protocol::{resolve, Image, ImageError};
 use crate::tests_p2::{json_ok, serve, Req};
-use crate::tests_p4::{cf_file, cf_project, cf_server, zip_bytes, Sink, KEY};
+use crate::tests_p4::{zip_bytes, Sink};
 use crate::*;
-use mango_core::{Paths, Secret};
+use mango_core::Paths;
 use serde_json::{json, Value};
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
@@ -944,7 +944,7 @@ async fn a_pack_logo_is_downloaded_from_allowed_hosts_only() {
     assert!(seen.lock().unwrap().iter().all(|r| r.path != "/etc/passwd"));
     // https on an unlisted host is never contacted: host policy with the real defaults
     let strict = env_with(ServiceOptions {
-        icon_hosts: vec!["cdn.modrinth.com".into(), "media.forgecdn.net".into()],
+        icon_hosts: vec!["cdn.modrinth.com".into()],
         icon_allow_http: false,
         ..opts("http://127.0.0.1:1/m")
     });
@@ -954,66 +954,6 @@ async fn a_pack_logo_is_downloaded_from_allowed_hosts_only() {
         .apply_pack_logo(&r.id, Some(&format!("{base}/logo.png")))
         .await;
     assert!(strict.view(&r.id).icon.is_none());
-}
-
-#[tokio::test]
-async fn curseforge_modpack_install_saves_the_logo_and_survives_a_missing_one() {
-    let logo = png_bytes(80, 80, |_, _| [250, 0, 0, 255]);
-    let (logo_base, _) = serve(move |_| {
-        Arc::new(move |r: &Req| {
-            if r.path == "/logo.png" {
-                (200, logo.clone())
-            } else {
-                (404, Vec::new())
-            }
-        })
-    })
-    .await;
-    for good in [true, false] {
-        let mut pack_project = cf_project(1000, "the-pack", 4471, None);
-        pack_project["logo"] =
-            json!({"url": format!("{logo_base}/{}", if good { "logo.png" } else { "gone.png" })});
-        let fab = ["1.21.1", "Fabric", "Client"];
-        let mut pack = cf_file(10001, 1000, "the-pack-1.zip", &["1.21.1", "Fabric"]);
-        let manifest = serde_json::to_vec(&json!({
-            "minecraft": {"version": "1.21.1", "modLoaders": [{"id": "fabric-0.16.9", "primary": true}]},
-            "name": "The Pack", "overrides": "overrides",
-            "files": [{"projectID": 100, "fileID": 1001, "required": true}]
-        }))
-        .unwrap();
-        pack.body = Some(zip_bytes(&[("manifest.json", &manifest)]));
-        let files = vec![cf_file(1001, 100, "alpha-1.jar", &fab), pack];
-        let projects = vec![cf_project(100, "alpha", 6, Some(true)), pack_project];
-        let (cf, _) = serve(cf_server(projects, files, |_, _| None)).await;
-        let mut o = opts("http://127.0.0.1:1/m");
-        o.curseforge_api = cf;
-        o.curseforge_key = Some(Secret::new(KEY));
-        o.curseforge = mango_curseforge::Options {
-            retries: 0,
-            strict_download_urls: false,
-            ..mango_curseforge::Options::default()
-        };
-        let e = env_with(o);
-        let view = e
-            .svc
-            .modpack_install(Provider::Curseforge, "1000".into(), None, None)
-            .await
-            .unwrap();
-        assert_eq!(view.mod_count, 1);
-        if good {
-            assert_eq!(
-                serde_json::to_value(&view.icon).unwrap(),
-                json!({"kind": "image"})
-            );
-            assert!(view.cover_url.is_some());
-            assert_eq!(
-                px(&e.paths().cover_file(&view.id).unwrap()).dimensions(),
-                (256, 256)
-            );
-        } else {
-            assert!(view.icon.is_none() && view.cover_url.is_none());
-        }
-    }
 }
 
 // ---------------------------------------------------------------- panoramas

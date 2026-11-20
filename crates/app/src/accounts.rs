@@ -430,12 +430,6 @@ fn is_bare_code(text: &str) -> bool {
 /// Hosts help links may point to (and their subdomains).
 const EXTERNAL_HOSTS: [&str; 4] = ["microsoft.com", "xbox.com", "minecraft.net", "live.com"];
 
-/// CurseForge project pages (`https://www.curseforge.com/minecraft/...`) may be
-/// opened so the user can fetch files whose author blocks third-party downloads.
-fn is_curseforge_project_page(host: &str, path: &str) -> bool {
-    (host == "curseforge.com" || host == "www.curseforge.com") && path.starts_with("/minecraft")
-}
-
 fn external_host_allowed(raw: &str) -> bool {
     if !mango_mango::security::is_allowed_external_url(raw) {
         return false;
@@ -447,9 +441,6 @@ fn external_host_allowed(raw: &str) -> bool {
         return false;
     };
     let host = host.trim_end_matches('.').to_ascii_lowercase();
-    if is_curseforge_project_page(&host, url.path()) {
-        return true;
-    }
     EXTERNAL_HOSTS
         .iter()
         .any(|d| host == *d || host.ends_with(&format!(".{d}")))

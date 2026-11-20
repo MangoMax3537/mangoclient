@@ -40,7 +40,7 @@ pub struct BlockFaces {
 }
 
 /// `config_set` patch: every field optional, unknown keys are rejected by the
-/// core. `curseforgeApiKey` is write-only (never returned).
+/// core.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigPatch {
@@ -82,16 +82,6 @@ pub struct ConfigPatch {
     pub telemetry: Option<bool>,
     #[ts(optional)]
     pub sidebar_open: Option<bool>,
-    /// Write-only; `null` or `""` clears it.
-    #[ts(optional = nullable)]
-    pub curseforge_api_key: Option<String>,
-    #[ts(optional)]
-    pub blocked_mods_modrinth_fallback: Option<bool>,
-    /// Absolute paths of existing folders.
-    #[ts(optional)]
-    pub blocked_mods_watch_dirs: Option<Vec<String>>,
-    #[ts(optional)]
-    pub blocked_mods_check_subfolders: Option<bool>,
     #[ts(optional)]
     pub auto_snapshot: Option<bool>,
     /// 1..50; out of range is rejected.
@@ -178,10 +168,6 @@ mod tests {
             first_run_done: Some(false),
             telemetry: Some(false),
             sidebar_open: Some(false),
-            curseforge_api_key: Some(String::new()),
-            blocked_mods_modrinth_fallback: Some(false),
-            blocked_mods_watch_dirs: Some(vec![]),
-            blocked_mods_check_subfolders: Some(false),
             auto_snapshot: Some(true),
             backup_keep: Some(5),
         };
@@ -213,16 +199,12 @@ mod tests {
             "firstRunDone",
             "telemetry",
             "sidebarOpen",
-            "curseforgeApiKey",
-            "blockedModsModrinthFallback",
-            "blockedModsWatchDirs",
-            "blockedModsCheckSubfolders",
             "autoSnapshot",
             "backupKeep",
         ] {
             assert!(ours.contains(k), "missing {k}");
         }
-        assert_eq!(ours.len(), 25);
+        assert_eq!(ours.len(), 21);
     }
 
     #[test]

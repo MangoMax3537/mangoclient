@@ -13,7 +13,6 @@ mango-java = { path = "../java" }
 mango-minecraft = { path = "../minecraft" }
 mango-loaders = { path = "../loaders" }
 mango-modrinth = { path = "../modrinth" }
-mango-curseforge = { path = "../curseforge" }
 mango-content = { path = "../content" }
 mango-mango = { path = "../mango" }
 mango-servers = { path = "../servers" }

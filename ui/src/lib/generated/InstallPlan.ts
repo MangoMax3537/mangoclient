@@ -5,6 +5,6 @@ import type { PlanConflict } from "./PlanConflict";
 export type InstallPlan = { profileId: string, items: Array<InstallPlanItem>, 
 /**
  * Bytes the default selection would download (requested + required items
- * that are not installed yet, minus blocked ones).
+ * that are not installed yet).
  */
 totalBytes: number, conflicts: Array<PlanConflict>, };

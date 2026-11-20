@@ -22,66 +22,6 @@ pub fn validate_profile_id(value: &str) -> Result<&str> {
     }
 }
 
-/// The folder a browser saves downloads to, per platform: the XDG user dir
-/// (`user-dirs.dirs`) on Linux, `~/Downloads` on macOS, `%USERPROFILE%\\Downloads`
-/// on Windows. `None` when no home directory is known.
-pub fn default_downloads_dir() -> Option<PathBuf> {
-    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty());
-    let home = if cfg!(windows) {
-        var("USERPROFILE").or_else(|| var("HOME"))
-    } else {
-        var("HOME")
-    }
-    .map(PathBuf::from)?;
-    Some(downloads_dir_in(
-        &home,
-        var("XDG_CONFIG_HOME").map(PathBuf::from).as_deref(),
-        var("XDG_DOWNLOAD_DIR")
-            .and_then(|v| v.into_string().ok())
-            .as_deref(),
-        cfg!(all(unix, not(target_os = "macos"))),
-    ))
-}
-
-/// [`default_downloads_dir`] with every input explicit (for tests).
-pub fn downloads_dir_in(
-    home: &Path,
-    xdg_config_home: Option<&Path>,
-    xdg_download_env: Option<&str>,
-    xdg: bool,
-) -> PathBuf {
-    let fallback = home.join("Downloads");
-    if !xdg {
-        return fallback;
-    }
-    let expand = |raw: &str| -> Option<PathBuf> {
-        let raw = raw.trim().trim_matches('"');
-        let path = match raw.strip_prefix("$HOME") {
-            Some(rest) => format!("{}{rest}", home.display()),
-            None => raw.to_string(),
-        };
-        let p = PathBuf::from(path);
-        (p.is_absolute() && !p.as_os_str().to_string_lossy().contains('\0')).then_some(p)
-    };
-    if let Some(p) = xdg_download_env.and_then(expand) {
-        return p;
-    }
-    let config = xdg_config_home
-        .map(Path::to_path_buf)
-        .filter(|c| c.is_absolute())
-        .unwrap_or_else(|| home.join(".config"));
-    std::fs::read_to_string(config.join("user-dirs.dirs"))
-        .ok()
-        .and_then(|text| {
-            text.lines().find_map(|line| {
-                line.trim()
-                    .strip_prefix("XDG_DOWNLOAD_DIR=")
-                    .and_then(expand)
-            })
-        })
-        .unwrap_or(fallback)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
     root: PathBuf,
@@ -268,45 +208,6 @@ mod tests {
         assert!(p.backup_dir("").is_err());
         assert!(p.cover_file("12345678123412341234123456789abc").is_err());
         assert!(p.instance_dir("").is_err());
-    }
-
-    #[test]
-    fn downloads_dir_follows_xdg_user_dirs_and_falls_back() {
-        let tmp = tempfile::tempdir().unwrap();
-        let home = tmp.path();
-        assert_eq!(
-            downloads_dir_in(home, None, None, true),
-            home.join("Downloads")
-        );
-        std::fs::create_dir_all(home.join(".config")).unwrap();
-        std::fs::write(
-            home.join(".config/user-dirs.dirs"),
-            "# c\nXDG_DESKTOP_DIR=\"$HOME/Desk\"\nXDG_DOWNLOAD_DIR=\"$HOME/Heruntergeladen\"\n",
-        )
-        .unwrap();
-        assert_eq!(
-            downloads_dir_in(home, None, None, true),
-            home.join("Heruntergeladen")
-        );
-        // Relative values are ignored; the env var wins when absolute.
-        std::fs::write(
-            home.join(".config/user-dirs.dirs"),
-            "XDG_DOWNLOAD_DIR=\"rel\"\n",
-        )
-        .unwrap();
-        assert_eq!(
-            downloads_dir_in(home, None, None, true),
-            home.join("Downloads")
-        );
-        assert_eq!(
-            downloads_dir_in(home, None, Some("/data/dl"), true),
-            PathBuf::from("/data/dl")
-        );
-        // Other platforms never read user-dirs.dirs.
-        assert_eq!(
-            downloads_dir_in(home, None, Some("/data/dl"), false),
-            home.join("Downloads")
-        );
     }
 
     #[test]

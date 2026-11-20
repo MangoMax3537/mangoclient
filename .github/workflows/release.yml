@@ -197,8 +197,6 @@ jobs:
       - name: Build bundles
         shell: bash
         env:
-          # Baked in at compile time (option_env!); empty/absent disables CurseForge.
-          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           BUNDLES: ${{ matrix.bundles }}
           TARGET: ${{ matrix.target }}
         run: |
