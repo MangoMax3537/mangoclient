@@ -1,25 +1,19 @@
-# Only README.md, LICENSE and the code belong in the repository.
-
-# Markdown: everything except the README stays local (CLAUDE.md, docs/, CHANGELOG.md, ...)
 *.md
 !README.md
+!CHANGELOG.md
 
-# Dotfiles and dot-directories stay local, except this file
 .*
 !/.gitignore
 
-# Build output and dependencies
 node_modules/
 dist/
 target/
 src-tauri/gen/
 
-# Logs, OS and editor leftovers
 *.log
 *.DS_Store
 todo.txt
 
-# mod/ (Gradle, IDEs, Fabric run dir, JVM crash dumps)
 mod/build/
 mod/out/
 mod/classes/
