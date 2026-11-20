@@ -2,5 +2,14 @@
 import type { BlockedFile } from "./BlockedFile";
 import type { Loader } from "./Loader";
 import type { Provider } from "./Provider";
+import type { RamHint } from "./RamHint";
 
-export type ModpackPlan = { provider: Provider, projectId: string, versionId: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, fileCount: number, sizeBytes: number | null, iconUrl: string | null, blockedFiles: Array<BlockedFile>, };
+export type ModpackPlan = { provider: Provider, projectId: string, versionId: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, fileCount: number, sizeBytes: number | null, iconUrl: string | null, blockedFiles: Array<BlockedFile>, 
+/**
+ * The pack's memory wish (CurseForge only), else `null`.
+ */
+ram: RamHint | null, 
+/**
+ * The heap the new instance gets after clamping; `null` without a hint.
+ */
+appliedRamMb: number | null, };

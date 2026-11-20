@@ -152,7 +152,7 @@ impl AppService {
 
     fn bg_view(&self, id: &str) -> Res<ProfileView> {
         let p = self.profile(id)?;
-        Ok(crate::blocked::view_of(&self.inner.paths, &p))
+        Ok(self.inner.view(&p))
     }
 
     async fn set_background_png(&self, id: String, source: BgSource) -> Res<ProfileView> {

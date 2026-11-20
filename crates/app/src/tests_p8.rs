@@ -305,7 +305,7 @@ async fn launch_runs_end_to_end_against_mock_endpoints() {
     let java = tmp.path().join("fakejava.sh");
     std::fs::write(
         &java,
-        "#!/bin/sh\nif [ \"$1\" = \"-version\" ]; then\n  echo 'openjdk version \"21.0.1\" 2023-10-17' >&2\n  exit 0\nfi\necho 'Setting user: Player'\nsleep 1\nexit 0\n",
+        format!("#!/bin/sh\nif [ \"$1\" = \"-version\" ]; then\n  echo 'openjdk version \"21.0.1\" 2023-10-17' >&2\n  exit 0\nfi\nprintf '%s\\n' \"$@\" > '{}'\necho 'Setting user: Player'\nsleep 1\nexit 0\n", tmp.path().join("args.txt").display()),
     )
     .unwrap();
     std::fs::set_permissions(&java, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -341,8 +341,10 @@ async fn launch_runs_end_to_end_against_mock_endpoints() {
         Host::system(false),
     )
     .unwrap();
-    svc.config_set(json!({"javaPath": java.display().to_string(), "telemetry": false}))
-        .unwrap();
+    svc.config_set(
+        json!({"javaPath": java.display().to_string(), "telemetry": false, "ram": 3072}),
+    )
+    .unwrap();
     let acc = svc.account_add_offline("Player_1".into()).unwrap();
     svc.account_select(acc.uuid).unwrap();
     let p = svc
@@ -378,6 +380,24 @@ async fn launch_runs_end_to_end_against_mock_endpoints() {
             LaunchState::Stopped,
         ]
     );
+    // The launch heap is the profile's effective RAM: first the config
+    // default, then an explicit override.
+    let xmx = || {
+        std::fs::read_to_string(tmp.path().join("args.txt"))
+            .unwrap()
+            .lines()
+            .find(|l| l.starts_with("-Xmx"))
+            .map(str::to_string)
+    };
+    assert_eq!(p.effective_ram_mb, 3072);
+    assert_eq!(xmx().as_deref(), Some("-Xmx3072M"));
+    let v = svc
+        .profile_update(p.id.clone(), json!({"ram": 2048}))
+        .unwrap();
+    assert_eq!(v.effective_ram_mb, 2048);
+    svc.game_launch(p.id.clone(), None).await.unwrap();
+    wait_for(|| xmx().as_deref() == Some("-Xmx2048M")).await;
+    wait_for(|| !svc.game_running().contains(&p.id)).await;
 
     // Everything came from the mock; nothing unexpected was asked for.
     let paths: Vec<String> = seen

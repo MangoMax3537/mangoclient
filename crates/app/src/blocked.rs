@@ -94,8 +94,8 @@ pub(crate) fn pending_count(paths: &Paths, profile_id: &str) -> usize {
 }
 
 /// The UI's profile with `pendingBlocked` filled in.
-pub(crate) fn view_of(paths: &Paths, p: &Profile) -> ProfileView {
-    let mut view = ProfileView::from(p);
+pub(crate) fn view_of(paths: &Paths, p: &Profile, default_ram_mb: u32) -> ProfileView {
+    let mut view = ProfileView::new(p, default_ram_mb);
     view.pending_blocked = pending_count(paths, &p.id);
     view.auto_block = crate::block_icons::auto_block(paths, &p.id);
     // A recorded picture whose file is gone means automatic.

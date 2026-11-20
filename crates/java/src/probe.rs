@@ -38,7 +38,11 @@ fn cache() -> &'static Mutex<HashMap<PathBuf, Option<JavaInfo>>> {
 async fn run(path: &Path) -> Option<JavaInfo> {
     let mut attempts = 0;
     let out = loop {
-        let fut = Command::new(path)
+        let mut cmd = Command::new(path);
+        // No console window flashing up when a GUI app probes java.exe.
+        #[cfg(windows)]
+        cmd.creation_flags(0x0800_0000);
+        let fut = cmd
             .arg("-version")
             .stdin(std::process::Stdio::null())
             .kill_on_drop(true)

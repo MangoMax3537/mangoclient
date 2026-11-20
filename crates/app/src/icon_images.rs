@@ -138,7 +138,7 @@ pub(crate) fn write_atomic(dest: &Path, bytes: &[u8]) -> std::io::Result<()> {
 impl AppService {
     fn view(&self, id: &str) -> Res<ProfileView> {
         let p = self.profile(id)?;
-        Ok(crate::blocked::view_of(&self.inner.paths, &p))
+        Ok(self.inner.view(&p))
     }
 
     pub fn profile_icon_set_block(&self, id: String, block: String) -> Res<ProfileView> {

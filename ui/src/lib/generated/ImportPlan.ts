@@ -2,6 +2,7 @@
 import type { BlockedFile } from "./BlockedFile";
 import type { ImportKind } from "./ImportKind";
 import type { Loader } from "./Loader";
+import type { RamHint } from "./RamHint";
 
 /**
  * What importing a file would create.
@@ -15,4 +16,12 @@ fileCount: number, sizeBytes: number | null,
 /**
  * CurseForge files that need the user (see `docs/ipc.md` Part 5).
  */
-blockedFiles: Array<BlockedFile>, };
+blockedFiles: Array<BlockedFile>, 
+/**
+ * The pack's memory wish (CurseForge, Prism), else `null`.
+ */
+ram: RamHint | null, 
+/**
+ * The heap the new instance gets after clamping; `null` without a hint.
+ */
+appliedRamMb: number | null, };

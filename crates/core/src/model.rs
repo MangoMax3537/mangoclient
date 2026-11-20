@@ -4,33 +4,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::error::Result;
+use crate::ram::{RamHint, RamSource};
 use crate::validation::{config_field, config_patch, profile_field};
 
-/// Suggest a heap size: half of RAM in 512 MB steps, clamped to 2048..=8192.
-pub fn default_ram_mb(total_mb: u64) -> u32 {
-    let half = total_mb / 2 / 512 * 512;
-    half.clamp(2048, 8192) as u32
-}
-
-/// Best-effort total system RAM (Linux only; other platforms report 8192).
-pub fn total_ram_mb() -> u64 {
-    if let Ok(s) = std::fs::read_to_string("/proc/meminfo") {
-        for line in s.lines() {
-            if let Some(rest) = line.strip_prefix("MemTotal:") {
-                let kb: u64 = rest
-                    .trim()
-                    .trim_end_matches("kB")
-                    .trim()
-                    .parse()
-                    .unwrap_or(0);
-                if kb > 0 {
-                    return kb / 1024;
-                }
-            }
-        }
-    }
-    8192
-}
+pub use crate::ram::{default_ram_mb, total_ram_mb};
 
 /// A string that never shows up in `Debug` output (API keys). Serializes as a
 /// plain string so it can live in `config.json`.
@@ -287,6 +264,13 @@ pub struct Profile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background_blur: Option<f64>,
     pub ram: Option<u32>,
+    /// Stored marker for who set `ram` (`modpack` | `user`); `None` on legacy
+    /// profiles. Read it through [`Profile::ram_source`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ram_source: Option<RamSource>,
+    /// The memory wish of the pack this instance came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ram_hint: Option<RamHint>,
     pub java_args: String,
     pub mods: Vec<ModRecord>,
     pub mango_config: Option<bool>,
@@ -318,6 +302,8 @@ impl Profile {
             background_dim: None,
             background_blur: None,
             ram: None,
+            ram_source: None,
+            ram_hint: None,
             java_args: String::new(),
             mods: Vec::new(),
             mango_config: None,
@@ -328,6 +314,21 @@ impl Profile {
             play_time_ms: 0,
             created,
         }
+    }
+
+    /// Who chose the heap: no override = `default`; an override without a
+    /// marker (legacy profile) = `user`.
+    pub fn ram_source(&self) -> RamSource {
+        match (self.ram, self.ram_source) {
+            (None, _) => RamSource::Default,
+            (Some(_), Some(RamSource::Modpack)) => RamSource::Modpack,
+            (Some(_), _) => RamSource::User,
+        }
+    }
+
+    /// The heap a launch uses: the override, else the config default.
+    pub fn effective_ram_mb(&self, config_ram: u32) -> u32 {
+        self.ram.unwrap_or(config_ram)
     }
 
     /// Merge an already validated patch (see `profile_patch`).
@@ -422,9 +423,9 @@ mod tests {
     #[test]
     fn default_ram_rules() {
         assert_eq!(default_ram_mb(4096), 2048);
-        assert_eq!(default_ram_mb(16384), 8192);
-        assert_eq!(default_ram_mb(32768), 8192);
-        assert_eq!(default_ram_mb(10000), 4608);
+        assert_eq!(default_ram_mb(16384), 4096);
+        assert_eq!(default_ram_mb(32768), 5120);
+        assert_eq!(default_ram_mb(10000), 3072);
     }
 
     #[test]
@@ -438,7 +439,7 @@ mod tests {
         assert_eq!(c.width, 1280);
         assert!(c.fullscreen);
         assert_eq!(c.concurrent_downloads, 12);
-        assert_eq!(Config::from_value(&json!("junk"), 16384).ram, 8192);
+        assert_eq!(Config::from_value(&json!("junk"), 16384).ram, 4096);
     }
 
     #[test]
@@ -465,5 +466,47 @@ mod tests {
         let a: Account = serde_json::from_value(raw.clone()).unwrap();
         assert_eq!(a.encrypted_credentials.as_deref(), Some("blob=="));
         assert_eq!(serde_json::to_value(&a).unwrap(), raw);
+    }
+}
+
+#[cfg(test)]
+mod ram_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn profile(extra: Value) -> Profile {
+        let mut v = json!({"id": "x", "name": "n", "mcVersion": "1.21", "loader": "vanilla",
+            "loaderVersion": "", "color": null, "cover": false, "ram": null, "javaArgs": "",
+            "mods": [], "mangoConfig": null, "session": null, "lastPlayed": null,
+            "playTimeMs": 0, "created": 0});
+        v.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn legacy_profiles_with_ram_count_as_user() {
+        let p = profile(json!({"ram": 4096}));
+        assert_eq!(p.ram_source(), RamSource::User);
+        assert_eq!(p.effective_ram_mb(6144), 4096);
+        let p = profile(json!({}));
+        assert_eq!(p.ram_source(), RamSource::Default);
+        assert_eq!(p.effective_ram_mb(6144), 6144);
+        // Stored marker and hint survive a round trip, additively.
+        let p = profile(json!({"ram": 3072, "ramSource": "modpack",
+            "ramHint": {"recommendedMb": 3072, "minMb": null, "maxMb": null, "source": "prism"}}));
+        assert_eq!(p.ram_source(), RamSource::Modpack);
+        let again: Profile = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+        assert_eq!(again, p);
+        // A stale marker without an override is just the default.
+        assert_eq!(
+            profile(json!({"ramSource": "user"})).ram_source(),
+            RamSource::Default
+        );
+        assert!(serde_json::to_value(profile(json!({})))
+            .unwrap()
+            .get("ramSource")
+            .is_none());
     }
 }

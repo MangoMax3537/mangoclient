@@ -284,7 +284,7 @@ impl AppService {
             game_dir: game_dir.clone(),
             profile_id: id.clone(),
             profile_name: profile.name.clone(),
-            ram_mb: profile.ram.unwrap_or(config.ram),
+            ram_mb: profile.effective_ram_mb(config.ram),
             preset: Preset::from_name(&config.performance_preset),
             global_java_args: config.java_args.clone(),
             profile_java_args: profile.java_args.clone(),

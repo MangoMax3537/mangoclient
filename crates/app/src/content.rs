@@ -453,7 +453,7 @@ impl AppService {
                     .await;
                 Ok(self
                     .profile(&created.id)
-                    .map_or(view, |p| crate::blocked::view_of(&self.inner.paths, &p)))
+                    .map_or(view, |p| self.inner.view(&p)))
             }
             Err(e) => {
                 // A half-installed pack is worse than none.
@@ -521,7 +521,7 @@ impl AppService {
         self.save_mods(&profile.id, &synced.mods)?;
         reporter.emit(1, 1, "done");
         let fresh = self.profile(&profile.id)?;
-        Ok(crate::blocked::view_of(&self.inner.paths, &fresh))
+        Ok(self.inner.view(&fresh))
     }
 }
 

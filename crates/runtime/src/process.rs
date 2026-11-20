@@ -39,7 +39,9 @@ fn probe(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn probe(pid: u32) -> bool {
-    let out = Command::new("tasklist")
+    let mut cmd = Command::new("tasklist");
+    hide_console(&mut cmd);
+    let out = cmd
         .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
         .stdin(Stdio::null())
         .stderr(Stdio::null())
@@ -125,7 +127,9 @@ fn start_ms_impl(pid: u32) -> Option<u64> {
     let script = format!(
         "[DateTimeOffset]::new((Get-Process -Id {pid}).StartTime).ToUnixTimeMilliseconds()"
     );
-    let out = Command::new("powershell")
+    let mut cmd = Command::new("powershell");
+    hide_console(&mut cmd);
+    let out = cmd
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::null())
         .stderr(Stdio::null())
@@ -185,12 +189,16 @@ pub fn terminate_java_started(pid: u32, started_at_ms: Option<u64>) -> Result<()
         .stderr(Stdio::null())
         .status();
     #[cfg(windows)]
-    let status = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/F"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let status = {
+        let mut cmd = Command::new("taskkill");
+        hide_console(&mut cmd);
+        cmd
+    }
+    .args(["/PID", &pid.to_string(), "/F"])
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .status();
     match status {
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(RuntimeError::Stop {
@@ -214,6 +222,18 @@ fn probe_exists_other(pid: u32) -> bool {
 fn probe_exists_other(_pid: u32) -> bool {
     false
 }
+
+/// Windows: spawned helper tools must not open a console window of their own.
+#[cfg(windows)]
+fn hide_console(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+fn hide_console(_cmd: &mut Command) {}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

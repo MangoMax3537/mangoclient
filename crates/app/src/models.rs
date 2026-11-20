@@ -598,4 +598,8 @@ pub struct ModpackPlan {
     pub size_bytes: Option<u64>,
     pub icon_url: Option<String>,
     pub blocked_files: Vec<BlockedFile>,
+    /// The pack's memory wish (CurseForge only), else `null`.
+    pub ram: Option<mango_core::RamHint>,
+    /// The heap the new instance gets after clamping; `null` without a hint.
+    pub applied_ram_mb: Option<u32>,
 }

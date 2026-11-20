@@ -1,4 +1,4 @@
-use mango_core::{Account, AccountType, Config, Loader, Paths, Profile};
+use mango_core::{Account, AccountType, Config, Loader, Paths, Profile, RamHint, RamSource};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -26,7 +26,14 @@ pub struct ProfileView {
     pub loader_version: Option<String>,
     pub color: Option<String>,
     pub cover_url: Option<String>,
+    /// Explicit override in MB; `null` = the default applies.
     pub ram: Option<u32>,
+    /// Who chose `ram`: `default` (no override), `modpack` or `user`.
+    pub ram_source: RamSource,
+    /// The memory wish of the pack this instance came from.
+    pub ram_hint: Option<RamHint>,
+    /// What a launch will use: `ram`, else the config default.
+    pub effective_ram_mb: u32,
     pub java_args: String,
     pub mango_config: Option<bool>,
     /// Library group; `null` = ungrouped.
@@ -99,8 +106,9 @@ pub enum ProfileBackground {
     None,
 }
 
-impl From<&Profile> for ProfileView {
-    fn from(p: &Profile) -> Self {
+impl ProfileView {
+    /// `default_ram_mb` is the config default a launch falls back to.
+    pub fn new(p: &Profile, default_ram_mb: u32) -> Self {
         ProfileView {
             id: p.id.clone(),
             name: p.name.clone(),
@@ -110,6 +118,9 @@ impl From<&Profile> for ProfileView {
             color: p.color.clone(),
             cover_url: p.cover.then(|| crate::image_protocol::cover_url(&p.id)),
             ram: p.ram,
+            ram_source: p.ram_source(),
+            ram_hint: p.ram_hint.clone(),
+            effective_ram_mb: p.effective_ram_mb(default_ram_mb),
             java_args: p.java_args.clone(),
             mango_config: p.mango_config,
             group: p.group.clone(),
@@ -279,6 +290,24 @@ impl From<&Config> for ConfigView {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct RamLimitsView {
+    pub min_mb: u32,
+    pub max_mb: u32,
+    pub total_mb: u64,
+}
+
+impl From<mango_core::RamLimits> for RamLimitsView {
+    fn from(l: mango_core::RamLimits) -> Self {
+        RamLimitsView {
+            min_mb: l.min_mb,
+            max_mb: l.max_mb,
+            total_mb: l.total_mb,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AppState {
@@ -287,6 +316,10 @@ pub struct AppState {
     pub profiles: Vec<ProfileView>,
     pub accounts: Vec<PublicAccount>,
     pub total_ram_mb: u64,
+    /// The suggested default heap for a new instance on this machine.
+    pub default_ram_mb: u32,
+    /// What an instance's heap may be on this machine.
+    pub ram_limits: RamLimitsView,
     pub running: Vec<String>,
     pub root_dir: String,
 }

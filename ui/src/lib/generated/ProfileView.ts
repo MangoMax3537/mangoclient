@@ -2,8 +2,26 @@
 import type { InstanceIcon } from "./InstanceIcon";
 import type { Loader } from "./Loader";
 import type { ProfileBackground } from "./ProfileBackground";
+import type { RamHint } from "./RamHint";
+import type { RamSource } from "./RamSource";
 
-export type ProfileView = { id: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, color: string | null, coverUrl: string | null, ram: number | null, javaArgs: string, mangoConfig: boolean | null, 
+export type ProfileView = { id: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, color: string | null, coverUrl: string | null, 
+/**
+ * Explicit override in MB; `null` = the default applies.
+ */
+ram: number | null, 
+/**
+ * Who chose `ram`: `default` (no override), `modpack` or `user`.
+ */
+ramSource: RamSource, 
+/**
+ * The memory wish of the pack this instance came from.
+ */
+ramHint: RamHint | null, 
+/**
+ * What a launch will use: `ram`, else the config default.
+ */
+effectiveRamMb: number, javaArgs: string, mangoConfig: boolean | null, 
 /**
  * Library group; `null` = ungrouped.
  */

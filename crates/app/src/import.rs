@@ -62,6 +62,10 @@ pub struct ImportPlan {
     pub size_bytes: Option<u64>,
     /// CurseForge files that need the user (see `docs/ipc.md` Part 5).
     pub blocked_files: Vec<BlockedFile>,
+    /// The pack's memory wish (CurseForge, Prism), else `null`.
+    pub ram: Option<mango_core::RamHint>,
+    /// The heap the new instance gets after clamping; `null` without a hint.
+    pub applied_ram_mb: Option<u32>,
 }
 
 fn invalid(msg: impl std::fmt::Display) -> AppError {
@@ -139,8 +143,9 @@ pub(crate) struct PrismInfo {
     pub mc_version: String,
     pub loader: Loader,
     pub loader_version: String,
-    /// `MaxMemAlloc` when the instance overrides the memory.
-    pub ram: Option<u32>,
+    /// `MinMemAlloc`/`MaxMemAlloc` unless the instance says
+    /// `OverrideMemory=false`.
+    pub ram_hint: Option<mango_core::RamHint>,
 }
 
 /// `key=value` lines of an `instance.cfg` (sections, comments and a BOM are
@@ -161,8 +166,8 @@ fn parse_cfg(text: &str) -> std::collections::HashMap<String, String> {
 
 /// Name, Minecraft version, loader and memory of a Prism/MultiMC instance
 /// from its `instance.cfg` and `mmc-pack.json`.
-pub(crate) fn parse_prism(cfg: &str, pack: &[u8]) -> Res<PrismInfo> {
-    let cfg = parse_cfg(cfg);
+pub(crate) fn parse_prism(cfg_text: &str, pack: &[u8]) -> Res<PrismInfo> {
+    let cfg = parse_cfg(cfg_text);
     let pack: Value =
         serde_json::from_slice(pack).map_err(|e| invalid(format!("mmc-pack.json: {e}")))?;
     let components = pack
@@ -195,16 +200,15 @@ pub(crate) fn parse_prism(cfg: &str, pack: &[u8]) -> Res<PrismInfo> {
         .unwrap_or(raw)
         .to_string();
     check_versions(&mc_version, &loader_version)?;
-    let ram = (cfg.get("OverrideMemory").map(String::as_str) == Some("true"))
-        .then(|| cfg.get("MaxMemAlloc").and_then(|v| v.parse::<u32>().ok()))
-        .flatten()
-        .filter(|r| (1024..=131_072).contains(r));
+    let ram_hint = (cfg.get("OverrideMemory").map(String::as_str) != Some("false"))
+        .then(|| mango_core::ram::parse_prism_ram(cfg_text))
+        .flatten();
     Ok(PrismInfo {
         name: cfg.get("name").filter(|n| !n.is_empty()).cloned(),
         mc_version,
         loader,
         loader_version,
-        ram,
+        ram_hint,
     })
 }
 
@@ -343,10 +347,7 @@ fn scan_archive(path: &Path) -> Res<Scan> {
 enum How {
     Mrpack,
     Curse(Box<CursePack>),
-    Prism {
-        info: PrismInfo,
-        overrides: Option<String>,
-    },
+    Prism { overrides: Option<String> },
 }
 
 struct Prepared {
@@ -404,6 +405,8 @@ impl AppService {
                     file_count: info.file_count as u64,
                     size_bytes: Some(summary.download_bytes),
                     blocked_files: Vec::new(),
+                    ram: None,
+                    applied_ram_mb: None,
                 };
                 (plan, How::Mrpack)
             }
@@ -431,6 +434,8 @@ impl AppService {
                     size_bytes: Some(resolved.download_bytes()),
                     icon_url: None,
                     blocked_files: blocked.iter().map(|b| b.file.clone()).collect(),
+                    ram: manifest.ram_hint.clone(),
+                    applied_ram_mb: crate::install::applied_ram_mb(manifest.ram_hint.as_ref()),
                 };
                 let plan = ImportPlan {
                     kind: ImportKind::Curseforge,
@@ -441,6 +446,8 @@ impl AppService {
                     file_count: pack_plan.file_count,
                     size_bytes: pack_plan.size_bytes,
                     blocked_files: pack_plan.blocked_files.clone(),
+                    ram: pack_plan.ram.clone(),
+                    applied_ram_mb: pack_plan.applied_ram_mb,
                 };
                 let pack = CursePack {
                     plan: pack_plan,
@@ -471,8 +478,10 @@ impl AppService {
                     file_count: files as u64,
                     size_bytes: Some(bytes),
                     blocked_files: Vec::new(),
+                    ram: info.ram_hint.clone(),
+                    applied_ram_mb: crate::install::applied_ram_mb(info.ram_hint.as_ref()),
                 };
-                (plan, How::Prism { info, overrides })
+                (plan, How::Prism { overrides })
             }
         };
         Ok(Prepared {
@@ -512,10 +521,10 @@ impl AppService {
             "loader": plan.loader,
             "loaderVersion": plan.loader_version.clone().unwrap_or_default(),
         });
-        if let How::Prism { info, .. } = &prepared.how {
-            if let Some(ram) = info.ram {
-                data["ram"] = json!(ram);
-            }
+        if let (Some(hint), Some(mb)) = (&plan.ram, plan.applied_ram_mb) {
+            // Prism applies here; a CurseForge pack applies it again,
+            // identically, when its manifest is installed.
+            crate::install::ram_patch(&mut data, hint, mb);
         }
         let created = self.inner.with_store(|s| s.add_profile(&data))?;
         match self.run_import(&created, &mut prepared).await {
@@ -524,7 +533,7 @@ impl AppService {
                     self.apply_pack_logo_bytes(&created.id, icon).await;
                 }
                 let fresh = self.profile(&created.id)?;
-                Ok(crate::blocked::view_of(&self.inner.paths, &fresh))
+                Ok(self.inner.view(&fresh))
             }
             Err(e) => {
                 // A half-installed pack is worse than none.
@@ -558,7 +567,7 @@ impl AppService {
             How::Curse(pack) => {
                 self.install_curse_pack(profile, &reporter, pack).await?;
             }
-            How::Prism { overrides, .. } => {
+            How::Prism { overrides } => {
                 let game_dir = self.inner.paths.instance_dir(&profile.id)?;
                 if let Some(prefix) = overrides.clone() {
                     let path = prepared.path.clone();

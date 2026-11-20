@@ -284,7 +284,7 @@ fn mrpack_index(name: &str, files: &[Value]) -> Vec<u8> {
     .unwrap()
 }
 
-const PRISM_CFG: &str = "[General]\nInstanceType=OneSix\nname=Cool Pack\niconKey=default\nOverrideMemory=true\nMaxMemAlloc=6144\n";
+const PRISM_CFG: &str = "[General]\nInstanceType=OneSix\nname=Cool Pack\niconKey=default\nOverrideMemory=true\nMaxMemAlloc=3072\n";
 
 fn mmc_pack(extra: Value) -> Vec<u8> {
     let mut components = vec![
@@ -441,7 +441,8 @@ async fn plans_detect_the_kind_by_content_not_by_name() {
     assert_eq!(
         serde_json::to_value(&plan).unwrap(),
         json!({"kind": "mrpack", "name": "MR Pack", "mcVersion": "1.21.1", "loader": "fabric",
-               "loaderVersion": "0.16.9", "fileCount": 1, "sizeBytes": 100, "blockedFiles": []})
+               "loaderVersion": "0.16.9", "fileCount": 1, "sizeBytes": 100, "blockedFiles": [],
+               "ram": null, "appliedRamMb": null})
     );
 
     // A Prism instance inside a top-level folder, named .mrpack.
@@ -799,7 +800,7 @@ async fn importing_a_prism_instance_creates_the_profile_and_its_files() {
             "1.20.1",
             Loader::Fabric,
             Some("0.15.7"),
-            Some(6144)
+            Some(3072)
         )
     );
     let inst = f.inst(&view.id);
@@ -1756,5 +1757,123 @@ async fn the_new_commands_are_reachable_through_dispatch() {
             "bad_args",
             "{cmd}"
         );
+    }
+}
+
+// ---------------------------------------------------------------- RAM
+
+#[tokio::test]
+async fn prism_ram_hint_is_planned_and_applied_identically() {
+    let f = fx();
+    let dir = f.scratch();
+    let p = prism_zip(&dir, "inst.zip", "I/", ".minecraft", fabric_loader());
+    let plan = f
+        .svc
+        .instance_import_plan(p.display().to_string())
+        .await
+        .unwrap();
+    let hint = plan.ram.clone().unwrap();
+    assert_eq!(hint.source, mango_core::RamHintSource::Prism);
+    assert_eq!(hint.recommended_mb, Some(3072));
+    assert_eq!(plan.applied_ram_mb, Some(3072));
+    let json = serde_json::to_value(&plan).unwrap();
+    assert_eq!(json["ram"]["recommendedMb"], 3072);
+    assert_eq!(json["appliedRamMb"], 3072);
+
+    let view = f
+        .svc
+        .instance_import(p.display().to_string(), None)
+        .await
+        .unwrap();
+    assert_eq!(Some(view.effective_ram_mb), plan.applied_ram_mb);
+    assert_eq!(view.ram_source, mango_core::RamSource::Modpack);
+    assert_eq!(view.ram_hint, Some(hint));
+
+    // The user can override; the hint stays for the UI's warning.
+    let v = f
+        .svc
+        .profile_update(view.id.clone(), json!({"ram": 4096}))
+        .unwrap();
+    assert_eq!(
+        (v.ram, v.ram_source, v.effective_ram_mb),
+        (Some(4096), mango_core::RamSource::User, 4096)
+    );
+    assert!(v.ram_hint.is_some());
+}
+
+#[tokio::test]
+async fn mrpack_has_no_ram_hint_and_uses_the_default() {
+    let f = fx();
+    let dir = f.scratch();
+    let index = mrpack_index("MR Pack", &[]);
+    let p = write_zip(&dir, "p.mrpack", &[("modrinth.index.json", &index)]);
+    let plan = f
+        .svc
+        .instance_import_plan(p.display().to_string())
+        .await
+        .unwrap();
+    assert_eq!((plan.ram.clone(), plan.applied_ram_mb), (None, None));
+    let view = f
+        .svc
+        .instance_import(p.display().to_string(), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        (view.ram, view.ram_source, view.ram_hint.clone()),
+        (None, mango_core::RamSource::Default, None)
+    );
+    let state = f.svc.app_state().unwrap();
+    assert_eq!(view.effective_ram_mb, state.config.ram);
+}
+
+#[test]
+fn profile_update_sets_and_clears_ram_and_app_state_reports_limits() {
+    let f = fx();
+    let id = f.profile("R", "1.21.1", "vanilla", None);
+    let state = f.svc.app_state().unwrap();
+    let total = state.total_ram_mb;
+    assert_eq!(state.default_ram_mb, mango_core::ram::default_ram_mb(total));
+    assert_eq!(state.ram_limits.min_mb, 1024);
+    assert_eq!(state.ram_limits.total_mb, total);
+    assert_eq!(
+        state.ram_limits.max_mb,
+        mango_core::ram_limits(total).max_mb
+    );
+    let v = state.profiles.iter().find(|p| p.id == id).unwrap();
+    assert_eq!(
+        (v.ram, v.ram_source, v.effective_ram_mb),
+        (None, mango_core::RamSource::Default, state.config.ram)
+    );
+
+    let v = f
+        .svc
+        .profile_update(id.clone(), json!({"ram": 2048}))
+        .unwrap();
+    assert_eq!(
+        (v.ram, v.ram_source, v.effective_ram_mb),
+        (Some(2048), mango_core::RamSource::User, 2048)
+    );
+    // A spread view (same value) keeps the source; derived keys are ignored.
+    let again = f
+        .svc
+        .profile_update(
+            id.clone(),
+            json!({"ram": 2048, "ramSource": "default", "ramHint": null, "effectiveRamMb": 1}),
+        )
+        .unwrap();
+    assert_eq!(again.ram_source, mango_core::RamSource::User);
+    let v = f
+        .svc
+        .profile_update(id.clone(), json!({"ram": null}))
+        .unwrap();
+    assert_eq!(
+        (v.ram, v.ram_source, v.effective_ram_mb),
+        (None, mango_core::RamSource::Default, state.config.ram)
+    );
+    for bad in [json!(512), json!(999999), json!("big"), json!(2048.5)] {
+        assert!(f
+            .svc
+            .profile_update(id.clone(), json!({"ram": bad}))
+            .is_err());
     }
 }

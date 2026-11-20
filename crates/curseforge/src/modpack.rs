@@ -83,6 +83,8 @@ pub struct Manifest {
     pub files: Vec<ManifestFile>,
     /// Folder inside the zip whose content is copied over the instance.
     pub overrides: String,
+    /// `minecraft.recommendedRam`, if the pack states a usable one.
+    pub ram_hint: Option<mango_core::RamHint>,
 }
 
 fn invalid(msg: &str) -> Error {
@@ -139,6 +141,9 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
     if raw.files.len() > Limits::default().entries {
         return Err(invalid("too many files"));
     }
+    let ram_hint = serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()
+        .and_then(|v| mango_core::ram::parse_curseforge_ram(&v));
     Ok(Manifest {
         name: raw.name.filter(|n| !n.trim().is_empty()),
         version: raw.version,
@@ -155,6 +160,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
             })
             .collect(),
         overrides,
+        ram_hint,
     })
 }
 

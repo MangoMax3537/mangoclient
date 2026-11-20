@@ -1102,6 +1102,8 @@ impl AppService {
                 .as_deref()
                 .and_then(crate::content::public_icon),
             blocked_files: Vec::new(),
+            ram: None,
+            applied_ram_mb: None,
         })
     }
 
@@ -1182,6 +1184,8 @@ impl AppService {
                 .and_then(|l| l.thumbnail_url.as_deref().or(l.url.as_deref()))
                 .and_then(crate::content::public_icon),
             blocked_files: blocked.iter().map(|b| b.file.clone()).collect(),
+            ram: manifest.ram_hint.clone(),
+            applied_ram_mb: applied_ram_mb(manifest.ram_hint.as_ref()),
         };
         Ok(CursePack {
             plan,
@@ -1243,7 +1247,7 @@ impl AppService {
                 self.apply_pack_logo(&created.id, logo).await;
                 Ok(self
                     .profile(&created.id)
-                    .map_or(view, |p| crate::blocked::view_of(&self.inner.paths, &p)))
+                    .map_or(view, |p| self.inner.view(&p)))
             }
             Err(e) => {
                 // A half-installed pack is worse than none.
@@ -1282,6 +1286,9 @@ impl AppService {
         let m = &pack.resolved.manifest;
         let mut patch = json!({"loader": m.loader, "loaderVersion": m.loader_version});
         patch["mcVersion"] = Value::String(m.mc_version.clone());
+        if let (Some(hint), Some(mb)) = (&m.ram_hint, applied_ram_mb(m.ram_hint.as_ref())) {
+            ram_patch(&mut patch, hint, mb);
+        }
         let updated = self
             .inner
             .with_store(|s| s.update_profile(&profile.id, &patch).map(|p| p.cloned()))?
@@ -1340,7 +1347,7 @@ impl AppService {
         self.save_mods(&profile.id, &synced.mods)?;
         reporter.emit(1, 1, "done");
         let fresh = self.profile(&profile.id)?;
-        Ok(crate::blocked::view_of(&self.inner.paths, &fresh))
+        Ok(self.inner.view(&fresh))
     }
 }
 
@@ -1349,4 +1356,21 @@ pub(crate) struct CursePack {
     pub(crate) zip: PathBuf,
     pub(crate) resolved: cf::ResolvedPack,
     pub(crate) blocked: Vec<BlockedEntry>,
+}
+
+/// What a pack's memory hint gives a new instance on this machine (the plan
+/// dialogs and the installer both go through here, so they always agree).
+pub(crate) fn applied_ram_mb(hint: Option<&mango_core::RamHint>) -> Option<u32> {
+    applied_ram_mb_for(hint, mango_core::model::total_ram_mb())
+}
+
+pub(crate) fn applied_ram_mb_for(hint: Option<&mango_core::RamHint>, total_mb: u64) -> Option<u32> {
+    hint.map(|h| h.applied_mb(&mango_core::ram_limits(total_mb)))
+}
+
+/// Adds the creation-time RAM fields to a profile patch.
+pub(crate) fn ram_patch(patch: &mut Value, hint: &mango_core::RamHint, mb: u32) {
+    patch["ram"] = json!(mb);
+    patch["ramSource"] = json!("modpack");
+    patch["ramHint"] = json!(hint);
 }

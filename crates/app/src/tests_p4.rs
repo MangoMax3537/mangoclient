@@ -1701,7 +1701,8 @@ async fn curseforge_modpack_plan_and_install() {
                 "sha1": hex::encode(Sha1::digest(cf_bytes("secret-1.jar"))),
                 "size": cf_bytes("secret-1.jar").len(), "type": "mod", "state": "pending",
                 "modrinth": null, "foundPath": null
-            }]
+            }],
+            "ram": null, "appliedRamMb": null
         })
     );
     assert!(plan.icon_url.is_some());
@@ -1967,4 +1968,35 @@ fn wire_shapes_match_the_contract() {
     let sp: SearchParams =
         serde_json::from_value(json!({"projectType": "mod", "provider": "curseforge"})).unwrap();
     assert_eq!(sp.provider, Provider::Curseforge);
+}
+
+#[tokio::test]
+async fn curseforge_recommended_ram_is_planned_and_applied() {
+    let mut manifest: serde_json::Value = serde_json::from_slice(&cf_manifest()).unwrap();
+    manifest["minecraft"]["recommendedRam"] = json!(2048);
+    let manifest = serde_json::to_vec(&manifest).unwrap();
+    let (projects, files) = cf_pack_world(&[("manifest.json", &manifest)]);
+    let (base, _seen) = serve(cf_server(projects, files, |_, _| None)).await;
+    let f = fx("http://127.0.0.1:1", &base, Some(KEY));
+
+    let plan = f
+        .svc
+        .modpack_plan(Provider::Curseforge, "1000".into(), None)
+        .await
+        .unwrap();
+    let hint = plan.ram.clone().unwrap();
+    assert_eq!(hint.recommended_mb, Some(2048));
+    assert_eq!(hint.source, mango_core::RamHintSource::Curseforge);
+    assert_eq!(plan.applied_ram_mb, Some(2048));
+
+    let view = f
+        .svc
+        .modpack_install(Provider::Curseforge, "1000".into(), None, None)
+        .await
+        .unwrap();
+    // The plan promised exactly what the instance got.
+    assert_eq!(Some(view.effective_ram_mb), plan.applied_ram_mb);
+    assert_eq!(view.ram, Some(2048));
+    assert_eq!(view.ram_source, mango_core::RamSource::Modpack);
+    assert_eq!(view.ram_hint, Some(hint));
 }

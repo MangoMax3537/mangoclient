@@ -574,7 +574,10 @@ async fn run_installer(
     };
     let mut attempts = 0;
     let mut child = loop {
-        let res = Command::new(java)
+        let mut installer = Command::new(java);
+        #[cfg(windows)]
+        installer.creation_flags(0x0800_0000);
+        let res = installer
             .arg("-jar")
             .arg(jar)
             .arg("--installClient")

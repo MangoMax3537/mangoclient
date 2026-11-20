@@ -6,6 +6,7 @@ pub mod error;
 pub mod model;
 pub mod paths;
 pub mod persistence;
+pub mod ram;
 pub mod store;
 pub mod validation;
 
@@ -15,6 +16,7 @@ pub use model::{
     Session,
 };
 pub use paths::{default_downloads_dir, downloads_dir_in, validate_profile_id, Paths};
+pub use ram::{ram_limits, RamHint, RamHintSource, RamLimits, RamSource};
 pub use store::{mod_record_is_safe, Store};
 pub use validation::{
     config_patch, is_wallpaper_id, profile_patch, validate_mods, ValidationError,

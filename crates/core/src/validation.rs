@@ -416,6 +416,12 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
             Value::Null => Ok(Value::Null),
             _ => integer(v, "profile ram", 1024, 131072),
         },
+        "ramSource" => match v {
+            Value::Null => Ok(Value::Null),
+            Value::String(s) if s == "modpack" || s == "user" => Ok(v.clone()),
+            _ => Err(invalid("ramSource")),
+        },
+        "ramHint" => ram_hint(v),
         "javaArgs" => text(v, "profile javaArgs", 8192, true),
         "mods" => {
             validate_mods(v).and_then(|m| serde_json::to_value(m).map_err(|_| invalid("mods")))
@@ -434,6 +440,19 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
         "playTimeMs" => integer(v, "playTimeMs", 0, MAX_SAFE_INT),
         _ => return None,
     })
+}
+
+/// `null` or a hint whose numbers are all in range (re-sanitised).
+fn ram_hint(v: &Value) -> R<Value> {
+    if v.is_null() {
+        return Ok(Value::Null);
+    }
+    let hint: crate::ram::RamHint =
+        serde_json::from_value(v.clone()).map_err(|_| invalid("ramHint"))?;
+    let clean =
+        crate::ram::RamHint::new(hint.recommended_mb, hint.min_mb, hint.max_mb, hint.source)
+            .ok_or_else(|| invalid("ramHint"))?;
+    serde_json::to_value(clean).map_err(|_| invalid("ramHint"))
 }
 
 pub const MAX_GROUP_CHARS: usize = 48;

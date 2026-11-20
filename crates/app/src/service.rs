@@ -10,7 +10,7 @@ use crate::types::{
     PublicAccount, VersionEntry, VersionManifest,
 };
 use mango_auth::Vault;
-use mango_core::{validate_profile_id, Paths, Store};
+use mango_core::{validate_profile_id, Paths, Profile, Store};
 use mango_minecraft::{get_version_manifest, VERSION_MANIFEST_URL};
 use mango_net::FetchOptions;
 use mango_runtime::GameInstance;
@@ -283,6 +283,12 @@ impl Inner {
     pub(crate) fn with_store<R>(&self, f: impl FnOnce(&mut Store) -> R) -> R {
         f(&mut lock(&self.store))
     }
+
+    /// The UI's profile (never call this inside `with_store`).
+    pub(crate) fn view(&self, p: &Profile) -> ProfileView {
+        let ram = self.with_store(|s| s.config.ram);
+        crate::blocked::view_of(&self.paths, p, ram)
+    }
 }
 
 /// Cheap to clone; all clones share the same state.
@@ -365,11 +371,12 @@ impl AppService {
                 ConfigView::from(&s.config),
                 s.profiles
                     .iter()
-                    .map(|p| crate::blocked::view_of(&s.paths, p))
+                    .map(|p| crate::blocked::view_of(&s.paths, p, s.config.ram))
                     .collect(),
                 s.accounts.clone(),
             )
         });
+        let total = mango_core::model::total_ram_mb();
         let now = now_ms() as i64;
         let accounts = records
             .iter()
@@ -380,7 +387,9 @@ impl AppService {
             config,
             profiles,
             accounts,
-            total_ram_mb: mango_core::model::total_ram_mb(),
+            total_ram_mb: total,
+            default_ram_mb: mango_core::ram::default_ram_mb(total),
+            ram_limits: mango_core::ram_limits(total).into(),
             running: self.game_running(),
             root_dir: inner.paths.root().display().to_string(),
         })
@@ -422,7 +431,7 @@ impl AppService {
             data["loaderVersion"] = Value::String(lv);
         }
         let p = self.inner.with_store(|s| s.add_profile(&data))?;
-        Ok(crate::blocked::view_of(self.paths(), &p))
+        Ok(self.inner.view(&p))
     }
 
     /// Applies the user-editable fields of `ProfileView` (`ProfilePatch`).
@@ -454,7 +463,7 @@ impl AppService {
                     clean.insert(key.clone(), v);
                 }
                 "coverUrl" | "lastPlayed" | "playTimeMs" | "modCount" | "pendingBlocked"
-                | "autoBlock" | "iconSource" => {}
+                | "autoBlock" | "iconSource" | "ramSource" | "ramHint" | "effectiveRamMb" => {}
                 "id" | "created" => {
                     return Err(AppError::new(
                         "validation",
@@ -477,11 +486,24 @@ impl AppService {
             }
         }
         self.inner.with_store(|s| {
+            // A changed `ram` is the user's choice; `null` goes back to the
+            // default. An unchanged value (a spread view) keeps its source.
+            if let Some(ram) = clean.get("ram") {
+                let current = s.get_profile(&id).ok_or_else(AppError::profile_not_found)?;
+                if ram.as_u64() != current.ram.map(u64::from) {
+                    let source = if ram.is_null() {
+                        Value::Null
+                    } else {
+                        json!("user")
+                    };
+                    clean.insert("ramSource".into(), source);
+                }
+            }
             let p = s
                 .update_profile(&id, &Value::Object(clean))?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::blocked::view_of(&s.paths, &p))
+            Ok(crate::blocked::view_of(&s.paths, &p, s.config.ram))
         })
     }
 
@@ -568,7 +590,7 @@ impl AppService {
                 .update_profile(&created.id, &patch)?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::blocked::view_of(&s.paths, &p))
+            Ok(crate::blocked::view_of(&s.paths, &p, s.config.ram))
         })
     }
 

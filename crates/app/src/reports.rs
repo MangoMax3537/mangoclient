@@ -285,7 +285,7 @@ fn build_report(
     ctx: &ScrubContext,
 ) -> CrashReport {
     let base = Base {
-        ram_mb: profile.ram.unwrap_or(ram_default),
+        ram_mb: profile.effective_ram_mb(ram_default),
         total_ram_mb: mango_core::model::total_ram_mb(),
         mc_version: &profile.mc_version,
         loader: profile.loader,

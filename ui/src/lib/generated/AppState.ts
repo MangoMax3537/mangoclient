@@ -2,5 +2,14 @@
 import type { ConfigView } from "./ConfigView";
 import type { ProfileView } from "./ProfileView";
 import type { PublicAccount } from "./PublicAccount";
+import type { RamLimitsView } from "./RamLimitsView";
 
-export type AppState = { version: string, config: ConfigView, profiles: Array<ProfileView>, accounts: Array<PublicAccount>, totalRamMb: number, running: Array<string>, rootDir: string, };
+export type AppState = { version: string, config: ConfigView, profiles: Array<ProfileView>, accounts: Array<PublicAccount>, totalRamMb: number, 
+/**
+ * The suggested default heap for a new instance on this machine.
+ */
+defaultRamMb: number, 
+/**
+ * What an instance's heap may be on this machine.
+ */
+ramLimits: RamLimitsView, running: Array<string>, rootDir: string, };
