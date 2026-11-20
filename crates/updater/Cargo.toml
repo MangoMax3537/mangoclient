@@ -7,11 +7,13 @@ license.workspace = true
 [dependencies]
 mango-net = { path = "../net" }
 mango-core = { path = "../core" }
+mango-archive = { path = "../archive" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 hex.workspace = true
+sha2.workspace = true
 semver = { version = "1.0.23", features = ["serde"] }
 ed25519-dalek = "2"
 base64 = "0.22"
@@ -19,7 +21,7 @@ url = "2"
 
 [dev-dependencies]
 tempfile.workspace = true
-sha2.workspace = true
+zip.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 
 [lints]

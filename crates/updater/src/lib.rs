@@ -5,9 +5,12 @@
 //! An unsigned or badly signed file is deleted and never staged.
 
 mod error;
+#[cfg(test)]
+mod install_tests;
 mod installer;
 mod manifest;
 mod platform;
+mod platform_install;
 mod state;
 mod updater;
 mod verify;
@@ -19,6 +22,7 @@ pub use manifest::{
     MIN_UPDATE_SIZE,
 };
 pub use platform::Platform;
+pub use platform_install::{PlatformInstaller, ProcessSpawner, QuitFn, Spawner, Target};
 pub use state::{DisabledReason, UpdateState, UpdateStatus};
 pub use updater::{is_newer, Updater, UpdaterConfig, RECHECK_INTERVAL};
 pub use verify::{verify_bytes, verify_file_or_delete, UPDATE_PUBLIC_KEY_B64};

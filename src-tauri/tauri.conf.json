@@ -6,8 +6,14 @@
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": { "script": "npm run dev", "cwd": "../ui" },
-    "beforeBuildCommand": { "script": "npm run build", "cwd": "../ui" }
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../ui"
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../ui"
+    }
   },
   "app": {
     "windows": [
@@ -28,9 +34,56 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis",
+      "dmg",
+      "app",
+      "appimage",
+      "deb"
+    ],
     "category": "Game",
-    "resources": { "../bundle/mangoconfig": "mangoconfig" },
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "resources": {
+      "../bundle/mangoconfig": "mangoconfig"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "mangomax",
+    "copyright": "Copyright (c) 2026 mangomax. MIT License.",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "homepage": "https://mangoclient.com/",
+    "shortDescription": "Minecraft launcher with profiles, Modrinth and Microsoft accounts",
+    "longDescription": "MangoClient is a Minecraft launcher: profiles for vanilla, Fabric, Quilt, Forge and NeoForge, Modrinth and CurseForge content, Microsoft and offline accounts, automatic Java and the bundled MangoConfig mod.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English",
+          "German"
+        ],
+        "compression": "lzma"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "deb": {
+        "section": "games"
+      }
+    }
   }
 }

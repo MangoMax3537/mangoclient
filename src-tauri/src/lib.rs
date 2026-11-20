@@ -3,6 +3,8 @@
 
 use std::sync::{Arc, Mutex};
 
+mod platform_updater;
+
 use mango_app::image_protocol::Image;
 use mango_app::{
     AppError, AppService, AppState, BlockIconsStatus, BlockedFile, ClipboardImage, ConfigView,

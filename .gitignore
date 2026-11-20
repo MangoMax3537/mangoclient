@@ -4,6 +4,7 @@
 
 .*
 !/.gitignore
+!/.github/
 
 node_modules/
 dist/

@@ -1,0 +1,291 @@
+# Release pipeline. Tag `v*` (or run manually) builds unsigned-by-default
+# installers for Windows, macOS (arm64 + x64) and Linux, signs the update
+# artifacts with Ed25519, writes latest.json and uploads everything to a DRAFT
+# GitHub release. Publishing the draft is a deliberate manual step.
+#
+# Every secret is optional. Without code-signing secrets the installers are
+# unsigned (SmartScreen/Gatekeeper will warn); without UPDATE_PRIVATE_KEY no
+# latest.json is produced and the in-app updater stays dormant. See
+# scripts/README.txt.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v2.0.0 (must match src-tauri/tauri.conf.json version)"
+        required: true
+        type: string
+      notes:
+        description: "Release notes shown in the updater (optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  TAURI_CLI: "@tauri-apps/cli@2.12.6"
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  prepare:
+    name: Verify version and jars
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: v
+        name: Tag must match the app version
+        run: |
+          conf="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [ "v${conf}" != "${RELEASE_TAG}" ]; then
+            echo "Tag ${RELEASE_TAG} does not match tauri.conf.json version ${conf}" >&2
+            exit 1
+          fi
+          echo "version=${conf}" >> "$GITHUB_OUTPUT"
+      - name: MangoConfig jars match mod_version
+        run: node scripts/check-jars.mjs
+
+  ui:
+    name: Build UI once
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install, check, test, build
+        working-directory: ui
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+          if-no-files-found: error
+          retention-days: 3
+
+  build:
+    name: Bundle (${{ matrix.name }})
+    needs: [prepare, ui]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+            label: x64
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: dmg,app
+            label: aarch64
+          - name: macos-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bundles: dmg,app
+            label: x64
+          # The oldest hosted Linux image that has webkit2gtk-4.1 (required by
+          # Tauri 2). An AppImage can only run on systems at least as new as its
+          # build host's glibc, so this sets the floor (glibc 2.35).
+          - name: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+            label: amd64
+    env:
+      # Signing availability, computed without exposing secret values.
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+      HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+
+      - name: Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev libfuse2 xdg-utils file
+
+      # --- optional Windows Authenticode ----------------------------------
+      - name: Import Windows code-signing certificate
+        if: runner.os == 'Windows' && env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $path
+          $cfg = @{ bundle = @{ windows = @{
+            certificateThumbprint = $cert.Thumbprint
+            digestAlgorithm = 'sha256'
+            timestampUrl = 'http://timestamp.digicert.com'
+          } } } | ConvertTo-Json -Depth 5
+          $out = Join-Path $env:RUNNER_TEMP 'signing.json'
+          Set-Content -Path $out -Value $cfg
+          "MANGO_SIGN_CONFIG=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # --- optional Apple signing / notarization --------------------------
+      # Tauri imports the certificate and notarizes when these variables exist,
+      # but an empty variable breaks it, so they are only exported when set.
+      - name: Enable Apple signing
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          {
+            echo "APPLE_CERTIFICATE=${APPLE_CERTIFICATE}"
+            echo "APPLE_CERTIFICATE_PASSWORD=${APPLE_CERTIFICATE_PASSWORD}"
+            echo "APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY}"
+          } >> "$GITHUB_ENV"
+      - name: Enable Apple notarization
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true' && env.HAS_APPLE_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          {
+            echo "APPLE_ID=${APPLE_ID}"
+            echo "APPLE_PASSWORD=${APPLE_PASSWORD}"
+            echo "APPLE_TEAM_ID=${APPLE_TEAM_ID}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build bundles
+        shell: bash
+        env:
+          # Baked in at compile time (option_env!); empty/absent disables CurseForge.
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          BUNDLES: ${{ matrix.bundles }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          args=(build --ci --target "$TARGET" --bundles "$BUNDLES"
+            --config '{"build":{"beforeBuildCommand":null}}')
+          if [ -n "${MANGO_SIGN_CONFIG:-}" ]; then
+            args+=(--config "$MANGO_SIGN_CONFIG")
+          fi
+          npx --yes "$TAURI_CLI" "${args[@]}"
+
+      - name: Collect artifacts
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          LABEL: ${{ matrix.label }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p out
+          b="src-tauri/target/${TARGET}/release/bundle"
+          case "$RUNNER_OS" in
+            Windows)
+              cp "$b"/nsis/*-setup.exe out/
+              ;;
+            macOS)
+              cp "$b"/dmg/*.dmg out/
+              # The updater consumes a zip of the .app (ditto keeps modes and signatures).
+              ditto -c -k --keepParent "$b/macos/MangoClient.app" "out/MangoClient_${VERSION}_${LABEL}.app.zip"
+              ;;
+            Linux)
+              cp "$b"/appimage/*.AppImage "$b"/deb/*.deb out/
+              ;;
+          esac
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Sign updates and draft release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HAS_UPDATE_KEY: ${{ secrets.UPDATE_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: collected
+          merge-multiple: true
+      - name: Checksums
+        working-directory: collected
+        run: |
+          ls -l
+          sha256sum -- * > SHA256SUMS.txt
+      - name: Write latest.json (Ed25519-signed)
+        if: env.HAS_UPDATE_KEY == 'true'
+        env:
+          MANGO_UPDATE_PRIVATE_KEY: ${{ secrets.UPDATE_PRIVATE_KEY }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          NOTES: ${{ github.event.inputs.notes }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "::add-mask::${MANGO_UPDATE_PRIVATE_KEY}"
+          printf '%s\n' "${NOTES:-MangoClient ${VERSION}}" > "${RUNNER_TEMP}/notes.txt"
+          cargo run --quiet --release -p mango-updater --example make_manifest -- \
+            "${VERSION}" "https://github.com/${REPO}/releases/download/${RELEASE_TAG}" \
+            collected "${RUNNER_TEMP}/notes.txt" > collected/latest.json
+          cat collected/latest.json
+      - name: No update key
+        if: env.HAS_UPDATE_KEY != 'true'
+        run: echo "::warning::UPDATE_PRIVATE_KEY is not set, so latest.json was NOT produced and in-app updates will not work for this release."
+      - name: Create or update the DRAFT release and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$REPO" --draft \
+              --title "MangoClient ${RELEASE_TAG}" --generate-notes --target "$GITHUB_SHA"
+          fi
+          gh release upload "$RELEASE_TAG" --repo "$REPO" --clobber collected/*
+          echo "Draft ready. Review it, then publish manually." >> "$GITHUB_STEP_SUMMARY"

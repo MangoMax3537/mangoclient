@@ -37,7 +37,7 @@ Get the newest stable build from the [GitHub Releases page](https://github.com/M
 | --- | --- | --- |
 | Windows | `.exe` installer | Windows 10 or 11, 64-bit |
 | macOS | `.dmg` (Apple Silicon and Intel) | macOS 11 Big Sur or newer |
-| Linux | AppImage or `.tar.gz` | x86_64, glibc 2.31+ |
+| Linux | AppImage or `.deb` | x86_64, glibc 2.35+ (Ubuntu 22.04 or newer) |
 
 On Linux, make the AppImage executable before starting it:
 
