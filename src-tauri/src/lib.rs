@@ -4,23 +4,27 @@
 use std::sync::{Arc, Mutex};
 
 mod platform_updater;
+mod window;
 
 use mango_app::image_protocol::Image;
 use mango_app::{
     AppError, AppService, AppState, Backup, BlockIconsStatus, BlockedFile, ClipboardImage,
     ConfigView, ContentItem, ContentType, CrashReport, Event, EventSink, ExportFormat, FileDialog,
     FileExport, Host, ImportPlan, InstallPlan, InstallTarget, LaunchResult, LoaderVersion,
-    LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, ProfileView,
-    ProjectDetail, ProjectVersion, Provider, ProviderStatus, PublicAccount, Screenshot,
-    ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus, ServiceOptions,
-    StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult, UpdateInfo,
-    UpdateStatus, VersionManifest, World,
+    LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, PolicyInput,
+    ProfileView, ProjectDetail, ProjectVersion, Provider, ProviderStatus, PublicAccount,
+    Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus,
+    ServiceOptions, StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult,
+    UpdateInfo, UpdateStatus, VersionManifest, World,
 };
 use mango_core::Paths;
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, DragDropEvent, Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder,
+    WindowEvent,
+};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::DialogExt;
 
@@ -32,6 +36,25 @@ impl EventSink for TauriSink {
     fn emit(&self, event: Event) {
         // A closed window must not take the game pipeline down.
         let _ = self.0.emit(event.name(), event.payload());
+        // Window policy: a game that runs may hide the launcher, one that
+        // ends brings it back. Queued, never evaluated here (the caller may
+        // hold service locks).
+        if let Event::LaunchState(e) = &event {
+            let input = match e.state {
+                mango_app::LaunchState::Running => Some(PolicyInput::GameRunning {
+                    profile_id: e.profile_id.clone(),
+                }),
+                mango_app::LaunchState::Stopped | mango_app::LaunchState::Crashed => {
+                    Some(PolicyInput::GameEnded {
+                        profile_id: e.profile_id.clone(),
+                    })
+                }
+                _ => None,
+            };
+            if let (Some(input), Some(life)) = (input, self.0.try_state::<window::Lifecycle>()) {
+                life.send(input);
+            }
+        }
     }
 }
 
@@ -861,8 +884,34 @@ async fn image_response(
     }
 }
 
+/// A small multi-thread runtime for the whole app (Tauri's own default has
+/// one worker per core and a 512-thread blocking pool, which a launcher that
+/// mostly waits on the network and the game never needs).
+fn build_runtime() -> Option<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .max_blocking_threads(16)
+        .thread_keep_alive(std::time::Duration::from_secs(5))
+        .thread_name("mango-worker")
+        .enable_all()
+        .build()
+        .ok()
+}
+
 pub fn run() {
-    let result = tauri::Builder::default()
+    // Kept alive until the process ends (`run` below never returns normally).
+    let runtime = build_runtime();
+    if let Some(rt) = &runtime {
+        tauri::async_runtime::set(rt.handle().clone());
+    }
+    let built = tauri::Builder::default()
+        // Must be the first plugin: a second start asks this process to show
+        // (or re-create) its window and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(life) = app.try_state::<window::Lifecycle>() {
+                life.send(PolicyInput::SecondInstance);
+            }
+        }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol("mangoimg", |ctx, request, responder| {
@@ -883,7 +932,23 @@ pub fn run() {
                 None => responder.respond(http_response(503, "text/plain", Vec::new(), None)),
             }
         })
+        .on_window_event(|window, event| {
+            // Files dropped on the launcher: grant first, then announce.
+            if window.label() != window::MAIN_LABEL {
+                return;
+            }
+            if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                if let Some(svc) = window.app_handle().try_state::<AppService>() {
+                    let svc: AppService = svc.inner().clone();
+                    let paths = paths.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        svc.files_dropped(&paths);
+                    });
+                }
+            }
+        })
         .setup(|app| {
+            window::install(app.handle());
             // Path arguments must come from the native pickers.
             let mut opts = ServiceOptions {
                 strict_paths: true,
@@ -1006,9 +1071,22 @@ pub fn run() {
             update_check,
             update_install,
         ])
-        .run(tauri::generate_context!());
-    if let Err(e) = result {
-        eprintln!("MangoClient failed to run: {e}");
-        std::process::exit(1);
-    }
+        .build(tauri::generate_context!());
+    let app = match built {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("MangoClient failed to run: {e}");
+            std::process::exit(1);
+        }
+    };
+    app.run(|handle, event| {
+        // Closing the last window must not quit while a game runs or work is
+        // active; a normal quit installs a staged update.
+        if let RunEvent::ExitRequested { code, api, .. } = event {
+            if window::on_exit_requested(handle, code.is_some()) {
+                api.prevent_exit();
+            }
+        }
+    });
+    drop(runtime);
 }

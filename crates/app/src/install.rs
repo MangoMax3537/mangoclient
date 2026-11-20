@@ -740,6 +740,7 @@ impl AppService {
         profile_id: String,
         include: Vec<String>,
     ) -> Res<Vec<ContentItem>> {
+        let _busy = self.busy_guard();
         let profile = self.profile(&profile_id)?;
         let built = self
             .plan_for(provider, &project_id, version_id.as_deref(), &profile)
@@ -1022,6 +1023,7 @@ impl AppService {
         version_id: Option<String>,
         name: Option<String>,
     ) -> Res<ProfileView> {
+        let _busy = self.busy_guard();
         match provider {
             Provider::Modrinth => {
                 self.modrinth_install_modpack(project_id, version_id, name)

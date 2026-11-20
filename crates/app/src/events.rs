@@ -86,6 +86,12 @@ pub struct PanoramaReadyEvent {
     pub profile_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FilesDroppedEvent {
+    pub paths: Vec<String>,
+}
+
 /// Rust -> UI events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -100,6 +106,7 @@ pub enum Event {
     BlockedChanged(BlockedChangedEvent),
     BlocksStatus(BlockIconsStatus),
     PanoramaReady(PanoramaReadyEvent),
+    FilesDropped(FilesDroppedEvent),
 }
 
 impl Event {
@@ -117,6 +124,7 @@ impl Event {
             Event::BlockedChanged(_) => "blocked:changed",
             Event::BlocksStatus(_) => "blocks:status",
             Event::PanoramaReady(_) => "panorama:ready",
+            Event::FilesDropped(_) => "files:dropped",
         }
     }
 
@@ -134,6 +142,7 @@ impl Event {
             Event::BlockedChanged(e) => serde_json::to_value(e),
             Event::BlocksStatus(e) => serde_json::to_value(e),
             Event::PanoramaReady(e) => serde_json::to_value(e),
+            Event::FilesDropped(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

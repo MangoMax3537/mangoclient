@@ -305,3 +305,30 @@ fn mac_rolls_back_when_second_rename_fails() {
     );
     assert!(f.rec.calls.lock().unwrap().is_empty());
 }
+
+#[test]
+fn apply_without_relaunch_swaps_but_neither_spawns_nor_quits() {
+    let f = fixture();
+    let live = f.install.join("MangoClient.AppImage");
+    fs::write(&live, b"old build").unwrap();
+    let new = f.download("new.AppImage", b"new build");
+    let inst = f.installer(Target::AppImage(live.clone()));
+    inst.stage(&new).unwrap();
+    inst.apply_without_relaunch().unwrap();
+    assert_eq!(fs::read(&live).unwrap(), b"new build");
+    assert!(f.rec.calls.lock().unwrap().is_empty());
+    assert_eq!(f.quits.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn windows_exit_install_runs_the_installer_without_the_update_flag() {
+    let f = fixture();
+    let setup = f.download("setup.exe", b"installer");
+    let inst = f.installer(Target::WindowsNsis);
+    inst.stage(&setup).unwrap();
+    inst.apply_without_relaunch().unwrap();
+    let calls = f.rec.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].1, vec![OsString::from("/S")]);
+    assert_eq!(f.quits.load(Ordering::SeqCst), 0);
+}

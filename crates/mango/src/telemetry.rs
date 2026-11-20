@@ -79,7 +79,13 @@ pub fn base_from_env() -> String {
 /// POST one beat. Errors are swallowed (offline is normal); returns whether
 /// the request completed.
 pub async fn beat(base: &str, payload: &Beat) -> bool {
-    let Ok(client) = reqwest::Client::builder().timeout(TIMEOUT).build() else {
+    // One client for the process: building one (TLS config, root store) every
+    // minute churned the heap for nothing.
+    static CLIENT: std::sync::OnceLock<Option<reqwest::Client>> = std::sync::OnceLock::new();
+    let Some(client) = CLIENT
+        .get_or_init(|| reqwest::Client::builder().timeout(TIMEOUT).build().ok())
+        .as_ref()
+    else {
         return false;
     };
     client

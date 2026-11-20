@@ -32,7 +32,9 @@ mod reports;
 mod scrub;
 mod servers;
 mod service;
+mod shell;
 mod types;
+mod window_policy;
 mod wire;
 mod worlds;
 
@@ -67,8 +69,8 @@ pub use crash::{Confidence, CrashCause, CrashReport};
 pub use error::{AppError, Res};
 pub use events::{
     AccountsChangedEvent, BlockedChangedEvent, ContentChangedEvent, Event, EventSink,
-    InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName,
-    PanoramaReadyEvent, ProgressPhase,
+    FilesDroppedEvent, InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent,
+    LogLevelName, PanoramaReadyEvent, ProgressPhase,
 };
 pub use export::ExportFormat;
 pub use host::{
@@ -88,10 +90,12 @@ pub use models::{
 pub use outfile::FileExport;
 pub use path_grants::DEFAULT_GRANT_TTL;
 pub use service::{resolve_bundle_dir, updates_dir, AppService, ServiceOptions};
+pub use shell::Activity;
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
     ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,
 };
+pub use window_policy::{PolicyInput, WindowAction, WindowPolicy};
 pub use wire::{
     BlockFaces, ConfigPatch, Language, PerformancePreset, ProfilePatch, ProjectKind, SearchSort,
 };

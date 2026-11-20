@@ -129,6 +129,12 @@ impl AppService {
         Ok(self.inner.updater.install()?)
     }
 
+    /// A normal quit with a staged update: install it without starting the
+    /// new version. `true` when something was installed.
+    pub fn update_install_on_exit(&self) -> Res<bool> {
+        Ok(self.inner.updater.install_on_exit()?)
+    }
+
     /// Poll the `mods/` folder of the selected and the running profiles and
     /// emit `content:changed` when it differs from the last look.
     fn spawn_mods_watcher(&self) {

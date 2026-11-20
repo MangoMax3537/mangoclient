@@ -18,6 +18,13 @@ pub trait Installer: Send + Sync {
     /// Arrange for the staged update to be installed when the app quits
     /// (or immediately, then relaunch, when called for a relaunch).
     fn apply_on_quit(&self) -> Result<()>;
+    /// Install the staged update for a plain quit: like `apply_on_quit`, but
+    /// the app is not started again and the quit callback is not called (the
+    /// app is already exiting). Installers that cannot tell fall back to
+    /// `apply_on_quit`.
+    fn apply_without_relaunch(&self) -> Result<()> {
+        self.apply_on_quit()
+    }
 }
 
 /// Does nothing; for tests and headless use.

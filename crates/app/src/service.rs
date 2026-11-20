@@ -226,6 +226,8 @@ pub(crate) struct Inner {
     /// Serializes token refreshes so a rotated refresh token is never lost.
     pub refresh_gate: tokio::sync::Mutex<()>,
     pub signing_in: AtomicBool,
+    /// Installs, imports and restores in flight (see `shell::BusyGuard`).
+    pub busy_ops: std::sync::atomic::AtomicUsize,
     /// Running blocked-files watchers by profile id.
     pub watchers: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
     /// Serializes read-modify-write cycles of the blocked-files sidecars.
@@ -337,6 +339,7 @@ impl AppService {
                 sessions: Mutex::new(HashMap::new()),
                 refresh_gate: tokio::sync::Mutex::new(()),
                 signing_in: AtomicBool::new(false),
+                busy_ops: std::sync::atomic::AtomicUsize::new(0),
                 watchers: Mutex::new(HashMap::new()),
                 blocked_gate: Mutex::new(()),
                 blocks_run: Mutex::new(crate::block_icons::BlocksRun::default()),

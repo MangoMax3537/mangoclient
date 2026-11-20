@@ -497,6 +497,7 @@ impl AppService {
         file_path: String,
         name: Option<String>,
     ) -> Res<ProfileView> {
+        let _busy = self.busy_guard();
         self.checked_in_path(&file_path, crate::path_grants::GrantKind::File)?;
         let mut prepared = self.prepare_import(&file_path).await?;
         let plan = prepared.plan.clone();

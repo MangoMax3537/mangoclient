@@ -876,6 +876,7 @@ impl AppService {
         backup_id: String,
         as_new: Option<bool>,
     ) -> Res<Vec<Backup>> {
+        let _busy = self.busy_guard();
         let profile = self.profile(&profile_id)?;
         let reserve = self.reserve(&profile_id)?;
         let inner = Arc::clone(&self.inner);

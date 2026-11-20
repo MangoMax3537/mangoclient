@@ -34,6 +34,7 @@ pub fn event_signatures(cfg: &Config) -> Vec<(&'static str, String)> {
         e::<BlockedChangedEvent>("blocked:changed", cfg),
         e::<BlockIconsStatus>("blocks:status", cfg),
         e::<PanoramaReadyEvent>("panorama:ready", cfg),
+        e::<FilesDroppedEvent>("files:dropped", cfg),
     ]
 }
 
@@ -94,6 +95,7 @@ fn export_roots(cfg: &Config) -> Result<(), ts_rs::ExportError> {
         AccountsChangedEvent,
         BlockedChangedEvent,
         PanoramaReadyEvent,
+        FilesDroppedEvent,
     );
     Ok(())
 }
@@ -334,7 +336,8 @@ mod tests {
                 | Event::AccountsChanged(_)
                 | Event::BlockedChanged(_)
                 | Event::BlocksStatus(_)
-                | Event::PanoramaReady(_) => e.name(),
+                | Event::PanoramaReady(_)
+                | Event::FilesDropped(_) => e.name(),
             }
         }
         let samples = [
@@ -396,6 +399,7 @@ mod tests {
             Event::PanoramaReady(PanoramaReadyEvent {
                 profile_id: String::new(),
             }),
+            Event::FilesDropped(FilesDroppedEvent { paths: vec![] }),
         ];
         for s in &samples {
             assert!(names.contains(&name_of(s)), "{} missing", s.name());

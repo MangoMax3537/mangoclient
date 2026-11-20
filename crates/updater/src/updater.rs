@@ -185,6 +185,16 @@ impl Updater {
         Ok(true)
     }
 
+    /// Install a ready update because the app is quitting anyway: the new
+    /// version is not started. `Ok(false)` when nothing is ready.
+    pub fn install_on_exit(&self) -> Result<bool> {
+        if !matches!(self.status().state, UpdateState::Ready { .. }) {
+            return Ok(false);
+        }
+        self.inner.installer.apply_without_relaunch()?;
+        Ok(true)
+    }
+
     /// Re-check every [`RECHECK_INTERVAL`] (offer only). Abort the handle to stop.
     pub fn spawn_periodic(&self, every: Duration) -> tokio::task::JoinHandle<()> {
         let this = self.clone();

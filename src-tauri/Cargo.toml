@@ -31,11 +31,12 @@ mango-app = { path = "../crates/app" }
 mango-core = { path = "../crates/core" }
 mango-updater = { path = "../crates/updater" }
 async-trait = "0.1"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "time"] }
+tauri-plugin-single-instance = "2"
 
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+panic = "unwind"
 strip = true

@@ -327,6 +327,7 @@ impl AppService {
         project_id: String,
         version_id: Option<String>,
     ) -> Res<Vec<ContentItem>> {
+        let _busy = self.busy_guard();
         let profile = self.profile(&profile_id)?;
         if !valid_project_ref(&project_id) {
             return Err(AppError::validation("Invalid project id"));
@@ -387,6 +388,7 @@ impl AppService {
         version_id: Option<String>,
         name: Option<String>,
     ) -> Res<crate::types::ProfileView> {
+        let _busy = self.busy_guard();
         if !valid_project_ref(&project_id) {
             return Err(AppError::validation("Invalid project id"));
         }

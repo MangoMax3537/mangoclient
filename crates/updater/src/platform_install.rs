@@ -394,6 +394,19 @@ impl Installer for PlatformInstaller {
     }
 
     fn apply_on_quit(&self) -> Result<()> {
+        self.apply(true)
+    }
+
+    fn apply_without_relaunch(&self) -> Result<()> {
+        self.apply(false)
+    }
+}
+
+impl PlatformInstaller {
+    /// `relaunch`: start the new version and call the quit callback (the
+    /// "Restart now" path). Without it the swap is done and the app, which
+    /// is quitting already, stays closed.
+    fn apply(&self, relaunch: bool) -> Result<()> {
         let staged = self
             .staged()
             .clone()
@@ -401,15 +414,20 @@ impl Installer for PlatformInstaller {
         let spawn = match (&self.target, &staged) {
             (Target::AppImage(current), _) => {
                 self.apply_appimage(current, &staged)?;
-                self.relaunch_args()
+                self.relaunch_args().filter(|_| relaunch)
             }
             (Target::MacApp(bundle), _) => {
                 self.apply_mac(bundle, &staged)?;
-                self.relaunch_args()
+                self.relaunch_args().filter(|_| relaunch)
             }
             (Target::WindowsNsis, Staged::File { path, sha256 }) => {
                 recheck_file(path, sha256)?;
-                Some((path.clone(), vec!["/S".into(), "/UPDATE".into()]))
+                // `/UPDATE` makes the NSIS installer start the app again.
+                let mut args: Vec<OsString> = vec!["/S".into()];
+                if relaunch {
+                    args.push("/UPDATE".into());
+                }
+                Some((path.clone(), args))
             }
             (Target::WindowsNsis, Staged::Bundle { .. }) => {
                 return Err(fail("unexpected staged kind"));
@@ -419,7 +437,9 @@ impl Installer for PlatformInstaller {
         if let Some((program, args)) = spawn {
             self.spawner.spawn_detached(&program, &args)?;
         }
-        (self.quit)();
+        if relaunch {
+            (self.quit)();
+        }
         Ok(())
     }
 }
