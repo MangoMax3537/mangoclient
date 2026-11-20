@@ -424,6 +424,8 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
             Value::Null => Ok(Value::Null),
             _ => boolean(v, "mangoConfig"),
         },
+        "group" => group_name(v),
+        "tags" => tag_list(v),
         "session" => session(v),
         "lastPlayed" => match v {
             Value::Null => Ok(Value::Null),
@@ -432,6 +434,51 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
         "playTimeMs" => integer(v, "playTimeMs", 0, MAX_SAFE_INT),
         _ => return None,
     })
+}
+
+pub const MAX_GROUP_CHARS: usize = 48;
+pub const MAX_TAGS: usize = 12;
+pub const MAX_TAG_CHARS: usize = 24;
+
+/// A label for a group or tag: trimmed, no control characters (this also
+/// rules out newlines and NUL), not empty.
+fn label(s: &str, max: usize, name: &str) -> R<String> {
+    let t = s.trim();
+    if t.is_empty() || t.chars().count() > max || t.chars().any(char::is_control) {
+        return Err(invalid(name));
+    }
+    Ok(t.to_string())
+}
+
+/// `null` or an empty/blank string = no group; else a trimmed label of at
+/// most [`MAX_GROUP_CHARS`] characters.
+fn group_name(v: &Value) -> R<Value> {
+    match v {
+        Value::Null => Ok(Value::Null),
+        Value::String(s) if s.trim().is_empty() => Ok(Value::Null),
+        Value::String(s) => label(s, MAX_GROUP_CHARS, "group").map(Value::String),
+        _ => Err(invalid("group")),
+    }
+}
+
+/// At most [`MAX_TAGS`] tags of at most [`MAX_TAG_CHARS`] characters each,
+/// trimmed. Duplicates (case-insensitive) are dropped, the first spelling
+/// wins. Any bad tag rejects the whole list; so does a list that is too long
+/// before de-duplication.
+fn tag_list(v: &Value) -> R<Value> {
+    let list = v.as_array().ok_or_else(|| invalid("tags"))?;
+    if list.len() > MAX_TAGS {
+        return Err(invalid("tags"));
+    }
+    let mut out: Vec<String> = Vec::new();
+    for item in list {
+        let s = item.as_str().ok_or_else(|| invalid("tags"))?;
+        let t = label(s, MAX_TAG_CHARS, "tags")?;
+        if !out.iter().any(|o| o.to_lowercase() == t.to_lowercase()) {
+            out.push(t);
+        }
+    }
+    Ok(json!(out))
 }
 
 fn session(v: &Value) -> R<Value> {
@@ -501,6 +548,41 @@ mod tests {
         assert!(profile_patch(&json!({"loaderVersion": "../x"})).is_err());
         assert!(profile_patch(&json!({"loaderVersion": ""})).is_ok());
         assert!(profile_patch(&json!({"bogus": 1})).is_err());
+    }
+
+    #[test]
+    fn group_and_tags_are_trimmed_bounded_and_deduplicated() {
+        let ok =
+            profile_patch(&json!({"group": "  Survival  ", "tags": [" a ", "A", "b", "Ä", "ä"]}))
+                .unwrap();
+        assert_eq!(
+            Value::Object(ok),
+            json!({"group": "Survival", "tags": ["a", "b", "Ä"]})
+        );
+        for blank in [json!(null), json!(""), json!("   ")] {
+            let ok = profile_patch(&json!({ "group": blank })).unwrap();
+            assert_eq!(ok["group"], Value::Null);
+        }
+        assert!(profile_patch(&json!({"group": "x".repeat(48)})).is_ok());
+        assert!(profile_patch(&json!({"group": "x".repeat(49)})).is_err());
+        assert!(profile_patch(&json!({"group": "a\nb"})).is_err());
+        assert!(profile_patch(&json!({"group": "a\u{0}b"})).is_err());
+        assert!(profile_patch(&json!({"group": 5})).is_err());
+        assert!(profile_patch(&json!({"tags": "a"})).is_err());
+        assert!(profile_patch(&json!({"tags": [1]})).is_err());
+        assert!(profile_patch(&json!({"tags": [""]})).is_err());
+        assert!(profile_patch(&json!({"tags": ["  "]})).is_err());
+        assert!(profile_patch(&json!({"tags": ["a\tb"]})).is_err());
+        assert!(profile_patch(&json!({"tags": ["x".repeat(25)]})).is_err());
+        assert!(profile_patch(&json!({"tags": ["x".repeat(24)]})).is_ok());
+        let twelve: Vec<String> = (0..12).map(|i| format!("t{i}")).collect();
+        assert!(profile_patch(&json!({ "tags": twelve })).is_ok());
+        let thirteen: Vec<String> = (0..13).map(|i| format!("t{i}")).collect();
+        assert!(profile_patch(&json!({ "tags": thirteen })).is_err());
+        assert_eq!(
+            Value::Object(profile_patch(&json!({"tags": []})).unwrap())["tags"],
+            json!([])
+        );
     }
 
     #[test]

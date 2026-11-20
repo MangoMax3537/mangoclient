@@ -388,7 +388,8 @@ impl AppService {
         let mut clean = Map::new();
         for (key, v) in obj {
             match key.as_str() {
-                "name" | "mcVersion" | "color" | "ram" | "javaArgs" | "mangoConfig" => {
+                "name" | "mcVersion" | "color" | "ram" | "javaArgs" | "mangoConfig" | "group"
+                | "tags" => {
                     clean.insert(key.clone(), v.clone());
                 }
                 "loader" => {
@@ -470,6 +471,8 @@ impl AppService {
             "ram": src.ram,
             "javaArgs": src.java_args,
             "mangoConfig": src.mango_config,
+            "group": src.group,
+            "tags": src.tags,
         });
         if data["name"]
             .as_str()

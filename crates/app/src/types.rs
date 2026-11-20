@@ -29,6 +29,9 @@ pub struct ProfileView {
     pub ram: Option<u32>,
     pub java_args: String,
     pub mango_config: Option<bool>,
+    /// Library group; `null` = ungrouped.
+    pub group: Option<String>,
+    pub tags: Vec<String>,
     pub last_played: Option<u64>,
     pub play_time_ms: u64,
     pub created: u64,
@@ -109,6 +112,8 @@ impl From<&Profile> for ProfileView {
             ram: p.ram,
             java_args: p.java_args.clone(),
             mango_config: p.mango_config,
+            group: p.group.clone(),
+            tags: p.tags.clone(),
             last_played: p.last_played,
             play_time_ms: p.play_time_ms,
             created: p.created,

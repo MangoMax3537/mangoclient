@@ -3,7 +3,11 @@ import type { InstanceIcon } from "./InstanceIcon";
 import type { Loader } from "./Loader";
 import type { ProfileBackground } from "./ProfileBackground";
 
-export type ProfileView = { id: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, color: string | null, coverUrl: string | null, ram: number | null, javaArgs: string, mangoConfig: boolean | null, lastPlayed: number | null, playTimeMs: number, created: number, modCount: number, 
+export type ProfileView = { id: string, name: string, mcVersion: string, loader: Loader, loaderVersion: string | null, color: string | null, coverUrl: string | null, ram: number | null, javaArgs: string, mangoConfig: boolean | null, 
+/**
+ * Library group; `null` = ungrouped.
+ */
+group: string | null, tags: Array<string>, lastPlayed: number | null, playTimeMs: number, created: number, modCount: number, 
 /**
  * Blocked pack files still waiting for the user (pending or found).
  */

@@ -290,6 +290,12 @@ pub struct Profile {
     pub java_args: String,
     pub mods: Vec<ModRecord>,
     pub mango_config: Option<bool>,
+    /// Library group (at most 48 chars); `None` = ungrouped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// Free-form labels (at most 12, each at most 24 chars).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     pub session: Option<Session>,
     pub last_played: Option<u64>,
     pub play_time_ms: u64,
@@ -315,6 +321,8 @@ impl Profile {
             java_args: String::new(),
             mods: Vec::new(),
             mango_config: None,
+            group: None,
+            tags: Vec::new(),
             session: None,
             last_played: None,
             play_time_ms: 0,

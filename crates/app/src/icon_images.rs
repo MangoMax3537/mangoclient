@@ -202,6 +202,17 @@ impl AppService {
     async fn try_pack_logo(&self, profile_id: &str, url: &str) -> Res<()> {
         self.check_icon_host(url)?;
         let bytes = mango_net::get_bytes(url, &self.inner.opts.fetch).await?;
+        self.save_pack_logo(profile_id, bytes).await
+    }
+
+    /// Best effort: a pack's own logo file (an import's `icon.png`).
+    pub(crate) async fn apply_pack_logo_bytes(&self, profile_id: &str, bytes: Vec<u8>) {
+        if let Err(e) = self.save_pack_logo(profile_id, bytes).await {
+            tracing::warn!("modpack logo not saved: {e}");
+        }
+    }
+
+    async fn save_pack_logo(&self, profile_id: &str, bytes: Vec<u8>) -> Res<()> {
         if bytes.len() > MAX_LOGO_BYTES {
             return Err(AppError::new("image_too_large", "Logo is too large"));
         }

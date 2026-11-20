@@ -11,18 +11,24 @@ pub mod bindings;
 mod block_icons;
 mod blocked;
 mod content;
+mod crash;
 pub mod dispatch;
 mod error;
 mod events;
+mod export;
 mod host;
 mod icon_images;
 pub mod image_protocol;
 mod images;
+mod import;
 mod install;
 mod launch;
 mod media;
 mod models;
+mod outfile;
 mod providers;
+mod reports;
+mod scrub;
 mod servers;
 mod service;
 mod types;
@@ -31,6 +37,8 @@ mod worlds;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_p10;
 #[cfg(test)]
 mod tests_p2;
 #[cfg(test)]
@@ -52,17 +60,20 @@ pub use accounts::LaunchCredentials;
 pub use backgrounds::{PanoramaSet, PanoramaSource};
 pub use backups::{Backup, BackupKind, BackupReason};
 pub use block_icons::{BlockIcon, BlockIconsStatus, BlocksState};
+pub use crash::{Confidence, CrashCause, CrashReport};
 pub use error::{AppError, Res};
 pub use events::{
     AccountsChangedEvent, BlockedChangedEvent, ContentChangedEvent, Event, EventSink,
     InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName,
     PanoramaReadyEvent, ProgressPhase,
 };
+pub use export::ExportFormat;
 pub use host::{
     is_login_redirect, login_navigation_allowed, CannedFileDialog, CannedLoginWindow,
     ClipboardImage, ExternalOpener, FileDialog, Host, LoginOutcome, LoginWindow, NoClipboard,
     NoFileDialog, NoLoginWindow, OpenFolder, SystemExternal, SystemOpener,
 };
+pub use import::{ImportKind, ImportPlan};
 pub use models::{
     BlockedFile, BlockedModrinth, BlockedState, ContentItem, ContentType, InstallPlan,
     InstallPlanItem, InstallTarget, LogEntry, LogKind, LogText, LogUpload, ModpackPlan,
@@ -71,6 +82,7 @@ pub use models::{
     ServerStatus, StatsDay, StatsProfile, StatsSummary, StatusReason, StorageKey, StorageUsage,
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
+pub use outfile::FileExport;
 pub use service::{resolve_bundle_dir, updates_dir, AppService, ServiceOptions};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,

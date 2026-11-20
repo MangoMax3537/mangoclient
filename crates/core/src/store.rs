@@ -440,4 +440,38 @@ mod tests {
         assert_eq!(again.profiles.len(), 1);
         assert_eq!(again.profiles[0].name, "A");
     }
+
+    #[test]
+    fn legacy_profiles_without_group_and_tags_load_and_new_fields_persist() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(
+            root.join("accounts.json"),
+            serde_json::to_string(&json!({"accounts": [], "profiles": [
+                {"id": ID, "name": "Old", "mcVersion": "1.20.1", "loader": "vanilla", "created": 5}
+            ]}))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut store = open(root);
+        assert_eq!(store.profiles.len(), 1);
+        assert_eq!(store.profiles[0].group, None);
+        assert!(store.profiles[0].tags.is_empty());
+        store
+            .update_profile(
+                ID,
+                &json!({"group": " Pals ", "tags": ["smp", "SMP", "1.20"]}),
+            )
+            .unwrap();
+        let again = open(root);
+        assert_eq!(again.profiles[0].group.as_deref(), Some("Pals"));
+        assert_eq!(again.profiles[0].tags, ["smp", "1.20"]);
+        // Clearing writes neither field back.
+        let mut again = again;
+        again
+            .update_profile(ID, &json!({"group": null, "tags": []}))
+            .unwrap();
+        let raw = std::fs::read_to_string(root.join("accounts.json")).unwrap();
+        assert!(!raw.contains("\"group\"") && !raw.contains("\"tags\""));
+    }
 }

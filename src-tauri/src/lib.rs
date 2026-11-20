@@ -8,12 +8,13 @@ mod platform_updater;
 use mango_app::image_protocol::Image;
 use mango_app::{
     AppError, AppService, AppState, Backup, BlockIconsStatus, BlockedFile, ClipboardImage,
-    ConfigView, ContentItem, ContentType, Event, EventSink, FileDialog, Host, InstallPlan,
-    InstallTarget, LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome,
-    LoginWindow, ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion, Provider,
-    ProviderStatus, PublicAccount, Screenshot, ScreenshotAction, SearchParams, SearchResult,
-    ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey, StorageUsage,
-    ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest, World,
+    ConfigView, ContentItem, ContentType, CrashReport, Event, EventSink, ExportFormat, FileDialog,
+    FileExport, Host, ImportPlan, InstallPlan, InstallTarget, LaunchResult, LoaderVersion,
+    LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, ProfileView,
+    ProjectDetail, ProjectVersion, Provider, ProviderStatus, PublicAccount, Screenshot,
+    ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus, ServiceOptions,
+    StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult, UpdateInfo,
+    UpdateStatus, VersionManifest, World,
 };
 use mango_core::Paths;
 use serde::Deserialize;
@@ -509,6 +510,48 @@ async fn snapshot_create(svc: Svc<'_>, profile_id: String, label: Option<String>
     svc.snapshot_create(profile_id, label).await
 }
 
+// ---- import / export, crash analysis, diagnostics ----
+
+#[tauri::command]
+async fn instance_export(
+    svc: Svc<'_>,
+    profile_id: String,
+    format: ExportFormat,
+    include_config: bool,
+    out_path: String,
+) -> Res<FileExport> {
+    svc.instance_export(profile_id, format, include_config, out_path)
+        .await
+}
+
+#[tauri::command]
+async fn instance_import_plan(svc: Svc<'_>, file_path: String) -> Res<ImportPlan> {
+    svc.instance_import_plan(file_path).await
+}
+
+#[tauri::command]
+async fn instance_import(
+    svc: Svc<'_>,
+    file_path: String,
+    name: Option<String>,
+) -> Res<ProfileView> {
+    svc.instance_import(file_path, name).await
+}
+
+#[tauri::command]
+async fn crash_analyze(
+    svc: Svc<'_>,
+    profile_id: String,
+    log_id: Option<String>,
+) -> Res<CrashReport> {
+    svc.crash_analyze(profile_id, log_id).await
+}
+
+#[tauri::command]
+async fn diagnostics_export(svc: Svc<'_>, profile_id: String, out_path: String) -> Res<FileExport> {
+    svc.diagnostics_export(profile_id, out_path).await
+}
+
 // ---- servers, media, logs, stats, storage ----
 
 #[tauri::command]
@@ -897,6 +940,11 @@ pub fn run() {
             backup_restore,
             backup_delete,
             snapshot_create,
+            instance_export,
+            instance_import_plan,
+            instance_import,
+            crash_analyze,
+            diagnostics_export,
             servers_list,
             servers_ping_all,
             servers_ping,

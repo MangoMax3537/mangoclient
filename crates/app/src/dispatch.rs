@@ -194,6 +194,24 @@ args! {
         #[ts(optional = nullable)]
         label: Option<String>,
     }
+    InstanceExportArgs {
+        profile_id: String,
+        format: crate::export::ExportFormat,
+        include_config: bool,
+        out_path: String,
+    }
+    InstanceImportPlanArgs { file_path: String }
+    InstanceImportArgs {
+        file_path: String,
+        #[ts(optional = nullable)]
+        name: Option<String>,
+    }
+    CrashAnalyzeArgs {
+        profile_id: String,
+        #[ts(optional = nullable)]
+        log_id: Option<String>,
+    }
+    DiagnosticsExportArgs { profile_id: String, out_path: String }
     AddressArgs { address: String }
     ScreenshotActionArgs { profile_id: String, name: String, action: ScreenshotAction }
     LogFileArgs { profile_id: String, id: String }
@@ -359,6 +377,18 @@ table! {
         |s, a| s.backup_delete(a.profile_id, a.backup_id).await;
     "snapshot_create": SnapshotCreateArgs => Backup =
         |s, a| s.snapshot_create(a.profile_id, a.label).await;
+    "instance_export": InstanceExportArgs => FileExport = |s, a| {
+        s.instance_export(a.profile_id, a.format, a.include_config, a.out_path)
+            .await
+    };
+    "instance_import_plan": InstanceImportPlanArgs => ImportPlan =
+        |s, a| s.instance_import_plan(a.file_path).await;
+    "instance_import": InstanceImportArgs => ProfileView =
+        |s, a| s.instance_import(a.file_path, a.name).await;
+    "crash_analyze": CrashAnalyzeArgs => CrashReport =
+        |s, a| s.crash_analyze(a.profile_id, a.log_id).await;
+    "diagnostics_export": DiagnosticsExportArgs => FileExport =
+        |s, a| s.diagnostics_export(a.profile_id, a.out_path).await;
     "servers_list": NoArgs => Vec<ServerEntry> = |s, _a| s.servers_list().await;
     "servers_ping_all": NoArgs => () = |s, _a| s.servers_ping_all().await;
     "servers_ping": AddressArgs => ServerStatus = |s, a| s.servers_ping(a.address).await;

@@ -172,6 +172,10 @@ fn extract_overrides(pack: &Path, game_dir: &Path) -> Result<()> {
                 continue;
             }
             let rel = &name[prefix.len()..];
+            // The launcher's own bookkeeping is never taken from a pack.
+            if rel.starts_with(".mangoclient-") {
+                continue;
+            }
             let dest = safe_archive_path(game_dir, rel)?;
             if let Some(parent) = dest.parent() {
                 fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
@@ -267,6 +271,17 @@ pub async fn install_modpack(
     .await;
     let _ = tokio::fs::remove_file(&pack_path).await;
     result
+}
+
+/// Install a `.mrpack` file that is already on disk (an import) into a
+/// profile's instance. The file is only read, never deleted.
+pub async fn install_pack_file(
+    pack_path: &Path,
+    paths: &Paths,
+    profile: &Profile,
+    on_progress: Option<Arc<ProgressFn>>,
+) -> Result<ModpackInfo> {
+    install_from_pack(pack_path, paths, profile, on_progress).await
 }
 
 async fn install_from_pack(

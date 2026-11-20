@@ -1103,6 +1103,19 @@ impl AppService {
         })
     }
 
+    /// Read the manifest of a pack zip and look every file up.
+    pub(crate) async fn resolve_pack_zip(
+        client: &cf::Client,
+        zip: &Path,
+    ) -> Res<(cf::Manifest, cf::ResolvedPack)> {
+        let z = zip.to_path_buf();
+        let manifest = tokio::task::spawn_blocking(move || cf::read_manifest(&z))
+            .await?
+            .map_err(AppError::from)?;
+        let resolved = cf::resolve_pack(client, &manifest).await?;
+        Ok((manifest, resolved))
+    }
+
     /// Download the pack zip, read its manifest and look every file up.
     async fn curse_pack_prepare(
         &self,
@@ -1141,15 +1154,7 @@ impl AppService {
         let cache = self.inner.paths.cache();
         let zip = safe_dest(&cache, &file.file_name)?;
         cf::download_cf_file(&client, Some(&project), &file, &zip, progress).await?;
-        let prepared = async {
-            let z = zip.clone();
-            let manifest = tokio::task::spawn_blocking(move || cf::read_manifest(&z))
-                .await?
-                .map_err(AppError::from)?;
-            let resolved = cf::resolve_pack(&client, &manifest).await?;
-            Ok::<_, AppError>((manifest, resolved))
-        }
-        .await;
+        let prepared = Self::resolve_pack_zip(&client, &zip).await;
         let (manifest, resolved) = match prepared {
             Ok(v) => v,
             Err(e) => {
@@ -1266,7 +1271,7 @@ impl AppService {
         result
     }
 
-    async fn install_curse_pack(
+    pub(crate) async fn install_curse_pack(
         &self,
         profile: &Profile,
         reporter: &InstallReporter,
@@ -1337,9 +1342,9 @@ impl AppService {
     }
 }
 
-struct CursePack {
-    plan: ModpackPlan,
-    zip: PathBuf,
-    resolved: cf::ResolvedPack,
-    blocked: Vec<BlockedEntry>,
+pub(crate) struct CursePack {
+    pub(crate) plan: ModpackPlan,
+    pub(crate) zip: PathBuf,
+    pub(crate) resolved: cf::ResolvedPack,
+    pub(crate) blocked: Vec<BlockedEntry>,
 }

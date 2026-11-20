@@ -5,4 +5,12 @@ import type { Loader } from "./Loader";
  * `profile_update` patch: only these fields are applied, derived view fields
  * are ignored by the service.
  */
-export type ProfilePatch = { name?: string, mcVersion?: string, loader?: Loader, loaderVersion?: string | null, color?: string | null, ram?: number | null, javaArgs?: string, mangoConfig?: boolean | null, };
+export type ProfilePatch = { name?: string, mcVersion?: string, loader?: Loader, loaderVersion?: string | null, color?: string | null, ram?: number | null, javaArgs?: string, mangoConfig?: boolean | null, 
+/**
+ * At most 48 chars; `null` or blank = no group.
+ */
+group?: string | null, 
+/**
+ * At most 12 tags of at most 24 chars; trimmed, duplicates (any case) removed.
+ */
+tags?: Array<string>, };

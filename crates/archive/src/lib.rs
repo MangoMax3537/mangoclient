@@ -202,6 +202,123 @@ pub fn extract_zip<R: Read + Seek>(
     Ok(total)
 }
 
+/// The entries of `zip` below `prefix` (`""` = all, else with a trailing
+/// `/`) that `skip` does not exclude, as `(index, path relative to the
+/// prefix, info)`. Entries named exactly like the prefix are ignored.
+fn subtree_entries<R: Read + Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    prefix: &str,
+    skip: &dyn Fn(&str) -> bool,
+) -> Result<Vec<(usize, String, EntryInfo)>, ArchiveError> {
+    let mut out = Vec::new();
+    for i in 0..zip.len() {
+        let f = zip.by_index_raw(i)?;
+        let name = f.name().to_string();
+        let Some(rel) = name.strip_prefix(prefix) else {
+            continue;
+        };
+        if rel.is_empty() || skip(rel) {
+            continue;
+        }
+        let info = EntryInfo {
+            name: name.clone(),
+            size: f.size(),
+            is_dir: f.is_dir(),
+            unix_mode: f.unix_mode(),
+        };
+        out.push((i, rel.to_string(), info));
+    }
+    Ok(out)
+}
+
+/// Check the part of a zip below `prefix` without writing anything: entry
+/// count (of the whole archive), symlink entries, sizes and that every path
+/// stays inside `check_root`. Returns `(files, bytes)` of what an extraction
+/// would write.
+pub fn scan_zip_subtree<R: Read + Seek>(
+    reader: R,
+    prefix: &str,
+    check_root: &Path,
+    limits: &Limits,
+    skip: &dyn Fn(&str) -> bool,
+) -> Result<(usize, u64), ArchiveError> {
+    let mut zip = zip::ZipArchive::new(reader)?;
+    if zip.len() > limits.entries {
+        return Err(ArchiveError::TooManyEntries);
+    }
+    let entries = subtree_entries(&mut zip, prefix, skip)?;
+    let bytes = validate_entries(entries.iter().map(|(_, _, e)| e.clone()), limits)?;
+    let mut files = 0;
+    for (_, rel, info) in &entries {
+        safe_archive_path(check_root, rel)?;
+        if !info.is_dir {
+            files += 1;
+        }
+    }
+    Ok((files, bytes))
+}
+
+/// Extract the part of a zip below `prefix` into `dest` (created if needed),
+/// leaving out what `skip` (given the path relative to the prefix) excludes.
+/// Same guarantees as [`extract_zip`]: no traversal, no links followed or
+/// created, bounded entry count, sizes and total. An existing regular file is
+/// overwritten, an existing link or directory in the way is an error.
+pub fn extract_zip_subtree<R: Read + Seek>(
+    reader: R,
+    prefix: &str,
+    dest: &Path,
+    limits: &Limits,
+    skip: &dyn Fn(&str) -> bool,
+) -> Result<u64, ArchiveError> {
+    let mut zip = zip::ZipArchive::new(reader)?;
+    if zip.len() > limits.entries {
+        return Err(ArchiveError::TooManyEntries);
+    }
+    let entries = subtree_entries(&mut zip, prefix, skip)?;
+    validate_entries(entries.iter().map(|(_, _, e)| e.clone()), limits)?;
+    for (_, rel, _) in &entries {
+        safe_archive_path(dest, rel)?;
+    }
+    fs::create_dir_all(dest)?;
+    let mut total = 0u64;
+    for (i, rel, info) in entries {
+        let target = safe_archive_path(dest, &rel)?;
+        if info.is_dir {
+            fs::create_dir_all(&target)?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+            // Re-check after creating directories (existing links are refused).
+            safe_archive_path(dest, &rel)?;
+        }
+        let mut out = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+        {
+            Ok(o) => o,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                let meta = fs::symlink_metadata(&target)?;
+                if meta.file_type().is_symlink() || !meta.is_file() {
+                    return Err(ArchiveError::Symlink(rel));
+                }
+                fs::File::create(&target)?
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let mut f = zip.by_index(i)?;
+        let remaining = limits.total_size.saturating_sub(total);
+        total += copy_bounded(
+            &mut f,
+            &mut out,
+            limits.entry_size.min(remaining),
+            &info.name,
+        )?;
+    }
+    Ok(total)
+}
+
 /// Extract a `.tar.gz` stream into `dest` (created if needed). Returns bytes written.
 pub fn extract_tar_gz<R: Read>(
     reader: R,
@@ -375,6 +492,70 @@ mod tests {
         assert!(matches!(
             extract_zip(Cursor::new(big), dest.path(), &tiny),
             Err(ArchiveError::EntryTooLarge(_))
+        ));
+    }
+
+    #[test]
+    fn subtree_scan_and_extract_filter_validate_and_never_escape() {
+        let zip = make_zip(&[
+            ("pack/.minecraft/mods/a.jar", b"jar", None),
+            ("pack/.minecraft/options.txt", b"lang:de", None),
+            ("pack/.minecraft/logs/latest.log", b"noise", None),
+            ("pack/instance.cfg", b"name=x", None),
+        ]);
+        let skip = |rel: &str| rel.starts_with("logs/");
+        let root = tempfile::tempdir().unwrap();
+        let (files, bytes) = scan_zip_subtree(
+            Cursor::new(zip.clone()),
+            "pack/.minecraft/",
+            root.path(),
+            &Limits::default(),
+            &skip,
+        )
+        .unwrap();
+        assert_eq!((files, bytes), (2, 10));
+        let dest = root.path().join("out");
+        let n = extract_zip_subtree(
+            Cursor::new(zip),
+            "pack/.minecraft/",
+            &dest,
+            &Limits::default(),
+            &skip,
+        )
+        .unwrap();
+        assert_eq!(n, 10);
+        assert_eq!(fs::read(dest.join("mods/a.jar")).unwrap(), b"jar");
+        assert!(!dest.join("logs").exists() && !dest.join("instance.cfg").exists());
+
+        let evil = make_zip(&[("m/../../escape.txt", b"x", None), ("m/ok", b"x", None)]);
+        let out = root.path().join("evil");
+        assert!(extract_zip_subtree(
+            Cursor::new(evil.clone()),
+            "m/",
+            &out,
+            &Limits::default(),
+            &|_| false
+        )
+        .is_err());
+        assert!(!out.exists(), "nothing is written before validation");
+        assert!(scan_zip_subtree(
+            Cursor::new(evil),
+            "m/",
+            root.path(),
+            &Limits::default(),
+            &|_| false
+        )
+        .is_err());
+        let link = make_zip(&[("m/l", b"/etc", Some(0o120_777))]);
+        assert!(matches!(
+            scan_zip_subtree(
+                Cursor::new(link),
+                "m/",
+                root.path(),
+                &Limits::default(),
+                &|_| false
+            ),
+            Err(ArchiveError::SymlinkEntry(_))
         ));
     }
 

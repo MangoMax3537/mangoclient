@@ -135,6 +135,12 @@ pub struct ProfilePatch {
     pub java_args: Option<String>,
     #[ts(optional = nullable)]
     pub mango_config: Option<bool>,
+    /// At most 48 chars; `null` or blank = no group.
+    #[ts(optional = nullable)]
+    pub group: Option<String>,
+    /// At most 12 tags of at most 24 chars; trimmed, duplicates (any case) removed.
+    #[ts(optional)]
+    pub tags: Option<Vec<String>>,
 }
 
 #[cfg(test)]
@@ -230,6 +236,8 @@ mod tests {
             ram: Some(2048),
             java_args: Some(String::new()),
             mango_config: Some(true),
+            group: Some(String::new()),
+            tags: Some(vec![]),
         };
         let ours = keys(serde_json::to_value(patch).unwrap_or(Value::Null));
         let svc_keys: BTreeSet<String> = [
@@ -241,6 +249,8 @@ mod tests {
             "ram",
             "javaArgs",
             "mangoConfig",
+            "group",
+            "tags",
         ]
         .into_iter()
         .map(String::from)

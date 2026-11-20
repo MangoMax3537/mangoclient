@@ -23,7 +23,7 @@ pub const UPLOAD_MAX_LINES: usize = 25_000;
 /// A gzip stream that expands past this is not a log.
 const MAX_GZ_TOTAL: u64 = 1024 * 1024 * 1024;
 
-fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
+pub(crate) fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -116,7 +116,7 @@ impl AppService {
 
     // ---- logs ----
 
-    fn log_dirs(&self, profile: &Profile) -> Res<(PathBuf, PathBuf, PathBuf)> {
+    pub(crate) fn log_dirs(&self, profile: &Profile) -> Res<(PathBuf, PathBuf, PathBuf)> {
         let instance = self.inner.paths.instance_dir(&profile.id)?;
         Ok((
             instance.join("logs"),
@@ -161,7 +161,7 @@ impl AppService {
     }
 
     /// `game:<name>|crash:<name>|launcher:<name>` -> the file. Basename only.
-    fn log_file(&self, profile_id: &str, id: &str) -> Res<(PathBuf, String)> {
+    pub(crate) fn log_file(&self, profile_id: &str, id: &str) -> Res<(PathBuf, String)> {
         let unknown = || AppError::new("unknown_log", "Unknown log");
         let profile = self.profile(profile_id)?;
         let (kind, name) = id.split_once(':').ok_or_else(unknown)?;
@@ -321,12 +321,12 @@ impl AppService {
     }
 }
 
-fn is_log_name(name: &str) -> bool {
+pub(crate) fn is_log_name(name: &str) -> bool {
     let l = name.to_ascii_lowercase();
     l.ends_with(".log") || l.ends_with(".log.gz") || l.ends_with(".txt")
 }
 
-fn list_dir(dir: &Path, kind: LogKind) -> Vec<LogEntry> {
+pub(crate) fn list_dir(dir: &Path, kind: LogKind) -> Vec<LogEntry> {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -353,7 +353,7 @@ fn list_dir(dir: &Path, kind: LogKind) -> Vec<LogEntry> {
         .collect()
 }
 
-async fn read_log(file: PathBuf) -> Res<LogText> {
+pub(crate) async fn read_log(file: PathBuf) -> Res<LogText> {
     tokio::task::spawn_blocking(move || read_tail(&file, MAX_LOG_BYTES))
         .await?
         .map_err(AppError::from)

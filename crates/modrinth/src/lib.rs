@@ -26,8 +26,8 @@ pub use install::{
     install_project, loader_name, merge_installed, mod_type_of, mods_dir, target_dir_for, LogFn,
 };
 pub use mrpack::{
-    detect_loader, inspect_pack, install_modpack, ModpackInfo, ModpackProgress, PackSummary,
-    ProgressFn, MAX_INDEX_BYTES,
+    detect_loader, inspect_pack, install_modpack, install_pack_file, ModpackInfo, ModpackProgress,
+    PackSummary, ProgressFn, MAX_INDEX_BYTES,
 };
 pub use types::{Dependency, Hashes, Project, SearchParams, Version, VersionFile};
 pub use updates::{check_all_updates, check_updates, ProfileUpdates, RequiredBy, UpdateInfo};

@@ -488,7 +488,18 @@ impl AppService {
             Some(progress),
         )
         .await?;
+        self.finish_modrinth_info(profile, &reporter, info).await
+    }
 
+    /// What follows a Modrinth pack install, whether the pack came from the
+    /// API or a file: the pack's own loader and version win over the
+    /// provisional values, and its jars become ordinary (local) records.
+    pub(crate) async fn finish_modrinth_info(
+        &self,
+        profile: &Profile,
+        reporter: &InstallReporter,
+        info: modrinth::ModpackInfo,
+    ) -> Res<crate::types::ProfileView> {
         let mut patch = json!({"loader": info.loader, "loaderVersion": info.loader_version});
         if let Some(mc) = info.mc_version.filter(|m| !m.is_empty()) {
             patch["mcVersion"] = Value::String(mc);
