@@ -721,12 +721,21 @@ pub fn run() {
                 opts = opts.with_resource_dir(&dir);
             }
             let sink = Arc::new(TauriSink(app.handle().clone()));
-            let host = Host::system(true)
+            let paths = Paths::from_env();
+            let mut host = Host::system(true)
                 .with_clipboard(Arc::new(TauriClipboard(app.handle().clone())))
                 .with_login(Arc::new(TauriLogin(app.handle().clone())))
                 .with_external(Arc::new(TauriExternal))
                 .with_dialog(Arc::new(TauriDialog(app.handle().clone())));
-            let svc = AppService::with_host(Paths::from_env(), sink, opts, host)?;
+            // Dev runs and installs that cannot replace themselves (tar.gz,
+            // distro packages) keep the no-op installer; the updater reports
+            // them as disabled anyway.
+            if let Some(installer) =
+                platform_updater::build(app.handle().clone(), &mango_app::updates_dir(&paths))
+            {
+                host = host.with_installer(installer);
+            }
+            let svc = AppService::with_host(paths, sink, opts, host)?;
             app.manage(svc.clone());
             // Telemetry, update checks and the mods/ watcher need a tokio
             // runtime, which `setup` itself does not run on.

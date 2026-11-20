@@ -298,7 +298,13 @@ async fn sends_user_agent_and_get_json() {
     let v: serde_json::Value = get_json(&format!("{base}/j"), &fast_fetch()).await.unwrap();
     assert_eq!(v["a"], 1);
     assert_eq!(*seen.lock().unwrap(), "/j");
-    assert!(UA.starts_with("MangoClient/1.0.0"));
+    assert_eq!(
+        UA,
+        format!(
+            "MangoClient/{} (+https://github.com/MangoMax3537/mangoclient)",
+            env!("CARGO_PKG_VERSION")
+        )
+    );
 }
 
 #[tokio::test]

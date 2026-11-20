@@ -2,9 +2,9 @@
 //!
 //! All logic (path checks, backup, rollback) lives in `crates/updater`; this
 //! only picks the `Target` for the running install and supplies the quit
-//! callback. `mango_app::build_updater` still passes `NoopInstaller`; once it
-//! accepts an installer, hand it `build(app.handle().clone(), &downloads)`.
-#![allow(dead_code)]
+//! callback. The result goes into `Host::with_installer`; the service hands it
+//! to the updater (the "Restart now" button and the launch-time update both
+//! end in `Installer::apply_on_quit`, which relaunches and exits the app).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

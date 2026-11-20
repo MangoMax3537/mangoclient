@@ -14,7 +14,6 @@ use mango_minecraft::{
     build_launch_command, install_version, resolve_version, HostEnv, InstallOptions,
     InstallProgress, LaunchInput, Phase, Preset,
 };
-use mango_net::FetchOptions;
 use mango_runtime::{
     is_session_alive, log_file_for, AdoptOptions, EventCb, GameEvent, GameInstance, GameState,
     LogLevel, SpawnOptions,
@@ -140,7 +139,10 @@ impl AppService {
             mangoconfig::ensure_with_log(paths, &profile, &config, &bundle_dir, &|l| log(l));
         log(&format!("MangoConfig: {outcome:?}"));
         if config.performance_mods {
-            let lookup = ModrinthPerf(mango_modrinth::Client::with_base(mango_modrinth::API));
+            let lookup = ModrinthPerf(mango_modrinth::Client::with_options(
+                &inner.opts.modrinth_api,
+                inner.opts.fetch.clone(),
+            ));
             let perf = mango_content::ensure_performance_mods(
                 paths,
                 &PerfOptions {
@@ -161,19 +163,15 @@ impl AppService {
             log(&format!("Could not seed options.txt: {e}"));
         }
         let icons = mango_servers::ServerIcons::new(paths.server_icons_file());
-        if let Err(e) = mango_servers::seed_featured_servers(
-            &game_dir,
-            &mango_servers::featured_servers(),
-            &icons,
-        )
-        .await
+        if let Err(e) =
+            mango_servers::seed_featured_servers(&game_dir, &inner.opts.partners, &icons).await
         {
             log(&format!("Partnered server list skipped: {e}"));
         }
 
         // 1. Java against the vanilla metadata (installers need a JVM first).
         state(LaunchState::Java);
-        let fetch = FetchOptions::default();
+        let fetch = inner.opts.fetch.clone();
         let base =
             resolve_version(paths, &profile.mc_version, &inner.opts.manifest_url, &fetch).await?;
         let required = mango_java::required_major_from_json(&base.version);
@@ -249,6 +247,11 @@ impl AppService {
                         level: LogLevelName::Info,
                     }));
                 })),
+                fetch: inner.opts.fetch.clone(),
+                endpoints: mango_minecraft::Endpoints {
+                    manifest: inner.opts.manifest_url.clone(),
+                    resources: inner.opts.resources_url.clone(),
+                },
                 ..InstallOptions::default()
             },
         )
@@ -335,6 +338,7 @@ impl AppService {
     ) -> Res<mango_java::Resolved> {
         let paths = &self.inner.paths;
         let mut opts = ResolveOptions::new(paths.runtimes(), paths.cache());
+        opts.adoptium_base = self.inner.opts.adoptium_base.clone();
         if !config.java_path.is_empty() {
             opts.custom_path = Some(PathBuf::from(&config.java_path));
         }

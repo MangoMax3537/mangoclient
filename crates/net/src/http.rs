@@ -4,7 +4,11 @@ use serde::de::DeserializeOwned;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-pub const UA: &str = "MangoClient/1.0.0 (+https://github.com/mangomax/mangoclient)";
+pub const UA: &str = concat!(
+    "MangoClient/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/MangoMax3537/mangoclient)"
+);
 
 /// Options for [`fetch_with_retry`]. Defaults: 5 attempts, 400ms * 2^n
 /// backoff, 60s timeout until response headers arrive.

@@ -14,7 +14,7 @@ use mango_minecraft::{get_version_manifest, VERSION_MANIFEST_URL};
 use mango_net::FetchOptions;
 use mango_runtime::GameInstance;
 use mango_servers::{PingOptions, ServerIcons};
-use mango_updater::{NoopInstaller, Updater, UpdaterConfig};
+use mango_updater::{Updater, UpdaterConfig};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 pub const DEFAULT_UPDATE_URL: &str =
-    "https://github.com/mangomax/mangoclient/releases/latest/download/latest.json";
+    "https://github.com/MangoMax3537/mangoclient/releases/latest/download/latest.json";
 
 /// Everything that points outside the data dir, injectable for tests.
 #[derive(Debug, Clone)]
@@ -47,8 +47,13 @@ pub struct ServiceOptions {
     pub curseforge: mango_curseforge::Options,
     /// mclo.gs log upload endpoint.
     pub mclogs_api: String,
-    /// Retry/timeout policy for the service's own HTTP calls.
+    /// Retry/timeout policy for the service's own HTTP calls (also used by
+    /// the launch pipeline).
     pub fetch: FetchOptions,
+    /// Minecraft assets (`resources.download.minecraft.net`) base URL.
+    pub resources_url: String,
+    /// Adoptium API base for the automatic Java download.
+    pub adoptium_base: String,
     /// Server list ping settings.
     pub ping: PingOptions,
     /// Partner servers, shown first and starred.
@@ -57,6 +62,15 @@ pub struct ServiceOptions {
     pub update_manifest_url: String,
     /// Unpackaged dev run: the updater reports `disabled`.
     pub update_dev: bool,
+    /// Base64 Ed25519 key updates must be signed with (tests: their own key).
+    pub update_public_key: String,
+    /// Pretend to be another platform (tests). `None` = detect.
+    pub update_platform: Option<mango_updater::Platform>,
+    /// Which URLs an update may come from. `None` = GitHub over https.
+    pub update_policy: Option<mango_updater::UrlPolicy>,
+    /// Pause between a verified launch-time update and handing it to the
+    /// installer, so the UI can paint.
+    pub update_relaunch_delay: Duration,
     /// Check for updates at startup and every 3 h (`start_background`).
     pub auto_update_check: bool,
     /// Telemetry base, already validated. `None` = `MANGO_API_BASE` / legacy.
@@ -90,6 +104,8 @@ impl Default for ServiceOptions {
             curseforge: mango_curseforge::Options::default(),
             mclogs_api: "https://api.mclo.gs/1/log".to_string(),
             fetch: FetchOptions::default(),
+            resources_url: mango_minecraft::RESOURCES_URL.to_string(),
+            adoptium_base: mango_java::DEFAULT_ADOPTIUM_BASE.to_string(),
             ping: PingOptions::default(),
             partners: mango_servers::featured_servers(),
             update_manifest_url: std::env::var("MANGO_UPDATE_URL")
@@ -97,6 +113,10 @@ impl Default for ServiceOptions {
                 .filter(|u| !u.is_empty())
                 .unwrap_or_else(|| DEFAULT_UPDATE_URL.to_string()),
             update_dev: cfg!(debug_assertions),
+            update_public_key: mango_updater::UPDATE_PUBLIC_KEY_B64.to_string(),
+            update_platform: None,
+            update_policy: None,
+            update_relaunch_delay: Duration::from_millis(800),
             auto_update_check: true,
             api_base: None,
             watch_interval: Duration::from_secs(2),
@@ -255,7 +275,7 @@ impl AppService {
         let store = Store::open(paths.clone())?;
         let modrinth = mango_modrinth::Client::with_options(&opts.modrinth_api, opts.fetch.clone());
         let icons = Arc::new(ServerIcons::in_root(paths.root()));
-        let updater = build_updater(&paths, &opts);
+        let updater = build_updater(&paths, &opts, host.installer.clone());
         let (host_vault, host_login) = (host.vault.clone(), host.login.clone());
         let host_dialog = host.dialog.clone();
         let svc = AppService {
@@ -343,6 +363,7 @@ impl AppService {
         loader: String,
         loader_version: Option<String>,
     ) -> Res<ProfileView> {
+        parse_loader(&loader)?;
         let mut data = json!({"name": name, "mcVersion": mc_version, "loader": loader});
         if let Some(lv) = loader_version.filter(|v| !v.is_empty()) {
             data["loaderVersion"] = Value::String(lv);
@@ -351,31 +372,55 @@ impl AppService {
         Ok(crate::blocked::view_of(self.paths(), &p))
     }
 
-    /// Only the user-editable fields of `ProfileView` are applied; derived
-    /// fields (`coverUrl`, `modCount`, `playTimeMs` ...) are ignored.
+    /// Applies the user-editable fields of `ProfileView` (`ProfilePatch`).
+    /// Derived view fields (`coverUrl`, `modCount`, `playTimeMs` ...) are
+    /// ignored so a UI may spread a whole view into the patch; keys that are
+    /// immutable (`id`, `created`), have their own command (`icon`,
+    /// `background`) or are unknown are rejected with a `validation` error.
     pub fn profile_update(&self, id: String, patch: Value) -> Res<ProfileView> {
         validate_profile_id(&id)?;
         let Some(obj) = patch.as_object() else {
             return Err(AppError::new("validation", "Patch must be an object"));
         };
         let mut clean = Map::new();
-        for key in [
-            "name",
-            "mcVersion",
-            "loader",
-            "color",
-            "ram",
-            "javaArgs",
-            "mangoConfig",
-        ] {
-            if let Some(v) = obj.get(key) {
-                clean.insert(key.to_string(), v.clone());
+        for (key, v) in obj {
+            match key.as_str() {
+                "name" | "mcVersion" | "color" | "ram" | "javaArgs" | "mangoConfig" => {
+                    clean.insert(key.clone(), v.clone());
+                }
+                "loader" => {
+                    if let Some(l) = v.as_str() {
+                        parse_loader(l)?;
+                    }
+                    clean.insert(key.clone(), v.clone());
+                }
+                "loaderVersion" => {
+                    // The UI uses null where the store uses "".
+                    let v = if v.is_null() { json!("") } else { v.clone() };
+                    clean.insert(key.clone(), v);
+                }
+                "coverUrl" | "lastPlayed" | "playTimeMs" | "modCount" | "pendingBlocked"
+                | "autoBlock" | "iconSource" => {}
+                "id" | "created" => {
+                    return Err(AppError::new(
+                        "validation",
+                        format!("Profile field '{key}' is immutable"),
+                    ));
+                }
+                "icon" | "background" => {
+                    return Err(AppError::new(
+                        "validation",
+                        format!("Profile field '{key}' has its own command"),
+                    ));
+                }
+                other => {
+                    let shown: String = other.chars().take(40).collect();
+                    return Err(AppError::new(
+                        "validation",
+                        format!("Unknown profile field '{shown}'"),
+                    ));
+                }
             }
-        }
-        if let Some(v) = obj.get("loaderVersion") {
-            // The UI uses null where the store uses "".
-            let v = if v.is_null() { json!("") } else { v.clone() };
-            clean.insert("loaderVersion".into(), v);
         }
         self.inner.with_store(|s| {
             let p = s
@@ -492,7 +537,7 @@ impl AppService {
             &paths,
             &self.inner.opts.manifest_url,
             force,
-            &FetchOptions::default(),
+            &self.inner.opts.fetch,
         )
         .await?;
         Ok(parse_manifest(&raw, installed_versions(&paths)))
@@ -503,9 +548,7 @@ impl AppService {
         loader: String,
         mc_version: String,
     ) -> Res<Vec<LoaderVersion>> {
-        let Some(l) = mango_loaders::Loader::parse(&loader) else {
-            return Err(AppError::new("validation", "Invalid loader"));
-        };
+        let l = parse_loader(&loader)?;
         if l == mango_loaders::Loader::Vanilla {
             return Ok(Vec::new());
         }
@@ -586,18 +629,51 @@ impl AppService {
     }
 }
 
-fn build_updater(paths: &Paths, opts: &ServiceOptions) -> Updater {
+/// Where verified updates are kept until installed. Outside `cache/`, which
+/// the storage manager may clear. The shell's installer must be built for
+/// exactly this directory.
+pub fn updates_dir(paths: &Paths) -> PathBuf {
+    paths.root().join("updates")
+}
+
+fn build_updater(
+    paths: &Paths,
+    opts: &ServiceOptions,
+    installer: Arc<dyn mango_updater::Installer>,
+) -> Updater {
     let version =
         semver::Version::parse(&opts.app_version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
     let mut cfg = UpdaterConfig::new(
         opts.update_manifest_url.clone(),
         version,
-        // Outside `cache/`, which the storage manager may clear.
-        paths.root().join("updates"),
+        updates_dir(paths),
     );
     cfg.dev = opts.update_dev;
     cfg.fetch = opts.fetch.clone();
-    Updater::new(cfg, Arc::new(NoopInstaller))
+    cfg.public_key_b64 = opts.update_public_key.clone();
+    if let Some(p) = &opts.update_platform {
+        cfg.platform = p.clone();
+    }
+    if let Some(p) = &opts.update_policy {
+        cfg.policy = p.clone();
+    }
+    Updater::new(cfg, installer)
+}
+
+/// One of vanilla, fabric, quilt, forge, neoforge; nothing else (not even "").
+fn parse_loader(raw: &str) -> Res<mango_loaders::Loader> {
+    match mango_loaders::Loader::parse(raw) {
+        Some(l) if !raw.is_empty() => Ok(l),
+        _ => {
+            let shown: String = raw.chars().take(40).collect();
+            Err(AppError::new(
+                "validation",
+                format!(
+                    "Invalid loader '{shown}' (expected vanilla, fabric, quilt, forge or neoforge)"
+                ),
+            ))
+        }
+    }
 }
 
 fn parse_manifest(raw: &Value, installed: Vec<String>) -> VersionManifest {

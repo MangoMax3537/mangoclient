@@ -297,6 +297,8 @@ pub struct Host {
     pub dialog: Arc<dyn FileDialog>,
     /// Encrypts account secrets with the per-device key.
     pub vault: Arc<Vault>,
+    /// Installs a verified update (src-tauri: the platform installer).
+    pub installer: Arc<dyn mango_updater::Installer>,
 }
 
 #[cfg(not(test))]
@@ -324,7 +326,14 @@ impl Host {
             }),
             dialog: Arc::new(NoFileDialog),
             vault: Arc::new(default_vault()),
+            installer: Arc::new(mango_updater::NoopInstaller),
         }
+    }
+
+    /// Replace the update installer (default: does nothing).
+    pub fn with_installer(mut self, installer: Arc<dyn mango_updater::Installer>) -> Host {
+        self.installer = installer;
+        self
     }
 
     pub fn with_external(mut self, external: Arc<dyn ExternalOpener>) -> Host {

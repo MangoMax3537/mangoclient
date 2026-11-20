@@ -21,10 +21,13 @@ impl AppService {
         self.spawn_update_events();
         if self.inner.opts.auto_update_check {
             let updater = self.inner.updater.clone();
+            self.spawn_update_relaunch();
             tokio::spawn({
                 let updater = updater.clone();
+                // The launch check applies: a verified update is handed to
+                // the installer, which restarts into the new version.
                 async move {
-                    updater.check(false).await;
+                    updater.check(true).await;
                 }
             });
             updater.spawn_periodic(mango_updater::RECHECK_INTERVAL);
@@ -82,6 +85,33 @@ impl AppService {
                 let status = UpdateStatus::from(&*rx.borrow_and_update());
                 let Some(inner) = weak.upgrade() else { return };
                 inner.emit(Event::UpdateStatus(status));
+            }
+        });
+    }
+
+    /// Launch-time update: once the check has a verified, staged update,
+    /// wait a moment (so the UI paints) and hand it to the installer.
+    fn spawn_update_relaunch(&self) {
+        let mut rx = self.inner.updater.subscribe_relaunch();
+        let weak = Arc::downgrade(&self.inner);
+        tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                if !*rx.borrow_and_update() {
+                    continue;
+                }
+                let Some(inner) = weak.upgrade() else { return };
+                let delay = inner.opts.update_relaunch_delay;
+                let updater = inner.updater.clone();
+                drop(inner);
+                tokio::time::sleep(delay).await;
+                // Installers touch the file system: keep it off the reactor.
+                let result = tokio::task::spawn_blocking(move || updater.install()).await;
+                match result {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => tracing::warn!("launch-time update not installed: {e}"),
+                    Err(e) => tracing::warn!("launch-time update install panicked: {e}"),
+                }
+                return;
             }
         });
     }

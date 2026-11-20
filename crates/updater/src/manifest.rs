@@ -64,8 +64,10 @@ impl UrlPolicy {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn insecure_for_tests(hosts: &[&str]) -> Self {
+    /// Plain http and explicit ports for the given hosts. Only for tests
+    /// against a loopback server: never use in a shipped build.
+    #[doc(hidden)]
+    pub fn insecure_for_tests(hosts: &[&str]) -> Self {
         Self {
             allowed_hosts: hosts.iter().map(|h| h.to_string()).collect(),
             allow_insecure: true,

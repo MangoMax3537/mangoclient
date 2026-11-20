@@ -41,6 +41,8 @@ mod tests_p5;
 mod tests_p6;
 #[cfg(test)]
 mod tests_p7;
+#[cfg(test)]
+mod tests_p8;
 
 pub use accounts::LaunchCredentials;
 pub use backgrounds::{PanoramaSet, PanoramaSource};
@@ -64,7 +66,7 @@ pub use models::{
     ServerStatus, StatsDay, StatsProfile, StatsSummary, StatusReason, StorageKey, StorageUsage,
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
-pub use service::{resolve_bundle_dir, AppService, ServiceOptions};
+pub use service::{resolve_bundle_dir, updates_dir, AppService, ServiceOptions};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
     ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,
