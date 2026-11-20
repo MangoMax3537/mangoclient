@@ -7,13 +7,11 @@
   import PlayButton from './PlayButton.svelte';
   import Seg from './Seg.svelte';
   import Overview from './profile/Overview.svelte';
-  import Content from './profile/Content.svelte';
-  import Media from './profile/Media.svelte';
-  import Backups from './profile/Backups.svelte';
-  import Logs from './profile/Logs.svelte';
-  import ProfileSettings from './profile/ProfileSettings.svelte';
+  import Lazy from './Lazy.svelte';
+  import { tabs } from '../lib/lazy';
   import PanoramaBackground from './PanoramaBackground.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
+  import ProfileMoreMenu from './ProfileMoreMenu.svelte';
   import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import { tip } from '../lib/tooltip';
@@ -39,11 +37,16 @@
   }
 </script>
 
+{#snippet tabSkel()}<div class="tsk" role="status"><span class="sr-only">{t('common.loading')}</span><div class="skel" aria-hidden="true"></div><div class="skel" aria-hidden="true"></div><div class="skel" aria-hidden="true"></div></div>{/snippet}
+
 {#if p}
   <div class="page">
     <section class="hero on-stage" class:compact={nav.profileTab !== 'overview'}>
       <PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />
-      <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
+      <div class="tools">
+        <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
+        <ProfileMoreMenu profileId={p.id} name={p.name} />
+      </div>
       <div class="inner">
         <button class="btn ghost back" type="button" onclick={() => (nav.view = 'library')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('nav.library')}</button>
         <div class="row">
@@ -74,11 +77,11 @@
     <div class="panel" role="tabpanel" aria-labelledby="ptab-{nav.profileTab}">
       {#key p.id}
         {#if nav.profileTab === 'overview'}<Overview profile={p} />
-        {:else if nav.profileTab === 'content'}<Content profile={p} />
-        {:else if nav.profileTab === 'media'}<Media profile={p} />
-        {:else if nav.profileTab === 'backups'}<Backups profile={p} />
-        {:else if nav.profileTab === 'logs'}<Logs profile={p} />
-        {:else}<ProfileSettings profile={p} />{/if}
+        {:else if nav.profileTab === 'content'}<Lazy load={tabs.content} props={{ profile: p }} fallback={tabSkel} />
+        {:else if nav.profileTab === 'media'}<Lazy load={tabs.media} props={{ profile: p }} fallback={tabSkel} />
+        {:else if nav.profileTab === 'backups'}<Lazy load={tabs.backups} props={{ profile: p }} fallback={tabSkel} />
+        {:else if nav.profileTab === 'logs'}<Lazy load={tabs.logs} props={{ profile: p }} fallback={tabSkel} />
+        {:else}<Lazy load={tabs.settings} props={{ profile: p }} fallback={tabSkel} />{/if}
       {/key}
     </div>
   </div>
@@ -95,7 +98,8 @@
   .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--r-s); }
   .pen { position: absolute; right: 3px; bottom: 3px; width: 20px; height: 20px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   .iconbtn:hover .pen, .iconbtn:focus-visible .pen { opacity: 1; transform: none; }
-  .bgbtn { position: absolute; right: 12px; top: 10px; width: 34px; height: 30px; padding: 0; background: rgba(var(--scrim), 0.55); border-color: var(--hero-line); color: #f4f1ea; z-index: 2; }
+  .tools { position: absolute; right: 12px; top: 10px; z-index: 3; display: flex; gap: 6px; }
+  .bgbtn { width: 34px; height: 30px; padding: 0; background: rgba(var(--scrim), 0.55); border-color: var(--hero-line); color: #f4f1ea; z-index: 2; }
   h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
   .hero.compact { min-height: 0; }
@@ -104,5 +108,7 @@
   .hero.compact h1 { font-size: 26px; }
   .playcol { display: grid; gap: var(--s-2); justify-items: end; }
   .tabs { flex: none; }
+  .tsk { display: grid; gap: 10px; max-width: 760px; }
+  .tsk .skel { height: 56px; }
   .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; }
 </style>

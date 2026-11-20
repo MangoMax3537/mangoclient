@@ -1,12 +1,8 @@
 <script lang="ts">
   // Orchestrates the install dialogs (docs/ipc.md Part 4): instance picker -> dependency plan -> progress,
   // modpack dialog, update preview. The running install itself lives in the store, so closing is safe.
-  import InstancePicker from './InstancePicker.svelte';
-  import DependencyDialog from './DependencyDialog.svelte';
-  import ModpackDialog from './ModpackDialog.svelte';
-  import UpdatePreview from './UpdatePreview.svelte';
-  import RunDialog from './RunDialog.svelte';
-  import BlockedDialog from './BlockedDialog.svelte';
+  import Lazy from './Lazy.svelte';
+  import { dialogs } from '../lib/lazy';
   import { suggestInstance, type RunStep } from '../lib/install';
   import { closeFlow, flow, nav, rememberInstallProfile, startContentRun, startInstall, tp } from '../lib/stores.svelte';
 
@@ -32,18 +28,18 @@
 
 {#if req?.kind === 'content'}
   {#if picked === null}
-    <InstancePicker project={req.project} versionId={req.versionId} onnext={(ids) => (picked = ids)} oncreate={createInstance} onclose={closeFlow} />
+    <Lazy load={dialogs.instancePicker} props={{ project: req.project, versionId: req.versionId, onnext: (ids: string[]) => (picked = ids), oncreate: createInstance, onclose: closeFlow }} />
   {:else}
-    <DependencyDialog project={req.project} versionId={req.versionId} profileIds={picked} update={req.update}
-      onback={req.scopeProfileId ? undefined : () => (picked = null)}
-      onconfirm={(steps) => start(req.update ? 'update' : 'content', req.project.title, req.project.iconUrl, steps)} onclose={closeFlow} />
+    <Lazy load={dialogs.dependencyDialog} props={{ project: req.project, versionId: req.versionId, profileIds: picked, update: req.update,
+      onback: req.scopeProfileId ? undefined : () => (picked = null),
+      onconfirm: (steps: RunStep[]) => start(req.update ? 'update' : 'content', req.project.title, req.project.iconUrl, steps), onclose: closeFlow }} />
   {/if}
 {:else if req?.kind === 'modpack'}
-  <ModpackDialog project={req.project} versionId={req.versionId} onclose={closeFlow} />
+  <Lazy load={dialogs.modpackDialog} props={{ project: req.project, versionId: req.versionId, onclose: closeFlow }} />
 {:else if req?.kind === 'updates'}
-  <UpdatePreview profileId={req.profileId} infos={req.infos} onconfirm={(steps) => start('update', tp('flow.upd.items', steps.length), null, steps)} onclose={closeFlow} />
+  <Lazy load={dialogs.updatePreview} props={{ profileId: req.profileId, infos: req.infos, onconfirm: (steps: RunStep[]) => start('update', tp('flow.upd.items', steps.length), null, steps), onclose: closeFlow }} />
 {:else if req?.kind === 'run'}
-  <RunDialog runId={req.runId} onclose={closeFlow} />
+  <Lazy load={dialogs.runDialog} props={{ runId: req.runId, onclose: closeFlow }} />
 {:else if req?.kind === 'blocked'}
-  <BlockedDialog profileId={req.profileId} onclose={closeFlow} />
+  <Lazy load={dialogs.blockedDialog} props={{ profileId: req.profileId, onclose: closeFlow }} />
 {/if}

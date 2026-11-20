@@ -3,6 +3,7 @@ import type { AccountsChangedEvent } from "./AccountsChangedEvent";
 import type { BlockIconsStatus } from "./BlockIconsStatus";
 import type { BlockedChangedEvent } from "./BlockedChangedEvent";
 import type { ContentChangedEvent } from "./ContentChangedEvent";
+import type { FilesDroppedEvent } from "./FilesDroppedEvent";
 import type { InstallProgressEvent } from "./InstallProgressEvent";
 import type { LaunchLogEvent } from "./LaunchLogEvent";
 import type { LaunchProgressEvent } from "./LaunchProgressEvent";
@@ -24,6 +25,7 @@ export type EventMap = {
   "blocked:changed": BlockedChangedEvent;
   "blocks:status": BlockIconsStatus;
   "panorama:ready": PanoramaReadyEvent;
+  "files:dropped": FilesDroppedEvent;
 };
 
 export type EventName = keyof EventMap;

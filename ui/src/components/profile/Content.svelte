@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
   import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
@@ -13,7 +14,7 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import type { Key } from '../../lib/i18n';
   import { providerLabel } from '../../lib/install';
-  import { app, contentRev, errorText, getApi, installs, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
+  import { app, contentRev, errorText, getApi, installs, nav, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
   import type { ContentItem, ContentType, ProfileView, UpdateInfo } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -21,8 +22,10 @@
 
   let items = $state<ContentItem[] | null>(null);
   let updateInfos = $state<UpdateInfo[]>([]);
-  let query = $state('');
+  let query = $state(untrack(() => nav.contentQuery ?? ''));
   let filter = $state<Filter>('all');
+  // A link from the crash panel opens this tab already searching for that mod; the request is used once.
+  $effect(() => { if (nav.contentQuery !== null) { query = nav.contentQuery; filter = 'all'; nav.contentQuery = null; } });
   let pending = $state<Record<string, boolean>>({});
   let confirmItem = $state<ContentItem | null>(null);
   let blocked = $state<{ item: ContentItem; dependents: string[] } | null>(null);

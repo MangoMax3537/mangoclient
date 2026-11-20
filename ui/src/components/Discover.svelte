@@ -13,7 +13,8 @@
   import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
   import EmptyState from './EmptyState.svelte';
-  import ProjectDrawer from './ProjectDrawer.svelte';
+  import Lazy from './Lazy.svelte';
+  import { dialogs } from '../lib/lazy';
   import { fmtCompact } from '../lib/format';
   import { effectiveProvider, providerLabel, sourceOptions } from '../lib/install';
   import type { Key } from '../lib/i18n';
@@ -212,8 +213,8 @@
 </div>
 
 {#if drawer}
-  <ProjectDrawer hit={drawer} {scope} installed={scopeItems[keyOf(drawer)] ?? null} busy={stateOf(drawer) === 'installing'} progress={pct(drawer.projectId)}
-    oninstall={(vid) => drawer && install(drawer, vid)} onclose={() => (drawer = null)} />
+  <Lazy load={dialogs.projectDrawer} props={{ hit: drawer, scope, installed: scopeItems[keyOf(drawer)] ?? null, busy: stateOf(drawer) === 'installing', progress: pct(drawer.projectId),
+    oninstall: (vid: string) => drawer && install(drawer, vid), onclose: () => (drawer = null) }} />
 {/if}
 
 <style>

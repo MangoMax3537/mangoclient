@@ -4,11 +4,15 @@
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import BugIcon from 'phosphor-svelte/lib/BugIcon';
+  import FirstAidKitIcon from 'phosphor-svelte/lib/FirstAidKitIcon';
   import EmptyState from '../EmptyState.svelte';
   import VirtualList from '../VirtualList.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import { fmtBytes, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
+  import { analyzable } from '../../lib/portability';
+  import { openCrash, openDiagnostics } from '../../lib/portability.svelte';
   import { actions, app, errorText, getApi, isBusy, lang, t, toast } from '../../lib/stores.svelte';
   import type { LogEntry, ProfileView } from '../../lib/types';
 
@@ -91,6 +95,10 @@
       <header>
         <b class="mono nm">{entry?.name}</b>
         <div class="acts">
+          {#if entry && analyzable(entry)}
+            <button class="btn" class:accent={entry.kind === 'crash'} type="button" title={t('crash.analyzeHint')} onclick={() => openCrash(profile.id, entry.id)}><BugIcon weight="bold" size={16} aria-hidden="true" />{t('crash.analyze')}</button>
+          {/if}
+          <button class="btn" type="button" title={t('diag.lead')} onclick={() => openDiagnostics(profile.id)}><FirstAidKitIcon weight="bold" size={16} aria-hidden="true" />{t('diag.button')}</button>
           <button class="btn" type="button" disabled={uploading || !entry} onclick={upload}><UploadSimpleIcon weight="bold" size={16} aria-hidden="true" />{uploading ? t('logs.uploading') : t('logs.upload')}</button>
           <button class="btn ghost danger" type="button" disabled={!entry} onclick={() => (confirmDel = true)} aria-label={t('logs.delete')} title={t('logs.delete')}><TrashIcon weight="bold" size={16} aria-hidden="true" /></button>
         </div>
@@ -131,8 +139,8 @@
   .k { padding: 0 6px; border-radius: var(--r-s); background: var(--ink-4); color: var(--paper-dim); }
   .k.crash { background: rgba(237, 102, 92, 0.2); color: var(--tomato); }
   .view { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 8px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .acts { display: flex; gap: 6px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+  .acts { display: flex; gap: 6px; flex-wrap: nowrap; margin-left: auto; }
   .res { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(134, 184, 107, 0.1); border: 1px solid rgba(134, 184, 107, 0.4); border-radius: var(--r-m); }
   .res .field { flex: 1; height: 32px; }
   .trunc { font-size: 13px; }

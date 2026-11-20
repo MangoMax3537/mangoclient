@@ -3,27 +3,27 @@
   import Rail from './components/Rail.svelte';
   import Home from './components/Home.svelte';
   import Library from './components/Library.svelte';
-  import Settings from './components/Settings.svelte';
-  import NewProfile from './components/NewProfile.svelte';
   import ProfilePage from './components/ProfilePage.svelte';
-  import Discover from './components/Discover.svelte';
-  import Servers from './components/Servers.svelte';
-  import Stats from './components/Stats.svelte';
-  import Onboarding from './components/Onboarding.svelte';
   import Toasts from './components/Toasts.svelte';
   import UpdatePill from './components/UpdatePill.svelte';
-  import ReloginDialog from './components/ReloginDialog.svelte';
-  import UpdateOverlay from './components/UpdateOverlay.svelte';
   import Activity from './components/Activity.svelte';
-  import InstallFlow from './components/InstallFlow.svelte';
-  import IconPicker from './components/IconPicker.svelte';
-  import BackgroundPicker from './components/BackgroundPicker.svelte';
+  import Lazy from './components/Lazy.svelte';
+  import ViewSkeleton from './components/ViewSkeleton.svelte';
+  import DropHint from './components/DropHint.svelte';
+  import { dialogs, screens } from './lib/lazy';
+  import { pf, watchDrops } from './lib/portability.svelte';
   import { actions, app, auth, errorText, flow, init, initTheme, nav, t, updates } from './lib/stores.svelte';
-  import { inHttp, inTauri } from './lib/api';
+  import { inHttp, inTauri, kind } from './lib/api';
 
-  onMount(() => { initTheme(); init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); }); });
+  onMount(() => {
+    initTheme();
+    void init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); });
+    return watchDrops({ tauri: inTauri(), mock: kind === 'mock' });
+  });
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
+
+{#snippet skel()}<ViewSkeleton />{/snippet}
 
 <div class="shell">
   <div class="strip" data-tauri-drag-region>
@@ -38,10 +38,7 @@
     <Rail />
     <main>
       {#if !app.ready}
-        <div class="loading" role="status"><span class="sr-only">{t('common.loading')}</span>
-          <div class="skel hero-sk" aria-hidden="true"></div>
-          <div class="cards-sk" aria-hidden="true">{#each Array(4) as _, i (i)}<div class="skel notch" style:--n="14px"></div>{/each}</div>
-        </div>
+        <ViewSkeleton />
       {:else}
         {#if app.error}
           <div class="banner" role="alert">{errorText(app.error)}
@@ -51,20 +48,25 @@
         {#if nav.view === 'home'}<Home />
         {:else if nav.view === 'library'}<Library />
         {:else if nav.view === 'profile' && nav.profileId}<ProfilePage id={nav.profileId} />
-        {:else if nav.view === 'discover'}<Discover />
-        {:else if nav.view === 'servers'}<Servers />
-        {:else if nav.view === 'stats'}<Stats />
-        {:else}<Settings />{/if}
+        {:else if nav.view === 'discover'}<Lazy load={screens.discover} fallback={skel} />
+        {:else if nav.view === 'servers'}<Lazy load={screens.servers} fallback={skel} />
+        {:else if nav.view === 'stats'}<Lazy load={screens.stats} fallback={skel} />
+        {:else}<Lazy load={screens.settings} fallback={skel} />{/if}
       {/if}
     </main>
   </div>
-  {#if nav.newProfile}<NewProfile />{/if}
-  {#if flow.req}<InstallFlow />{/if}
-  {#if nav.iconPicker}<IconPicker profileId={nav.iconPicker} onclose={() => (nav.iconPicker = null)} />{/if}
-  {#if nav.backgroundPicker}<BackgroundPicker profileId={nav.backgroundPicker} onclose={() => (nav.backgroundPicker = null)} />{/if}
-  {#if updates.overlay}<UpdateOverlay />{/if}
-  {#if app.ready && app.config && !app.config.firstRunDone}<Onboarding />{/if}
-  {#if auth.relogin}<ReloginDialog />{/if}
+  {#if nav.newProfile}<Lazy load={screens.newProfile} />{/if}
+  {#if flow.req}<Lazy load={dialogs.installFlow} />{/if}
+  {#if nav.iconPicker}<Lazy load={dialogs.iconPicker} props={{ profileId: nav.iconPicker, onclose: () => (nav.iconPicker = null) }} />{/if}
+  {#if nav.backgroundPicker}<Lazy load={dialogs.backgroundPicker} props={{ profileId: nav.backgroundPicker, onclose: () => (nav.backgroundPicker = null) }} />{/if}
+  {#if pf.imp && pf.impOpen}<Lazy load={dialogs.importDialog} />{/if}
+  {#if pf.exp}<Lazy load={dialogs.exportDialog} props={{ profileId: pf.exp.profileId, onclose: () => (pf.exp = null) }} />{/if}
+  {#if pf.diag}<Lazy load={dialogs.diagnosticsDialog} props={{ profileId: pf.diag.profileId, onclose: () => (pf.diag = null) }} />{/if}
+  {#if pf.crash}<Lazy load={dialogs.crashPanel} props={{ profileId: pf.crash.profileId, logId: pf.crash.logId, onclose: () => (pf.crash = null) }} />{/if}
+  {#if updates.overlay}<Lazy load={dialogs.updateOverlay} />{/if}
+  {#if app.ready && app.config && !app.config.firstRunDone}<Lazy load={screens.onboarding} />{/if}
+  {#if auth.relogin}<Lazy load={dialogs.reloginDialog} />{/if}
+  {#if pf.dragging}<DropHint />{/if}
   <Toasts />
 </div>
 
@@ -78,8 +80,4 @@
   .body { flex: 1; display: flex; min-height: 0; }
   main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); }
   .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); border-radius: var(--r-m); color: var(--paper); }
-  .loading { height: 100%; display: grid; grid-template-rows: 46vh auto; gap: var(--s-5); align-content: start; }
-  .hero-sk { opacity: 0.6; }
-  .cards-sk { display: flex; gap: var(--s-3); padding: 0 32px 0 44px; }
-  .cards-sk div { width: 212px; height: 200px; }
 </style>

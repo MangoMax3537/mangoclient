@@ -1,6 +1,7 @@
 import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
 import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from './auth';
 import { runSteps, type RunStep } from './install';
+import { listenDropped } from './drop';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
   AppState, BlockedFile, BlockIconsStatus, Config, ConfigPatch, ProfilePatch, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
@@ -45,6 +46,8 @@ export const nav = $state({
   discoverProfile: null as string | null, discoverType: 'mod' as ProjectType,
   /** Instance whose icon / background picker is open (mounted once in App). */
   iconPicker: null as string | null, backgroundPicker: null as string | null,
+  /** The Content tab picks this up once as its search text (crash cause "related mods" link there). */
+  contentQuery: null as string | null,
 });
 export const openIconPicker = (id: string): void => { nav.iconPicker = id; };
 export const openBackgroundPicker = (id: string): void => { nav.backgroundPicker = id; };
@@ -180,12 +183,12 @@ export function initTheme(): void {
 }
 
 /* ---- toasts ---- */
-export interface Toast { id: number; text: string; kind: 'info' | 'ok' | 'error' }
+export interface Toast { id: number; text: string; kind: 'info' | 'ok' | 'error'; /** One follow-up button (opens a panel, navigates ...). */ action?: { label: string; run: () => void } }
 export const toasts = $state<Toast[]>([]);
 let toastId = 0;
-export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500): void {
+export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500, action?: Toast['action']): void {
   const id = ++toastId;
-  toasts.push({ id, text, kind });
+  toasts.push(action ? { id, text, kind, action } : { id, text, kind });
   setTimeout(() => dismissToast(id), ms);
 }
 export function dismissToast(id: number): void {
@@ -300,7 +303,8 @@ export async function init(api: Api = defaultApi): Promise<void> {
   unlisteners = [];
   currentApi = api;
   unlisteners = await Promise.all([
-    api.listen('launch:state', (e) => applyState(e.profileId, e.state)),
+    api.listen('launch:state', (e) => { applyState(e.profileId, e.state); if (e.state === 'crashed') for (const h of eventHooks.crashed) h(e.profileId); }),
+    listenDropped(api, (e) => { for (const h of eventHooks.dropped) h(e.paths); }),
     api.listen('launch:progress', applyProgress),
     api.listen('launch:log', (e) => pushLog(e.profileId, e.line, e.level)),
     api.listen('install:progress', applyInstallProgress),
@@ -333,6 +337,12 @@ export function applyPinged(s: ServerStatus): void {
 }
 
 export const getApi = (): Api => currentApi;
+
+/**
+ * Subscriptions of modules that must not be imported by the store (they import it): the crash offer and the file-drop handling live in
+ * portability.svelte.ts and register here. Called from the event listeners set up by `init`.
+ */
+export const eventHooks = { crashed: [] as ((profileId: string) => void)[], dropped: [] as ((paths: string[]) => void)[] };
 
 /** Starts sequential install_apply steps in the background; progress is read from `installs`, state from the returned run. */
 export function startContentRun(kind: 'content' | 'update', title: string, iconUrl: string | null, steps: RunStep[], watching = true): InstallRun {
@@ -389,7 +399,7 @@ export function resetStores(): void {
   for (const k of Object.keys(launches)) delete launches[k];
   for (const k of Object.keys(consoles)) delete consoles[k];
   nav.view = 'home'; nav.newProfile = false; nav.newProfilePrefill = null; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
-  nav.discoverProfile = null; nav.discoverType = 'mod'; nav.iconPicker = null; nav.backgroundPicker = null;
+  nav.discoverProfile = null; nav.discoverType = 'mod'; nav.iconPicker = null; nav.backgroundPicker = null; nav.contentQuery = null;
   blocks.status = null; blocks.requested = false; panoramaAsked.clear();
   for (const k of Object.keys(panoramas)) delete panoramas[k];
   toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;

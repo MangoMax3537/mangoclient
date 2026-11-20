@@ -33,6 +33,7 @@ export type { CrashReport } from "./CrashReport";
 export type { DiagnosticsExportArgs } from "./DiagnosticsExportArgs";
 export type { ExportFormat } from "./ExportFormat";
 export type { FileExport } from "./FileExport";
+export type { FilesDroppedEvent } from "./FilesDroppedEvent";
 export type { GameLaunchArgs } from "./GameLaunchArgs";
 export type { GameMode } from "./GameMode";
 export type { IdArgs } from "./IdArgs";

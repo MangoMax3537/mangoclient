@@ -41,6 +41,10 @@ export function activityItems({ profiles, launches, installs, runs, label }: Inp
   }
   for (const ev of Object.values(installs)) {
     if (seen.has(ev.projectId)) continue; // an install without a tracked run (started elsewhere)
+    if (ev.projectId === 'import') { // a modpack import (Part 9): the new instance is not in the list yet
+      out.push({ key: 'inst:import', kind: 'install', title: label('import.title'), detail: ev.label, fraction: ev.total ? ev.done / ev.total : null, profileId: undefined });
+      continue;
+    }
     out.push({ key: `inst:${ev.projectId}`, kind: 'install', title: ev.label || ev.projectId, detail: label('activity.installingTo', { name: name(ev.profileId) }), fraction: ev.total ? ev.done / ev.total : null, profileId: ev.profileId });
   }
   for (const [id, info] of Object.entries(launches)) {

@@ -5,6 +5,8 @@ import { createContentApi } from './mockContent';
 import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
 import { createBlockedMock, type BlockedDev } from './mockBlocked';
 import { createWorldsMock } from './mockWorlds';
+import { createPortabilityMock, MOCK_CRASHES, type MockCrash, type PortabilityDev } from './mockPortability';
+import { checkGroup, checkTag } from './portability';
 import { fallbackImage } from './fallbackImage';
 import type {
   ApiEvents, AppState, Config, LaunchState, LoaderVersion, ProfileView, PublicAccount, VersionManifest, VersionEntry, Loader,
@@ -35,6 +37,13 @@ export interface MockOptions {
   running?: boolean;
   /** Part 9: every changing world/backup call fails with this code (`?mockBackupError=<code>`). */
   backupError?: string;
+  /** Part 9: which crash `crash_analyze` reports (`?mockCrash=java|oom|dependency|none`); any value also makes a launch end in a crash. */
+  crash?: MockCrash;
+  /** Part 9: every import plan / import fails with this code (`?mockImportError=<code>`), exports with `exportError`. */
+  importError?: string;
+  exportError?: string;
+  /** Part 9: simulate `files:dropped` shortly after the app listens (`?mockDrop=mrpack|curseforge|prism|bad`). */
+  drop?: string;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -44,7 +53,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off ?mockRunning ?mockBackupError=<code> */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off ?mockRunning ?mockBackupError=<code> ?mockCrash=java|oom|dependency|none ?mockImportError=<code> ?mockExportError=<code> ?mockDrop=mrpack|curseforge|prism|bad */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -60,6 +69,10 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     panorama: q.get('mockPanorama') === 'off' ? 'off' : 'default',
     running: q.has('mockRunning'),
     backupError: q.get('mockBackupError') || undefined,
+    crash: MOCK_CRASHES.find((m) => m === q.get('mockCrash')),
+    importError: q.get('mockImportError') || undefined,
+    exportError: q.get('mockExportError') || undefined,
+    drop: q.has('mockDrop') ? q.get('mockDrop') || 'mrpack' : undefined,
   };
 }
 
@@ -72,17 +85,17 @@ function seedProfiles(now: number): ProfileView[] {
   const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
-      color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
+      color: '#ffad32', ram: 6144, group: 'Survival', tags: ['main', 'fabric'], lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
     { ...base, id: '8a4be9d0-2f6c-4f3e-8b0c-7d1e93a4c5f2', name: 'Vanilla Survival', mcVersion: '1.21.4', loader: 'vanilla', loaderVersion: null,
-      color: '#86b86b', icon: { kind: 'block', block: 'grass_block' }, lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
+      color: '#86b86b', icon: { kind: 'block', block: 'grass_block' }, group: 'Survival', tags: ['vanilla', 'friends'], lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
     { ...base, id: 'c27d11f4-91a8-4e22-b3a6-4c8f0e9d6b37', name: 'Bedwars Practice', mcVersion: '1.8.9', loader: 'forge', loaderVersion: '11.15.1.2318',
-      color: '#ed665c', icon: { kind: 'block', block: 'tnt' }, ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
+      color: '#ed665c', icon: { kind: 'block', block: 'tnt' }, group: 'PvP', tags: ['1.8', 'practice'], ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
     { ...base, id: 'e90a6b35-17c4-4d8f-a2e1-5b3c7f4d8a09', name: 'Shader Showcase', mcVersion: '1.20.6', loader: 'quilt', loaderVersion: '0.26.1',
-      color: '#6fa8d6', ram: 8192, lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
+      color: '#6fa8d6', ram: 8192, tags: ['shaders'], lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
     { ...base, id: '1b9d4c68-6e0f-4a35-8c27-d3f5a7e91b40', name: 'Create Expedition', mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172',
-      color: '#d6c27a', ram: 8192, lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
+      color: '#d6c27a', ram: 8192, group: 'Modpacks', tags: ['create', 'tech'], lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
     { ...base, id: '6e2a85f1-0b7d-4d94-9a13-c48e2f6b7d05', name: 'Classic Forge 1.20.1', mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0',
-      color: '#e6a3b8', background: { kind: 'none' }, ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
+      color: '#e6a3b8', background: { kind: 'none' }, group: 'Modpacks', ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
   ];
 }
 
@@ -119,7 +132,7 @@ const LOADER_VERSIONS: Record<Exclude<Loader, 'vanilla'>, LoaderVersion[]> = {
   neoforge: [{ version: '21.4.100', stable: true }, { version: '21.4.40-beta', stable: false }],
 };
 
-export type MockApi = Api & { dev: BlockedDev };
+export type MockApi = Api & { dev: BlockedDev & PortabilityDev };
 
 export function createMockApi(opts: MockOptions = {}): MockApi {
   const scale = opts.timeScale ?? 1;
@@ -142,8 +155,9 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
     'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(), 'blocked:changed': new Set(),
-    'blocks:status': new Set(), 'panorama:ready': new Set(),
+    'blocks:status': new Set(), 'panorama:ready': new Set(), 'files:dropped': new Set(),
   };
+  const emitDrop = (paths: string[]) => emit('files:dropped', { paths });
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
     for (const cb of listeners[name] as Set<(p: ApiEvents[K]) => void>) cb(payload);
   };
@@ -168,6 +182,10 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     scale, now, config: () => config, profiles: () => profiles, find, errorCode: opts.backupError,
     gameActive: (id) => running.has(id) || timers.has(id),
   });
+  const portabilityMock = createPortabilityMock({
+    scale, emit, emitDrop, profiles: () => profiles, find, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); },
+    seedBlocked: (id, files) => blockedMock.seed(id, files), crash: opts.crash, importError: opts.importError, exportError: opts.exportError,
+  });
   const blockedMock = createBlockedMock({
     scale, emit, auto: !!opts.blockedAuto, dirs: () => config.blockedModsWatchDirs,
     setPending: (id, n) => { const p = profiles.find((x) => x.id === id); if (p) p.pendingBlocked = n; },
@@ -182,7 +200,8 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     ...blockedMock.api,
     ...iconsMock.api,
     ...worldsMock,
-    dev: blockedMock.dev,
+    ...portabilityMock.api,
+    dev: { ...blockedMock.dev, ...portabilityMock.dev },
     async appState(): Promise<AppState> {
       return {
         version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles), accounts: structuredClone(accounts),
@@ -211,7 +230,27 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       icons.sync();
       return structuredClone(p);
     },
-    async profileUpdate({ id, patch }) { Object.assign(find(id), patch); return structuredClone(find(id)); },
+    async profileUpdate({ id, patch }) {
+      const p = find(id);
+      const next: Partial<ProfileView> = { ...patch };
+      // like the service: group is trimmed (blank = none, 48 chars), tags are trimmed, deduplicated case-insensitively (12 of 24 chars)
+      if ('group' in patch) {
+        const g = checkGroup(patch.group ?? '');
+        if (!g.ok) throw { code: 'validation', message: `group: ${g.error}`, needsRelogin: false };
+        next.group = g.group;
+      }
+      if (patch.tags) {
+        const out: string[] = [];
+        for (const raw of patch.tags) {
+          const r = checkTag(raw, out);
+          if (r.ok) out.push(r.tag);
+          else if (r.error === 'long' || r.error === 'control' || r.error === 'limit') throw { code: 'validation', message: `tag: ${r.error}`, needsRelogin: false };
+        }
+        next.tags = out;
+      }
+      Object.assign(p, next);
+      return structuredClone(p);
+    },
     async profileDelete({ id }) {
       profiles = profiles.filter((p) => p.id !== id);
       if (config.selectedProfile === id) config.selectedProfile = profiles[0]?.id ?? null;
@@ -304,6 +343,12 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
         at(5500, () => log('[main/INFO]: Loading ' + p.modCount + ' mods'));
         at(5800, () => log('[main/WARN]: Config file sodium-options.json was outdated', 'warn'));
         at(6100, () => log('[Render thread/INFO]: Backend initialized'));
+        if (opts.crash) {
+          at(7600, () => {
+            log('[Render thread/ERROR]: Unhandled game exception', 'error');
+            clearTimers(profileId); setState(profileId, 'crashed');
+          });
+        }
       });
     },
     async gameStop({ profileId }) {
@@ -318,19 +363,20 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     async gameRunning() { return [...running]; },
     async pickImageFile() { return null; }, // no native dialog in the browser: the UI uses <input type=file> there
     async pickFolder() { return null; },
-    async pickImportFile() { return null; },
-    async pickSaveFile() { return null; },
-    // Part 9 (import/export, crash analysis, diagnostics): typed pass-throughs, their UI comes later
-    async instanceExport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
-    async instanceImportPlan() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
-    async instanceImport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
-    async crashAnalyze() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
-    async diagnosticsExport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
     async openFolder({ target }) { return `~/.mangoclient/${target}`; },
     async openExternal({ url }) {
       if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
     },
     async listen<K extends keyof ApiEvents>(name: K, cb: (p: ApiEvents[K]) => void): Promise<Unlisten> {
+      if (name === 'files:dropped') {
+        const set = listeners['files:dropped'];
+        set.add(cb as (p: ApiEvents['files:dropped']) => void);
+        if (opts.drop && set.size === 1) {
+          const kind = opts.drop;
+          setTimeout(() => emitDrop([kind === 'bad' ? '/home/mango/Downloads/notes.txt' : kind === 'curseforge' ? portabilityMock.dev.samples[1] : kind === 'prism' ? portabilityMock.dev.samples[2] : portabilityMock.dev.samples[0]]), 900 * scale);
+        }
+        return () => { set.delete(cb as (p: ApiEvents['files:dropped']) => void); };
+      }
       const set = listeners[name] as Set<(p: ApiEvents[K]) => void>;
       set.add(cb);
       return () => { set.delete(cb); };

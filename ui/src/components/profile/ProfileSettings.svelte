@@ -6,6 +6,7 @@
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import Seg from '../Seg.svelte';
   import InstanceIcon from '../InstanceIcon.svelte';
+  import GroupTagsEditor from '../GroupTagsEditor.svelte';
   import PanoramaBackground from '../PanoramaBackground.svelte';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
@@ -93,6 +94,8 @@
       <input id="ps-name" class="field" bind:value={name} maxlength="48" autocomplete="off" aria-invalid={nameErr} onblur={saveName} onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
       {#if nameErr}<div class="err" role="alert">{t('new.nameRequired')}</div>{/if}
     </div>
+
+    <GroupTagsEditor {profile} onsaved={() => { saved = true; clearTimeout(savedTimer); savedTimer = setTimeout(() => (saved = false), 1600); }} />
 
     <div class="row">
       <div class="who"><InstanceIcon profile={profile} size={56} notch={10} />

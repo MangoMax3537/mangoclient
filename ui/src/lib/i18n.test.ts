@@ -36,6 +36,11 @@ describe('i18n', () => {
       'settings.blocked.browse', 'settings.blocked.dialogTitle', 'err.background', 'err.icon.no_modpack_logo', 'err.backend_unreachable', 'err.validation', 'err.bad_args'];
     for (const k of keys) { expect(hasKey('en', k), k).toBe(true); expect(hasKey('de', k), k).toBe(true); expect(dictionaries.de[k]).not.toBe(dictionaries.en[k]); }
   });
+  it('the Part 9 portability strings exist in both languages and differ between them', () => {
+    const keys = ['import.button', 'import.title', 'import.err.notGranted', 'import.err.tooLarge', 'import.drop.title', 'export.menu', 'export.includeConfigHint', 'export.warnings.one', 'export.warnings.other',
+      'diag.scrubbed', 'crash.title', 'crash.toastAction', 'crash.empty.title', 'crash.copy', 'group.ungrouped', 'tags.err.limit', 'library.searchAll', 'lazy.failed'];
+    for (const k of keys) { expect(hasKey('en', k), k).toBe(true); expect(hasKey('de', k), k).toBe(true); expect(dictionaries.de[k]).not.toBe(dictionaries.en[k]); }
+  });
   it('translates per language', () => {
     expect(translate('de', 'home.play')).toBe('Spielen');
     expect(translate('en', 'home.play')).toBe('Play');
