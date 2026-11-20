@@ -142,3 +142,47 @@ interface UpdateStatus { state: UpdateStateName; percent?: number; version?: str
 
 ## Rust-side host trait (not a command)
 `mango_app::host::LoginWindow` — `async fn authorize(&self, authorize_url: &str, redirect_prefix: &str) -> LoginOutcome` with `LoginOutcome = Code(String) | Cancelled | Error(String)`. src-tauri implements it with an isolated, non-persistent webview window (incognito/in-memory data store, all permissions denied, navigation allow-list limited to login.live.com / microsoftonline / live.com hosts, intercepting the redirect to `https://login.live.com/oauth20_desktop.srf`). The CLI implements it by printing the URL and reading the pasted redirect URL from stdin.
+
+---
+
+# Part 4: providers (Modrinth + CurseForge), install planning, modpacks
+
+Supersedes the `modrinth_*` commands of Part 2 (the Rust side may keep them as thin deprecated aliases for one release; the UI must use the new names). `projectId` is always a string (CurseForge ids are numeric strings) and is only unique together with `provider`.
+
+## Types
+```ts
+type Provider = 'modrinth' | 'curseforge';
+interface ProviderStatus { provider: Provider; available: boolean; reason?: 'no_api_key'|'offline'|'disabled'; }
+// ProjectHit, ProjectDetail, ProjectVersion, SearchParams (Part 2) gain `provider: Provider`.
+// ContentItem and UpdateInfo gain `provider: Provider | null` (null = local jar).
+type TargetState = 'available' | 'installed' | 'incompatible';
+interface InstallTarget { profileId: string; state: TargetState; installedVersion: string | null;
+  reason: null | 'loader' | 'mc_version' | 'content_type' | 'no_compatible_version' | 'distribution_blocked';
+  detail: string | null;            // e.g. "needs Fabric, instance uses Forge" (English diagnostic; UI localizes by reason)
+  requiredDeps: number; }           // how many required dependencies would be added
+interface InstallPlanItem { provider: Provider; projectId: string; versionId: string; title: string; type: ContentType; iconUrl: string | null;
+  role: 'requested' | 'required' | 'optional' | 'incompatible'; alreadyInstalled: boolean; installedVersion: string | null;
+  distributionBlocked: boolean; sizeBytes: number | null; downloadUrl: string | null; }  // downloadUrl only set when distributionBlocked (user must fetch from the website)
+interface InstallPlan { profileId: string; items: InstallPlanItem[]; totalBytes: number; conflicts: { projectId: string; title: string; with: string }[]; }
+interface ModpackPlan { provider: Provider; projectId: string; versionId: string; name: string; mcVersion: string; loader: Loader; loaderVersion: string | null;
+  fileCount: number; sizeBytes: number | null; iconUrl: string | null; blockedFiles: { name: string; url: string }[]; }
+```
+`SearchParams.provider` selects the source (the UI offers a source switch Modrinth | CurseForge; no merged result list).
+
+## Commands
+| command | args | returns |
+|---|---|---|
+| `providers_status` | none | `ProviderStatus[]` (CurseForge needs an API key from build-time env `CURSEFORGE_API_KEY` or the optional config field `curseforgeApiKey`; when missing `available:false, reason:'no_api_key'` and the UI hides or disables CurseForge) |
+| `search_projects` | `{ params: SearchParams }` | `SearchResult` |
+| `project_detail` | `{ provider, projectId }` | `ProjectDetail` |
+| `project_versions` | `{ provider, projectId, profileId? }` | `ProjectVersion[]` |
+| `install_targets` | `{ provider, projectId, versionId? }` | `InstallTarget[]` (one per profile; powers the instance popup: `installed` and `incompatible` entries are shown dark/disabled with the reason) |
+| `install_plan` | `{ provider, projectId, versionId?, profileId }` | `InstallPlan` (resolves required AND optional dependencies, marks already-installed ones, nothing is downloaded) |
+| `install_apply` | `{ provider, projectId, versionId?, profileId, include: string[] }` | `ContentItem[]` (installs the requested item + required deps + the optional deps whose `projectId` is in `include`; emits `install:progress`) |
+| `modpack_plan` | `{ provider, projectId, versionId? }` | `ModpackPlan` |
+| `modpack_install` | `{ provider, projectId, versionId?, name? }` | `ProfileView` (creates a new profile; progress via `install:progress` with the new `profileId`; blocked files are listed in the plan and skipped with a warning event) |
+
+## Rules for every provider
+- Dependencies are never installed silently: the UI always shows the plan first (`install_plan`) and only calls `install_apply` after confirmation.
+- CurseForge files with `allowModDistribution = false` are never downloaded by the app: they appear as `distributionBlocked` with the website URL.
+- Updates (`content_check_updates`) and `content_toggle`/`content_uninstall` work for items of both providers; a project is identified by `(provider, projectId)`.
