@@ -113,8 +113,12 @@ pub(crate) const BLOCKS: &[BlockDef] = &[
 
 pub(crate) const FACES: [&str; 3] = ["top", "left", "right"];
 
+/// Reserved `iconBlock` value for the real MangoClient brand icon. Not a block, so
+/// it needs no extracted gallery; old data (block ids only) is unaffected.
+pub const BRAND_ICON_ID: &str = "mangoclient";
+
 pub(crate) fn is_known_block(id: &str) -> bool {
-    BLOCKS.iter().any(|b| b.id == id)
+    id == BRAND_ICON_ID || BLOCKS.iter().any(|b| b.id == id)
 }
 
 /// Every texture name the extractor may read.

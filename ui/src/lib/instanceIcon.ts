@@ -4,6 +4,9 @@ import { DEFAULT_SCRIM, MANGO_CLIENT_ID, type Wallpaper } from './wallpapers';
 import { resolveAuto, type PoolItem } from './bgCycle';
 import type { BlockIcon, Loader, BlockIconsStatus, InstanceIcon, PanoramaSet, ProfileBackground, ProfileView } from './types';
 
+/** Reserved `iconBlock` value (mirrors `BRAND_ICON_ID` in Rust): the real MangoClient icon as an explicit choice. */
+export const BRAND_ICON_ID = 'mangoclient';
+
 export type IconInput = Pick<ProfileView, 'coverUrl' | 'icon' | 'autoBlock'>;
 
 /** What an instance shows. The MangoClient icon is the only static fallback, never a letter. */
@@ -26,6 +29,7 @@ export function resolveInstanceIcon(p: IconInput | null | undefined, status: Blo
   const icon: InstanceIcon = p.icon ?? null;
   // a cover without an icon record is a legacy cover: still an image
   if (p.coverUrl && icon?.kind !== 'block') return { kind: 'image', src: p.coverUrl };
+  if (icon?.kind === 'block' && icon.block === BRAND_ICON_ID) return { kind: 'brand' };
   if (icon?.kind === 'block') {
     const b = findBlock(status, icon.block);
     if (b) return { kind: 'block', block: b, auto: false };

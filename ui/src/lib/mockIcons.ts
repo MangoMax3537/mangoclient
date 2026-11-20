@@ -83,7 +83,7 @@ export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () =>
     },
     async profileIconSetBlock({ id, block }) {
       const p = ctx.find(id);
-      if (status.state !== 'ready' || !gallery.some((b) => b.id === block)) throw fail('block_unknown');
+      if (block !== 'mangoclient' && (status.state !== 'ready' || !gallery.some((b) => b.id === block))) throw fail('block_unknown');
       stashLogo(p); p.icon = { kind: 'block', block }; p.coverUrl = null; p.iconSource = null;
       return view(id);
     },

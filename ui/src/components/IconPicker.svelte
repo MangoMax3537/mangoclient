@@ -11,7 +11,7 @@
   import ImagePick from './ImagePick.svelte';
   import { brandIcon } from '../lib/fallbackImage';
   import {
-    blockForSeed, choiceFromIcon, findBlock, iconTint, pickerState, sameChoice, selectedBlockId, type IconChoice,
+    BRAND_ICON_ID, blockForSeed, choiceFromIcon, findBlock, iconTint, pickerState, sameChoice, selectedBlockId, type IconChoice,
   } from '../lib/instanceIcon';
   import { imageDrop, type PickedImage } from '../lib/pickImage';
   import type { Key } from '../lib/i18n';
@@ -46,6 +46,7 @@
 
   // what the preview shows for the current draft
   const view = $derived.by(() => {
+    if (draft.kind === 'block' && draft.block === BRAND_ICON_ID) return { type: 'brand' as const };
     if (draft.kind === 'block' && st.state === 'ready') { const b = findBlock(blocks.status, draft.block); if (b) return { type: 'block' as const, b }; }
     if (draft.kind === 'auto' && autoBlock) return { type: 'block' as const, b: autoBlock };
     if (draft.kind === 'keep' && profile?.coverUrl) return { type: 'image' as const, src: profile.coverUrl };
@@ -53,7 +54,7 @@
     return { type: 'brand' as const };
   });
   const sumLabel = $derived(
-    draft.kind === 'block' ? findBlock(blocks.status, draft.block)?.label ?? ''
+    draft.kind === 'block' ? (draft.block === BRAND_ICON_ID ? t('icons.brand') : findBlock(blocks.status, draft.block)?.label ?? '')
       : draft.kind === 'auto' ? t('icons.auto') + (autoBlock ? `: ${autoBlock.label}` : '')
       : draft.kind === 'image' ? draft.name : t('icons.logo.current'));
 
@@ -62,7 +63,7 @@
 
   /* roving radio grid */
   let grid: HTMLDivElement | undefined = $state();
-  const cellIds = $derived(['auto', ...(st.state === 'ready' ? st.blocks.map((b) => b.id) : [])]);
+  const cellIds = $derived(['auto', BRAND_ICON_ID, ...(st.state === 'ready' ? st.blocks.map((b) => b.id) : [])]);
   function key(e: KeyboardEvent, i: number) {
     const cols = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 1;
     const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' ? cols : e.key === 'ArrowUp' ? -cols : 0;
@@ -115,10 +116,9 @@
 
       {#if tab === 'gallery'}
         <div role="tabpanel" aria-labelledby="ipick-gallery" class="panel">
-          {#if st.state === 'ready'}
             <div class="grid" role="radiogroup" aria-label={t('icons.tab.gallery')} bind:this={grid}>
               {#each cellIds as id, i (id)}
-                {@const b = id === 'auto' ? autoBlock : st.blocks.find((x) => x.id === id)}
+                {@const b = id === 'auto' ? autoBlock : id === BRAND_ICON_ID || st.state !== 'ready' ? null : st.blocks.find((x) => x.id === id)}
                 {@const on = selected === id}
                 <button type="button" role="radio" class="cell" class:on aria-checked={on} tabindex={on || (!selected && i === 0) ? 0 : -1}
                   onclick={() => pickBlock(id)} onkeydown={(e) => key(e, i)}>
@@ -126,13 +126,13 @@
                     {#if b}<BlockIcon faces={b.faces} fill radius={10} tint={tone} />{:else}<Tile kind="profile" id={id} src={null} tint={tone} fill radius={10} />{/if}
                     {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
                   </span>
-                  <span class="lbl">{id === 'auto' ? t('icons.auto') : b?.label}</span>
+                  <span class="lbl">{id === 'auto' ? t('icons.auto') : id === BRAND_ICON_ID ? t('icons.brand') : b?.label}</span>
                   {#if id === 'auto' && autoBlock}<span class="sub">{autoBlock.label}</span>{/if}
                 </button>
               {/each}
             </div>
             <p class="hint">{t('icons.autoHint')}</p>
-          {:else if st.state === 'preparing'}
+          {#if st.state === 'preparing'}
             <div class="state" role="status">
               <div class="skgrid" aria-hidden="true">{#each Array(14) as _, i (i)}<span class="skel sk"></span>{/each}</div>
               <div class="bar step-end" aria-hidden="true"><span></span></div>
@@ -145,7 +145,7 @@
               <p class="err" role="alert">{t(st.key as Key)}</p>
               <button class="btn" type="button" onclick={() => prepareBlocks(true)}>{t('common.retry')}</button>
             </div>
-          {:else}
+          {:else if st.state === 'missing'}
             <div class="state">
               <img class="px mk" src={brandIcon(128)} alt="" draggable="false" />
               <p><b>{t('icons.missing')}</b></p>
@@ -170,7 +170,7 @@
 
   {#snippet footer()}
     <button class="btn ghost" type="button" onclick={onclose}>{t('common.cancel')}</button>
-    <button class="btn accent" type="button" disabled={!changed || busy || (draft.kind === 'block' && st.state !== 'ready')} onclick={apply}>{profileId ? t('icons.apply') : t('icons.use')}</button>
+    <button class="btn accent" type="button" disabled={!changed || busy || (draft.kind === 'block' && draft.block !== BRAND_ICON_ID && st.state !== 'ready')} onclick={apply}>{profileId ? t('icons.apply') : t('icons.use')}</button>
   {/snippet}
 </Modal>
 

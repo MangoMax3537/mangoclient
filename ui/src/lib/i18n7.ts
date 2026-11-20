@@ -2,7 +2,7 @@
 export const en7 = {
   'icons.change': 'Change icon', 'icons.changeShort': 'Change', 'icons.title': 'Icon: {name}', 'icons.titleNew': 'Instance icon',
   'icons.tab.gallery': 'Gallery', 'icons.tab.upload': 'Upload', 'icons.tab.logo': 'Modpack logo',
-  'icons.auto': 'Auto', 'icons.autoHint': 'Auto picks a block from the instance id, so every instance gets its own. It never changes.',
+  'icons.brand': 'Mango Client', 'icons.auto': 'Auto', 'icons.autoHint': 'Auto picks a block from the instance id, so every instance gets its own. It never changes.',
   'icons.reset': 'Reset to auto', 'icons.apply': 'Apply icon', 'icons.use': 'Use this icon',
   'icons.missing': 'The block icons are not prepared yet.',
   'icons.prepare': 'Prepare icons',
@@ -46,7 +46,7 @@ export const en7 = {
 export const de7: Record<keyof typeof en7, string> = {
   'icons.change': 'Symbol ändern', 'icons.changeShort': 'Ändern', 'icons.title': 'Symbol: {name}', 'icons.titleNew': 'Symbol der Instanz',
   'icons.tab.gallery': 'Galerie', 'icons.tab.upload': 'Hochladen', 'icons.tab.logo': 'Modpack-Logo',
-  'icons.auto': 'Automatisch', 'icons.autoHint': 'Automatisch wählt einen Block anhand der Instanz-ID, so bekommt jede Instanz ihren eigenen. Er ändert sich nie.',
+  'icons.brand': 'Mango Client', 'icons.auto': 'Automatisch', 'icons.autoHint': 'Automatisch wählt einen Block anhand der Instanz-ID, so bekommt jede Instanz ihren eigenen. Er ändert sich nie.',
   'icons.reset': 'Auf automatisch zurücksetzen', 'icons.apply': 'Symbol übernehmen', 'icons.use': 'Dieses Symbol verwenden',
   'icons.missing': 'Die Block-Symbole sind noch nicht vorbereitet.',
   'icons.prepare': 'Symbole vorbereiten',

@@ -13,7 +13,7 @@
   import BlockIcon from './BlockIcon.svelte';
   import Tile from './Tile.svelte';
   import IconPicker from './IconPicker.svelte';
-  import { blockForSeed, choiceFromIcon, findBlock, iconTint, type IconChoice } from '../lib/instanceIcon';
+  import { BRAND_ICON_ID, blockForSeed, choiceFromIcon, findBlock, iconTint, type IconChoice } from '../lib/instanceIcon';
   import { fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { actions, app, blocks, errorText, getApi, nav, startInstall, t } from '../lib/stores.svelte';
@@ -145,7 +145,7 @@
           {:else if iconChoice.kind === 'image' && iconChoice.preview}<Tile kind="profile" id={seed} src={iconChoice.preview} size={64} notch={11} />
           {:else}<Tile kind="profile" id={seed} src={null} tint={iconTone} size={64} notch={11} />{/if}
         </span>
-        <div class="itxt"><b>{iconChoice.kind === 'auto' ? t('icons.auto') + (iconBlock ? `: ${iconBlock.label}` : '') : iconChoice.kind === 'block' ? (iconBlock?.label ?? '') : iconChoice.kind === 'image' ? iconChoice.name : ''}</b>
+        <div class="itxt"><b>{iconChoice.kind === 'auto' ? t('icons.auto') + (iconBlock ? `: ${iconBlock.label}` : '') : iconChoice.kind === 'block' ? (iconChoice.block === BRAND_ICON_ID ? t('icons.brand') : (iconBlock?.label ?? '')) : iconChoice.kind === 'image' ? iconChoice.name : ''}</b>
           <span class="hint">{t('new.iconHint')}</span></div>
         <button class="btn" type="button" onclick={() => (pickIcon = true)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('icons.changeShort')}</button>
       </div>

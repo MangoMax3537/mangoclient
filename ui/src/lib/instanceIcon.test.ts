@@ -1,7 +1,7 @@
 import { buildPool } from './bgCycle';
 import { describe, expect, it } from 'vitest';
 import {
-  PANORAMA_BLUR, backgroundStyle, blockErrorKey, blockForSeed, choiceFromBackground, panoramaAngle, panoramaDelay, pickerState, previewBackground, resolveBackground,
+  BRAND_ICON_ID, PANORAMA_BLUR, choiceFromIcon, sameChoice, backgroundStyle, blockErrorKey, blockForSeed, choiceFromBackground, panoramaAngle, panoramaDelay, pickerState, previewBackground, resolveBackground,
   resolveInstanceIcon, sameBackground, type BackgroundContext,
 } from './instanceIcon';
 import { buildWallpapers } from './wallpapers';
@@ -11,6 +11,20 @@ const face = 'x.png';
 const blk = (id: string): BlockIcon => ({ id, label: id, faces: { top: face, left: face, right: face } });
 const ready: BlockIconsStatus = { state: 'ready', mcVersion: '1.21.4', blocks: [blk('dirt'), blk('tnt'), blk('oak_log')] };
 const missing: BlockIconsStatus = { state: 'missing', mcVersion: null, blocks: [] };
+
+describe('the MangoClient icon as an explicit choice', () => {
+  it('resolves to the brand icon even with a ready gallery and an auto block', () => {
+    const r = resolveInstanceIcon({ coverUrl: null, icon: { kind: 'block', block: BRAND_ICON_ID }, autoBlock: 'dirt' }, ready);
+    expect(r).toEqual({ kind: 'brand' });
+    expect(BRAND_ICON_ID).toBe('mangoclient');
+  });
+  it('round-trips through the picker choice and sameChoice', () => {
+    const c = choiceFromIcon({ kind: 'block', block: BRAND_ICON_ID });
+    expect(c).toEqual({ kind: 'block', block: 'mangoclient' });
+    expect(sameChoice(c, { kind: 'block', block: 'mangoclient' })).toBe(true);
+    expect(sameChoice(c, { kind: 'auto' })).toBe(false);
+  });
+});
 
 describe('icon resolution order', () => {
   it('image icon wins over everything', () => {

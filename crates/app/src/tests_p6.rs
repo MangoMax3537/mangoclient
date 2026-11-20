@@ -704,6 +704,40 @@ fn write_png(path: &Path, w: u32, h: u32) {
 }
 
 #[tokio::test]
+async fn the_brand_icon_is_a_selectable_icon_and_legacy_ids_still_load() {
+    let e = env();
+    let p = e.profile("1.21.1");
+    let v = e
+        .svc
+        .profile_icon_set_block(p.id.clone(), "mangoclient".into())
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&v.icon).unwrap(),
+        json!({"kind": "block", "block": "mangoclient"})
+    );
+    let again = e.reopen();
+    let v2 = again
+        .app_state()
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|x| x.id == p.id)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&v2.icon).unwrap(),
+        json!({"kind": "block", "block": "mangoclient"})
+    );
+    // a legacy block id still validates and replaces it
+    let v3 = again
+        .profile_icon_set_block(p.id.clone(), "tnt".into())
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&v3.icon).unwrap(),
+        json!({"kind": "block", "block": "tnt"})
+    );
+}
+
+#[tokio::test]
 async fn setting_and_clearing_a_block_icon_persists() {
     let e = env();
     let p = e.profile("1.21.1");
