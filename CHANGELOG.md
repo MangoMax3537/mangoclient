@@ -1,3 +1,17 @@
+### MangoClient 2.0.0
+
+A complete rewrite: the launcher core is now Rust, the app is a Tauri shell with a new interface. It ships MangoConfig 1.10.1.
+
+- **New design.** A new, calmer look with a gold-yellow brand, skeleton loading, a custom title bar with back and forward, smooth transitions, keyboard shortcuts (press ? for the list) and a settings search that understands aliases ("darkmode" finds Design).
+- **Instances.** Per-instance RAM (sensible defaults of 4 GB on 16 GB machines, 5 GB on 32 GB, 6 GB on 64 GB and more, packs can recommend their own), Java and window size per instance, groups and tags, instance icons from your modpack, your own image or real Minecraft blocks read from your own game files, and a background per instance: a wallpaper for the Minecraft version, the version's panorama, or your own picture. Home cycles through the backgrounds.
+- **Content.** Mods, shaders and resource packs have their own tabs. Installing asks which instances (instances that already have it or cannot take it are dimmed with the reason) and shows required and optional dependencies before anything is installed. Modrinth modpacks install as new instances; Modrinth `.mrpack` and Prism/MultiMC instances can be imported, instances can be exported as `.mrpack`.
+- **Safety nets.** World backups and snapshots (automatic before updates and removals), restore never overwrites, crash analysis with plain-language causes and a diagnostics export that scrubs paths and tokens.
+- **Accounts.** Microsoft sign-in tokens are encrypted with a key that exists only on your device (stored in the system keystore); a copied accounts file is useless elsewhere. A skins page with a 3D preview, skin upload, capes and a skin library. Offline accounts still work. Accounts from 1.3.x need one new sign-in.
+- **Servers.** Real SRV lookups, server icons from the ping, quick join.
+- **Updates.** Updates are verified with an Ed25519 signature bound to version, platform and file hash.
+- **Not included.** CurseForge is not supported in 2.0 (Modrinth only).
+- **Upgrade note.** 2.0 is a new installation: download it from the release page. Your game data, profiles and settings are picked up from the same folder; Microsoft accounts must be signed in again.
+
 ### MangoClient 1.3.4
 
 - Ships MangoConfig 1.10.1 (below).
