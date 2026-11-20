@@ -2,6 +2,7 @@
 //! Updater wiring (installer injection), launch isolation from the real
 //! network, and strict profile/loader validation.
 
+#[cfg_attr(windows, allow(unused_imports))]
 use crate::tests_p2::{json_ok, serve, Handler, Req};
 use crate::tests_p4::Sink;
 use crate::*;
@@ -9,6 +10,7 @@ use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
 use mango_core::Paths;
 use serde_json::json;
+#[cfg_attr(windows, allow(unused_imports))]
 use sha1::{Digest as _, Sha1};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

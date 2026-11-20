@@ -599,13 +599,16 @@ async fn plans_reject_bad_files_with_stable_codes() {
     );
     assert_eq!(code(&dir.join("missing.zip")).await, "import.not_found");
     assert_eq!(code(&dir).await, "import.not_a_file");
-    let link = dir.join("link.zip");
-    std::os::unix::fs::symlink(&nothing, &link).unwrap();
-    assert_eq!(
-        code(&link).await,
-        "import.not_a_file",
-        "links are never followed"
-    );
+    #[cfg(unix)]
+    {
+        let link = dir.join("link.zip");
+        std::os::unix::fs::symlink(&nothing, &link).unwrap();
+        assert_eq!(
+            code(&link).await,
+            "import.not_a_file",
+            "links are never followed"
+        );
+    }
     let big = dir.join("big.zip");
     std::fs::File::create(&big)
         .unwrap()

@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use mango_java::*;
+#[cfg_attr(windows, allow(unused_imports))]
 use std::path::{Path, PathBuf};
 
 fn cand(path: &str, major: u32) -> Candidate {

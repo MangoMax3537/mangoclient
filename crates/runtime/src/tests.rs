@@ -1,11 +1,14 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+#[cfg_attr(windows, allow(unused_imports))]
 use mango_core::Session;
+#[cfg_attr(windows, allow(unused_imports))]
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg_attr(windows, allow(dead_code))]
 fn collect() -> (EventCb, Arc<Mutex<Vec<GameEvent>>>) {
     let store = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&store);
@@ -13,6 +16,7 @@ fn collect() -> (EventCb, Arc<Mutex<Vec<GameEvent>>>) {
     (cb, store)
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn lines(store: &Arc<Mutex<Vec<GameEvent>>>) -> Vec<(String, LogLevel)> {
     store
         .lock()

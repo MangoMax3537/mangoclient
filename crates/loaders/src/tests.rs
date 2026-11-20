@@ -2,6 +2,7 @@
 
 use crate::*;
 use std::collections::HashMap;
+#[cfg_attr(windows, allow(unused_imports))]
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;

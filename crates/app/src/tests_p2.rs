@@ -35,6 +35,7 @@ impl MockSink {
 }
 
 struct Fx {
+    #[cfg_attr(windows, allow(dead_code))]
     tmp: tempfile::TempDir,
     svc: AppService,
     sink: Arc<MockSink>,
