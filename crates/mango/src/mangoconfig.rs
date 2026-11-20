@@ -124,15 +124,18 @@ pub fn supports(profile: &Profile, bundle: &Bundle) -> bool {
     loader_ok(profile.loader) && bundle.has_build_for(&profile.mc_version)
 }
 
-/// Launch order: a vanilla profile switches to Fabric when MangoConfig is
-/// enabled and a jar exists for its version. Forge/NeoForge/Quilt never switch.
+/// A vanilla profile switches to Fabric only when the user explicitly turned
+/// MangoConfig on for it (`mangoConfig === true`), the global switch is on and
+/// a jar exists for its exact version. The default (`null`) never converts a
+/// loader. Forge/NeoForge/Quilt never switch.
 pub fn should_switch_vanilla_to_fabric(
     profile: &Profile,
     config: &Config,
     bundle: &Bundle,
 ) -> bool {
     profile.loader == Loader::Vanilla
-        && enabled_for(profile, config)
+        && profile.mango_config == Some(true)
+        && config.mango_config
         && bundle.has_build_for(&profile.mc_version)
 }
 
@@ -467,16 +470,22 @@ mod tests {
         let f = fx();
         let b = Bundle::scan(&f.bundle);
         let c = config(true);
-        assert!(should_switch_vanilla_to_fabric(
+        let mut opted_in = profile(Loader::Vanilla, "1.21.4");
+        opted_in.mango_config = Some(true);
+        assert!(should_switch_vanilla_to_fabric(&opted_in, &c, &b));
+        // The default (null) never converts a loader.
+        assert!(!should_switch_vanilla_to_fabric(
             &profile(Loader::Vanilla, "1.21.4"),
             &c,
             &b
         ));
-        assert!(!should_switch_vanilla_to_fabric(
-            &profile(Loader::Vanilla, "1.19"),
-            &c,
-            &b
-        ));
+        // An unsupported version never switches, even when opted in.
+        let mut unsupported = profile(Loader::Vanilla, "1.19");
+        unsupported.mango_config = Some(true);
+        assert!(!should_switch_vanilla_to_fabric(&unsupported, &c, &b));
+        let mut future = profile(Loader::Vanilla, "26.3");
+        future.mango_config = Some(true);
+        assert!(!should_switch_vanilla_to_fabric(&future, &c, &b));
         for l in [
             Loader::Quilt,
             Loader::Forge,
@@ -490,7 +499,7 @@ mod tests {
             ));
         }
         assert!(!should_switch_vanilla_to_fabric(
-            &profile(Loader::Vanilla, "1.21.4"),
+            &opted_in,
             &config(false),
             &b
         ));

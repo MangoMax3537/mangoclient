@@ -40,6 +40,13 @@ pub struct ProfileView {
     /// Game window override; `mode: default` = the global settings.
     pub window: mango_core::WindowSettings,
     pub mango_config: Option<bool>,
+    /// A bundled MangoConfig build exists for this loader and Minecraft version.
+    #[serde(default)]
+    pub mango_config_supported: bool,
+    /// What a launch will really inject: supported and not switched off by the
+    /// profile or the global setting.
+    #[serde(default)]
+    pub mango_config_active: bool,
     /// Library group; `null` = ungrouped.
     pub group: Option<String>,
     pub tags: Vec<String>,
@@ -127,6 +134,8 @@ impl ProfileView {
             java_path: p.java_path.clone(),
             window: p.window.unwrap_or_default(),
             mango_config: p.mango_config,
+            mango_config_supported: false,
+            mango_config_active: false,
             group: p.group.clone(),
             tags: p.tags.clone(),
             last_played: p.last_played,
@@ -386,8 +395,16 @@ pub(crate) fn installed_versions(paths: &Paths) -> Vec<String> {
 }
 
 /// The UI's profile with the derived fields (`autoBlock`, background) filled in.
-pub(crate) fn view_of(paths: &Paths, p: &Profile, default_ram_mb: u32) -> ProfileView {
-    let mut view = ProfileView::new(p, default_ram_mb);
+pub(crate) fn view_of(
+    paths: &Paths,
+    p: &Profile,
+    config: &mango_core::Config,
+    bundle: &mango_mango::mangoconfig::Bundle,
+) -> ProfileView {
+    use mango_mango::mangoconfig::{enabled_for, supports};
+    let mut view = ProfileView::new(p, config.ram);
+    view.mango_config_supported = supports(p, bundle);
+    view.mango_config_active = view.mango_config_supported && enabled_for(p, config);
     view.auto_block = crate::block_icons::auto_block(paths, &p.id);
     // A recorded picture whose file is gone means automatic.
     if matches!(view.background, ProfileBackground::Image { .. })

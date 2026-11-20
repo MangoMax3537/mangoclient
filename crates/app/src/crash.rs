@@ -173,6 +173,11 @@ const RULES: &[Rule] = &[
         run: rule_mixin_failure,
     },
     Rule {
+        code: "mod_entrypoint",
+        title: "A mod failed while starting",
+        run: rule_mod_entrypoint,
+    },
+    Rule {
         code: "gl_driver",
         title: "The graphics driver or OpenGL failed",
         run: rule_gl_driver,
@@ -620,7 +625,16 @@ fn rule_heap_reserve(f: &Facts) -> Option<Finding> {
         "Invalid maximum heap size",
         "The specified size exceeds the maximum representable size",
         "Initial heap size set to a larger value than the maximum heap size",
+        // HotSpot on Linux when the machine cannot back the heap.
+        "There is insufficient memory for the Java Runtime Environment to continue",
     ])?;
+    // `Native memory allocation (mmap) failed to map 858993459200 bytes`
+    let asked_mb = re!(r"failed to map (\d+) bytes")
+        .and_then(|re| re.captures(f.text))
+        .and_then(|c| c[1].parse::<u64>().ok())
+        .map(|b| b / (1024 * 1024))
+        .filter(|mb| *mb > 0);
+    let wanted = asked_mb.unwrap_or_else(|| u64::from(f.ram_mb));
     let free = if f.total_ram_mb > 0 {
         format!(" This computer has {} MB in total.", f.total_ram_mb)
     } else {
@@ -630,8 +644,7 @@ fn rule_heap_reserve(f: &Facts) -> Option<Finding> {
         i,
         Confidence::High,
         format!(
-            "Java could not set aside the configured {} MB.{free}",
-            f.ram_mb
+            "Java could not set aside the requested {wanted} MB.{free}"
         ),
         vec![
             s("Lower the memory of this instance (a 32-bit Java cannot use more than about 1.5 GB)"),
@@ -649,7 +662,15 @@ fn rule_out_of_memory(f: &Facts) -> Option<Finding> {
         "Requested array size exceeds VM limit",
         "OutOfMemoryError: Out of Memory Error",
     ]) {
+        // `-Xmx` in the Java arguments comes after the launcher's own and wins.
+        let own_xmx = re!(r"-Xmx(\d+[kKmMgG]?)")
+            .and_then(|re| re.captures_iter(f.java_args).last())
+            .map(|c| c[1].to_string());
         let advice = match suggested_ram(f.ram_mb, f.total_ram_mb) {
+            _ if own_xmx.is_some() => format!(
+                "The Java arguments set -Xmx{}, which overrides the memory of the instance: remove it or raise it",
+                own_xmx.as_deref().unwrap_or_default()
+            ),
             Some(r) => format!(
                 "Raise the memory of this instance from {} MB to about {r} MB",
                 f.ram_mb
@@ -664,7 +685,10 @@ fn rule_out_of_memory(f: &Facts) -> Option<Finding> {
         return finding(
             i,
             Confidence::High,
-            format!("The game used up its {} MB of memory", f.ram_mb),
+            match &own_xmx {
+                Some(x) => format!("The game used up the -Xmx{x} of its Java arguments"),
+                None => format!("The game used up its {} MB of memory", f.ram_mb),
+            },
             vec![
                 advice,
                 s("Lower the render distance"),
@@ -751,7 +775,9 @@ fn rule_jvm_args(f: &Facts) -> Option<Finding> {
     let re = re!(
         r"(?i)(?:Unrecognized (?:VM )?option:? '?([^'\s]+)|Improperly specified VM option '([^']+)'|Invalid VM option '?([^'\s]+))"
     )?;
-    let (i, l) = f.lines.iter().enumerate().find(|(_, l)| re.is_match(l))?;
+    let Some((i, l)) = f.lines.iter().enumerate().find(|(_, l)| re.is_match(l)) else {
+        return rule_jvm_conflict(f);
+    };
     let c = re.captures(l)?;
     let arg = (1..=3).find_map(|n| c.get(n)).map_or("", |m| m.as_str());
     let own = if f.java_args.contains(arg) && !arg.is_empty() {
@@ -766,6 +792,36 @@ fn rule_jvm_args(f: &Facts) -> Option<Finding> {
         vec![
             format!("Remove {arg} from the Java arguments of the instance and of the settings"),
             s("Options for another Java version (for example -XX:+UseConcMarkSweepGC on Java 17+) are not accepted"),
+        ],
+        Vec::new(),
+    )
+}
+
+/// `SurvivorRatio (32) must be less than or equal to ergonomic SurvivorRatio
+/// maximum (16)` / `Error: Could not create the Java Virtual Machine.`: the
+/// JVM refuses a combination of options (typically a small `-Xmx` next to
+/// the launcher's G1 tuning); the reason is the line before the error.
+fn rule_jvm_conflict(f: &Facts) -> Option<Finding> {
+    let (i, _) = f.find_any(&["Could not create the Java Virtual Machine"])?;
+    let reason = f.lines[..i]
+        .iter()
+        .rev()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .map(|l| l.chars().take(160).collect::<String>())
+        .unwrap_or_default();
+    // Without a stated reason this says nothing about the cause.
+    if reason.is_empty() || reason.starts_with("Error:") {
+        return None;
+    }
+    let detail = format!("Java refused to start with the configured options: {reason}");
+    finding(
+        i,
+        Confidence::High,
+        detail,
+        vec![
+            s("Raise the memory of the instance (very small values do not work with the G1 settings)"),
+            s("Remove custom Java arguments from the instance and the settings, then add them back one by one"),
         ],
         Vec::new(),
     )
@@ -925,6 +981,9 @@ fn rule_duplicate_mods(f: &Facts) -> Option<Finding> {
             related,
         );
     }
+    if let Some(found) = rule_unique_id(f) {
+        return Some(found);
+    }
     let conflict = re!(
         r"(?i)Mod '([^']+)' \(([^)]+)\) \S+ (?:is incompatible with|conflicts with|breaks) (.+?)(?:, but|,? which is|!|$)"
     )?;
@@ -951,6 +1010,52 @@ fn rule_duplicate_mods(f: &Facts) -> Option<Finding> {
     )
 }
 
+/// Fabric's solver output when two mods claim one id (also through
+/// `provides`): `Immediate reason: [ROOT_FORCELOAD_SINGLE a 1.0, UNIQUE_ID a,
+/// ROOT_FORCELOAD_SINGLE b 1.0]` and, in the error, `Remove mod 'A' (a) 1.0
+/// (/path/a-1.0.jar).` (the "More details" list stays empty).
+fn rule_unique_id(f: &Facts) -> Option<Finding> {
+    let (i, l) = f
+        .lines
+        .iter()
+        .enumerate()
+        .find(|(_, l)| l.contains("UNIQUE_ID"))?;
+    let mods: Vec<String> = re!(r"ROOT_FORCELOAD_SINGLE ([\w.\-]+)")
+        .map(|re| re.captures_iter(l).map(|c| c[1].to_string()).collect())
+        .unwrap_or_default();
+    let mut related = mods.clone();
+    let jars: Vec<String> = f
+        .lines
+        .iter()
+        .filter(|l| l.contains("Remove mod '"))
+        .flat_map(|l| jar_names(l))
+        .collect();
+    related.extend(jars.iter().cloned());
+    let what = if mods.is_empty() {
+        s("Two mods")
+    } else {
+        format!("{} use", mods.join(" and "))
+    };
+    let detail = format!(
+        "{what} the same mod id, so the loader cannot load both{}",
+        if jars.is_empty() {
+            String::new()
+        } else {
+            format!(" (the loader suggests removing {})", jars.join(", "))
+        }
+    );
+    finding(
+        i,
+        Confidence::High,
+        detail,
+        vec![
+            s("Remove one of the two mods"),
+            s("Check for an old copy you added by hand next to the installed one"),
+        ],
+        related,
+    )
+}
+
 /// `sodium.mixins.json` -> `sodium`, `mixins.create.json` -> `create`.
 fn mod_of_mixin_config(name: &str) -> Option<String> {
     let re = re!(
@@ -969,6 +1074,7 @@ fn rule_mixin_failure(f: &Facts) -> Option<Finding> {
         "Mixin transformation of",
         "MixinTransformerError",
         "Mixin prepare failed",
+        "Mixin prepare for mod",
     ])?;
     // Look for the config and the mod around the first failure.
     let window = f.lines[i.saturating_sub(2)..f.lines.len().min(i + 12)].join("\n");
@@ -1012,6 +1118,49 @@ fn rule_mixin_failure(f: &Facts) -> Option<Finding> {
 }
 
 // ---------------------------------------------------------------- graphics, shaders
+
+/// Fabric: `Could not execute entrypoint stage 'main' due to errors, provided
+/// by 'badentry' at 'does.not.Exist'!`, with the root cause further down
+/// (`Caused by: java.lang.ClassNotFoundException: does.not.Exist`).
+fn rule_mod_entrypoint(f: &Facts) -> Option<Finding> {
+    let re = re!(
+        r"Could not execute entrypoint stage '([^']+)' due to errors, provided by '([^']+)'(?: at '([^']+)')?"
+    )?;
+    let (i, c) = f
+        .lines
+        .iter()
+        .enumerate()
+        .find_map(|(i, l)| re.captures(l).map(|c| (i, c)))?;
+    let (stage, modid) = (c[1].to_string(), c[2].to_string());
+    let class = c.get(3).map(|m| m.as_str().to_string());
+    let missing_class = f.lines[i..]
+        .iter()
+        .take(40)
+        .any(|l| l.contains("ClassNotFoundException") || l.contains("NoClassDefFoundError"));
+    let detail = match (&class, missing_class) {
+        (Some(cl), true) => {
+            format!("The mod {modid} points at the class {cl} for its {stage} entrypoint, but that class does not exist in it")
+        }
+        _ => format!(
+            "The mod {modid} threw an error in its {stage} entrypoint while the game was starting"
+        ),
+    };
+    finding(
+        i,
+        Confidence::High,
+        detail,
+        vec![
+            format!(
+                "Update {modid}, or install the build made for Minecraft {} and {}",
+                f.mc_version,
+                modrinth_loader(f.loader)
+            ),
+            format!("As a test, disable {modid}"),
+            s("Tell the mod's author if it keeps happening, with the crash report"),
+        ],
+        vec![modid],
+    )
+}
 
 fn rule_gl_driver(f: &Facts) -> Option<Finding> {
     let (i, _) = f.find_any(&[
@@ -1828,5 +1977,173 @@ mod tests {
             ],
         );
         assert_eq!(out, ["Sodium", "Fabric API", "unknown_mod"]);
+    }
+
+    // ------- fixtures from real Minecraft 1.21.4 / Fabric Loader 0.20.1 runs
+    // (relevant lines only, home paths replaced with ~).
+
+    #[test]
+    fn real_fabric_missing_dependency_and_wrong_minecraft() {
+        let missing = "[main/WARN]: Mod resolution failed\n\
+            [main/INFO]: Immediate reason: [HARD_DEP_NO_CANDIDATE needsdep 1.0.0 {depends nonexistentlib @ [*]}, ROOT_FORCELOAD_SINGLE needsdep 1.0.0]\n\
+            [main/ERROR]: Incompatible mods found!\n\
+            net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!\n\
+            A potential solution has been determined, this may resolve your problem:\n\
+            \t - Install nonexistentlib, any version.\n\
+            More details:\n\
+            \t - Mod 'Needsdep' (needsdep) 1.0.0 requires any version of nonexistentlib, which is missing!\n\
+            \tat net.fabricmc.loader.impl.FabricLoaderImpl.load(FabricLoaderImpl.java:207)";
+        let c = run("mod_dependency", missing).unwrap();
+        assert!(c.related_mods.contains(&"needsdep".to_string()), "{c:?}");
+        assert!(c.related_mods.contains(&"nonexistentlib".to_string()));
+        assert!(run("wrong_mc_version", missing).is_none());
+
+        let wrong = "[main/INFO]: Immediate reason: [HARD_DEP_INCOMPATIBLE_PRESELECTED oldmc 1.0.0 {depends minecraft @ [>=1.19 <1.20]}, ROOT_FORCELOAD_SINGLE oldmc 1.0.0]\n\
+            [main/ERROR]: Incompatible mods found!\n\
+            net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!\n\
+            A potential solution has been determined, this may resolve your problem:\n\
+            \t - Replace 'Minecraft' (minecraft) 1.21.4 with any version between 1.19 (inclusive) and 1.20 (exclusive).\n\
+            More details:\n\
+            \t - Mod 'Oldmc' (oldmc) 1.0.0 requires any version between 1.19 (inclusive) and 1.20 (exclusive) of 'Minecraft' (minecraft), but only the wrong version is present: 1.21.4!";
+        let c = run("wrong_mc_version", wrong).unwrap();
+        assert_eq!(c.related_mods, vec!["oldmc".to_string()], "{c:?}");
+        assert!(run("mod_dependency", wrong).is_none());
+    }
+
+    #[test]
+    fn real_fabric_two_mods_with_one_id() {
+        let log = "[main/WARN]: Mod resolution failed\n\
+            [main/INFO]: Immediate reason: [ROOT_FORCELOAD_SINGLE alpha 1.0.0, UNIQUE_ID alpha, ROOT_FORCELOAD_SINGLE beta 1.0.0]\n\
+            [main/INFO]: Reason: []\n\
+            [main/INFO]: Fix: add [], remove [alpha 1.0.0], replace []\n\
+            [main/ERROR]: Incompatible mods found!\n\
+            net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!\n\
+            A potential solution has been determined, this may resolve your problem:\n\
+            \t - Remove mod 'Alpha' (alpha) 1.0.0 (~/.mangoclient/instances/x/mods/alpha-1.0.jar).\n\
+            More details:";
+        let c = run("duplicate_mods", log).unwrap();
+        assert!(c.detail.contains("alpha and beta"), "{}", c.detail);
+        assert!(c.detail.contains("alpha-1.0.jar"));
+        assert!(c.related_mods.contains(&"beta".to_string()));
+        // The same solver output for a missing dependency is not a duplicate.
+        assert!(run(
+            "duplicate_mods",
+            "Immediate reason: [HARD_DEP_NO_CANDIDATE a 1.0 {depends b @ [*]}]"
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn real_fabric_entrypoint_class_missing() {
+        let log = "Time: 2026-11-21 00:21:39\n\
+            Description: Initializing game\n\
+            \n\
+            java.lang.RuntimeException: Could not execute entrypoint stage 'main' due to errors, provided by 'badentry' at 'does.not.Exist'!\n\
+            \tat net.fabricmc.loader.impl.FabricLoaderImpl.lambda$invokeEntrypoints$0(FabricLoaderImpl.java:418)\n\
+            Caused by: net.fabricmc.loader.api.EntrypointException: Exception while loading entries for entrypoint 'main' provided by 'badentry'\n\
+            Caused by: net.fabricmc.loader.api.LanguageAdapterException: java.lang.ClassNotFoundException: does.not.Exist\n\
+            Caused by: java.lang.ClassNotFoundException: does.not.Exist";
+        let c = run("mod_entrypoint", log).unwrap();
+        assert_eq!(c.related_mods, vec!["badentry".to_string()]);
+        assert!(c.detail.contains("does.not.Exist"), "{}", c.detail);
+        assert!(run("mod_entrypoint", "[main/INFO]: Loading 3 mods").is_none());
+    }
+
+    #[test]
+    fn real_mixin_with_a_missing_class() {
+        let log = "[main/ERROR]: Mixin prepare for mod badmixin failed preparing MissingClassMixin in badmixin.mixins.json: org.spongepowered.asm.mixin.transformer.throwables.InvalidMixinException The specified mixin 'com.example.badmixin.mixin.MissingClassMixin' was not found\n\
+            [main/ERROR]: Uncaught exception in thread \"main\"\n\
+            java.lang.RuntimeException: Mixin transformation of net.minecraft.client.main.Main failed\n\
+            Caused by: org.spongepowered.asm.mixin.throwables.MixinApplyError: Mixin [badmixin.mixins.json:MissingClassMixin from mod badmixin] from phase [DEFAULT] in config [badmixin.mixins.json] FAILED during PREPARE";
+        let c = run("mixin_failure", log).unwrap();
+        assert_eq!(c.related_mods, vec!["badmixin".to_string()], "{c:?}");
+        // A mixin that was only mentioned while loading is not a failure.
+        assert!(run(
+            "mixin_failure",
+            "[main/INFO]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:~/libraries/sponge-mixin.jar"
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn real_java_17_on_a_java_21_game_in_two_languages() {
+        let de = "Fehler: Beim Laden der Klasse net.minecraft.client.main.Main ist ein LinkageError aufgetreten\n\
+            \tjava.lang.UnsupportedClassVersionError: net/minecraft/client/main/Main has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 61.0";
+        let en = "Error: LinkageError occurred while loading main class net.minecraft.client.main.Main\n\
+            \tjava.lang.UnsupportedClassVersionError: net/minecraft/client/main/Main has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 61.0";
+        for log in [de, en] {
+            let c = run("java_version", log).unwrap();
+            assert_eq!(
+                c.detail, "This needs Java 21 or newer, but Java 17 is running",
+                "{log}"
+            );
+        }
+    }
+
+    #[test]
+    fn real_jvm_start_failures_from_the_process_output() {
+        // 128 MB with the launcher's own G1 tuning.
+        let ratio = "SurvivorRatio (32) must be less than or equal to ergonomic SurvivorRatio maximum (16)\n\
+            Error: Could not create the Java Virtual Machine.\n\
+            Error: A fatal exception has occurred. Program will exit.";
+        let c = run("jvm_args", ratio).unwrap();
+        assert!(c.detail.contains("SurvivorRatio (32)"), "{}", c.detail);
+
+        let reserve = "OpenJDK 64-Bit Server VM warning: INFO: os::commit_memory(0x00007f036c000000, 858993459200, 0) failed; error='Not enough space' (errno=12)\n\
+            #\n\
+            # There is insufficient memory for the Java Runtime Environment to continue.\n\
+            # Native memory allocation (mmap) failed to map 858993459200 bytes. Error detail: committing reserved memory.\n\
+            # An error report file with more information is saved as:\n\
+            # ~/.mangoclient/instances/x/hs_err_pid1036348.log";
+        let c = run("jvm_heap_reserve", reserve).unwrap();
+        assert!(c.detail.contains("819200 MB"), "{}", c.detail);
+        // An out-of-memory error inside the game is another cause.
+        assert!(run(
+            "jvm_heap_reserve",
+            "java.lang.OutOfMemoryError: Java heap space"
+        )
+        .is_none());
+        assert!(run("jvm_args", reserve).is_none());
+    }
+
+    #[test]
+    fn real_heap_exhaustion_blames_a_small_xmx_in_the_java_arguments() {
+        let log = "[main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.20.1\n\
+            [main/ERROR]: Uncaught exception in thread \"main\"\n\
+            java.lang.OutOfMemoryError: Java heap space";
+        let c = run_with("out_of_memory", log, &[], |b| {
+            b.java_args = "-XX:+UseG1GC -Xmx48m -Xms32m";
+        })
+        .unwrap();
+        assert!(c.detail.contains("-Xmx48m"), "{}", c.detail);
+        assert!(
+            c.suggestions[0].contains("overrides"),
+            "{:?}",
+            c.suggestions
+        );
+        let c = run("out_of_memory", log).unwrap();
+        assert!(c.suggestions[0].contains("2048 MB"), "{:?}", c.suggestions);
+    }
+
+    #[test]
+    fn a_clean_real_start_is_no_cause_even_with_the_linux_narrator_error() {
+        let log = "[main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.20.1\n\
+            [main/INFO]: Loading 4 mods:\n\
+            \t- fabricloader 0.20.1\n\
+            \t   \\-- mixinextras 0.5.5\n\
+            \t- java 21\n\
+            \t- minecraft 1.21.4\n\
+            [main/INFO]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:~/libraries/net/fabricmc/sponge-mixin/0.17.5+mixin.0.8.7/sponge-mixin-0.17.5+mixin.0.8.7.jar Service=Knot/Fabric Env=CLIENT\n\
+            [Datafixer Bootstrap/INFO]: 243 Datafixer optimizations took 258 milliseconds\n\
+            [Render thread/INFO]: Setting user: Player\n\
+            [Render thread/ERROR]: Error while loading the narrator\n\
+            com.mojang.text2speech.Narrator$InitializeException: Failed to load library flite\n\
+            Caused by: java.lang.UnsatisfiedLinkError: Unable to load library 'flite':\n\
+            \tSuppressed: java.io.IOException: Native library (linux-x86-64/libflite.so) not found in resource path (~/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar)\n\
+            [Render thread/INFO]: Sound engine started";
+        let b = base(&[]);
+        let facts = Facts::new(log, &b);
+        let causes = analyze(&facts).causes;
+        assert!(causes.is_empty(), "{causes:?}");
     }
 }

@@ -1259,6 +1259,35 @@ fn write_log(f: &Fx, id: &str, rel: &str, text: &str, age_secs: u64) {
 const OOM_REPORT: &str = "---- Minecraft Crash Report ----\n// Don't do that.\n\nTime: 2025-01-02 10:00:00\nDescription: Exception in server tick loop\n\njava.lang.OutOfMemoryError: Java heap space\n\tat net.minecraft.class_2818.method_12202(SourceFile:1)\n\nA detailed walkthrough of the error\n\n-- System Details --\n\tMinecraft Version: 1.20.1\n\tJava Version: 17.0.9, Eclipse Adoptium\n";
 
 #[tokio::test]
+async fn crash_analyze_reads_the_launcher_log_when_the_jvm_never_wrote_one() {
+    let f = fx();
+    let id = f.profile("J", "1.21.4", "vanilla", None);
+    let name = f.svc.app_state().unwrap().profiles[0].name.clone();
+    let launcher = mango_runtime::log_file_for(&f.paths().logs(), &name, &id);
+    std::fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+    let jvm_error = "SurvivorRatio (32) must be less than or equal to ergonomic SurvivorRatio maximum (16)\nError: Could not create the Java Virtual Machine.\n";
+    std::fs::write(&launcher, jvm_error).unwrap();
+
+    // No game log at all: the process output is all there is.
+    let r = f.svc.crash_analyze(id.clone(), None).await.unwrap();
+    assert!(r
+        .source_log
+        .as_deref()
+        .is_some_and(|s| s.starts_with("launcher:")));
+    assert_eq!(r.causes[0].code, "jvm_args");
+
+    // An old latest.log from an earlier run loses to the newer process output.
+    write_log(&f, &id, "logs/latest.log", "[main/INFO]: fine\n", 3600);
+    let r = f.svc.crash_analyze(id.clone(), None).await.unwrap();
+    assert_eq!(r.causes[0].code, "jvm_args");
+
+    // A latest.log written by the same run (same time) stays the source.
+    write_log(&f, &id, "logs/latest.log", "[main/INFO]: fine\n", 0);
+    let r = f.svc.crash_analyze(id.clone(), None).await.unwrap();
+    assert_eq!(r.source_log.as_deref(), Some("game:latest.log"));
+}
+
+#[tokio::test]
 async fn crash_analyze_picks_the_newest_crash_report_else_latest_log() {
     let f = fx();
     let id = f.profile("C", "1.20.1", "fabric", Some("0.16.9"));

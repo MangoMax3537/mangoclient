@@ -253,8 +253,13 @@ impl Inner {
 
     /// The UI's profile (never call this inside `with_store`).
     pub(crate) fn view(&self, p: &Profile) -> ProfileView {
-        let ram = self.with_store(|s| s.config.ram);
-        crate::types::view_of(&self.paths, p, ram)
+        let bundle = self.bundle();
+        self.with_store(|s| crate::types::view_of(&s.paths, p, &s.config, &bundle))
+    }
+
+    /// The bundled MangoConfig jars.
+    pub(crate) fn bundle(&self) -> mango_mango::mangoconfig::Bundle {
+        mango_mango::mangoconfig::Bundle::scan(&self.opts.bundle_dir)
     }
 }
 
@@ -333,12 +338,13 @@ impl AppService {
 
     pub fn app_state(&self) -> Res<AppState> {
         let inner = &self.inner;
+        let bundle = inner.bundle();
         let (config, profiles, records) = inner.with_store(|s| {
             (
                 ConfigView::from(&s.config),
                 s.profiles
                     .iter()
-                    .map(|p| crate::types::view_of(&s.paths, p, s.config.ram))
+                    .map(|p| crate::types::view_of(&s.paths, p, &s.config, &bundle))
                     .collect(),
                 s.accounts.clone(),
             )
@@ -451,6 +457,7 @@ impl AppService {
                 }
             }
         }
+        let bundle = self.inner.bundle();
         self.inner.with_store(|s| {
             // A changed `ram` is the user's choice; `null` goes back to the
             // default. An unchanged value (a spread view) keeps its source.
@@ -469,7 +476,7 @@ impl AppService {
                 .update_profile(&id, &Value::Object(clean))?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::types::view_of(&s.paths, &p, s.config.ram))
+            Ok(crate::types::view_of(&s.paths, &p, &s.config, &bundle))
         })
     }
 
@@ -550,6 +557,7 @@ impl AppService {
         })
         .await??;
 
+        let bundle = self.inner.bundle();
         self.inner.with_store(|s| {
             let mut patch = json!({"mods": rebased});
             // `cover` is derived from the copied file.
@@ -558,7 +566,7 @@ impl AppService {
                 .update_profile(&created.id, &patch)?
                 .cloned()
                 .ok_or_else(AppError::profile_not_found)?;
-            Ok(crate::types::view_of(&s.paths, &p, s.config.ram))
+            Ok(crate::types::view_of(&s.paths, &p, &s.config, &bundle))
         })
     }
 
@@ -620,6 +628,7 @@ impl AppService {
 
     /// `true` when a stop signal was sent.
     pub fn game_stop(&self, profile_id: String) -> Res<bool> {
+        validate_profile_id(&profile_id)?;
         let game = lock(&self.inner.games).get(&profile_id).cloned();
         match game {
             Some(g) => {

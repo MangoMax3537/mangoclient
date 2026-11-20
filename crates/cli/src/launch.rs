@@ -131,6 +131,12 @@ fn find_profile<'a>(store: &'a Store, target: &str) -> Res<&'a Profile> {
     if let Some(p) = store.get_profile(target) {
         return Ok(p);
     }
+    if store.profiles.is_empty() {
+        return Err(CliError::Failure(
+            "there are no profiles yet; create one with `profile create <name> --mc <version> --loader <loader>`"
+                .into(),
+        ));
+    }
     let lower = target.to_lowercase();
     let matches: Vec<&Profile> = store
         .profiles
@@ -643,5 +649,13 @@ mod tests {
         assert_eq!(find_profile(&store, &p.id).unwrap().name, "Alpha");
         assert_eq!(find_profile(&store, "alpha").unwrap().id, p.id);
         assert!(find_profile(&store, "nope").is_err());
+    }
+
+    #[test]
+    fn launching_without_any_profile_says_so() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::open(Paths::new(tmp.path())).unwrap();
+        let e = find_profile(&store, "x").unwrap_err().to_string();
+        assert!(e.contains("no profiles yet"), "{e}");
     }
 }

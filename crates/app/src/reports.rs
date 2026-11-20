@@ -6,7 +6,7 @@
 
 use crate::crash::{self, Base, CrashCause, CrashReport, Facts};
 use crate::error::{AppError, Res};
-use crate::media::{list_dir, read_tail, MAX_LOG_BYTES};
+use crate::media::{list_dir, mtime_ms, read_tail, MAX_LOG_BYTES};
 use crate::models::LogKind;
 use crate::outfile::{add_bytes, write_zip_atomic, FileExport};
 use crate::scrub::{scrub, ScrubContext};
@@ -44,15 +44,40 @@ fn newest(entries: Vec<crate::models::LogEntry>) -> Option<crate::models::LogEnt
         .max_by(|a, b| a.modified.cmp(&b.modified).then_with(|| b.id.cmp(&a.id)))
 }
 
-/// The newest crash report of the instance, else `latest.log`.
-fn default_source(crash_dir: &Path, game_dir: &Path) -> Option<(String, PathBuf)> {
-    if let Some(e) = newest(list_dir(crash_dir, LogKind::Crash)) {
-        return Some((e.id, crash_dir.join(e.name)));
+/// The launcher log counts as newer than the game's own logs when it was
+/// written more than this much later: the JVM then died before the game
+/// could write `latest.log` (bad Java arguments, no memory, old Java).
+const LAUNCHER_NEWER_MS: u64 = 5_000;
+
+/// The newest crash report of the instance, else `latest.log`; the launcher
+/// log (the process output) when that is clearly newer or nothing else exists.
+fn default_source(crash_dir: &Path, game_dir: &Path, launcher: &Path) -> Option<(String, PathBuf)> {
+    let game = if let Some(e) = newest(list_dir(crash_dir, LogKind::Crash)) {
+        Some((e.id, crash_dir.join(e.name), e.modified))
+    } else {
+        let latest = game_dir.join("latest.log");
+        std::fs::symlink_metadata(&latest)
+            .ok()
+            .filter(|m| m.is_file())
+            .map(|m| ("game:latest.log".to_string(), latest, mtime_ms(&m)))
+    };
+    let launcher_log = std::fs::symlink_metadata(launcher)
+        .ok()
+        .filter(|m| m.is_file())
+        .and_then(|m| {
+            let name = launcher.file_name()?.to_string_lossy().into_owned();
+            Some((
+                format!("launcher:{name}"),
+                launcher.to_path_buf(),
+                mtime_ms(&m),
+            ))
+        });
+    match (game, launcher_log) {
+        (Some(g), Some(l)) if l.2 > g.2.saturating_add(LAUNCHER_NEWER_MS) => Some((l.0, l.1)),
+        (Some(g), _) => Some((g.0, g.1)),
+        (None, Some(l)) => Some((l.0, l.1)),
+        (None, None) => None,
     }
-    let latest = game_dir.join("latest.log");
-    std::fs::symlink_metadata(&latest)
-        .is_ok_and(|m| m.is_file())
-        .then(|| ("game:latest.log".to_string(), latest))
 }
 
 impl AppService {
@@ -64,7 +89,7 @@ impl AppService {
         log_id: Option<String>,
     ) -> Res<CrashReport> {
         let profile = self.profile(&profile_id)?;
-        let (game_dir, crash_dir, _) = self.log_dirs(&profile)?;
+        let (game_dir, crash_dir, launcher) = self.log_dirs(&profile)?;
         let source = match log_id {
             Some(id) => {
                 let (file, _) = self.log_file(&profile_id, &id)?;
@@ -72,7 +97,7 @@ impl AppService {
             }
             None => {
                 let (c, g) = (crash_dir, game_dir);
-                tokio::task::spawn_blocking(move || default_source(&c, &g)).await?
+                tokio::task::spawn_blocking(move || default_source(&c, &g, &launcher)).await?
             }
         };
         let ctx = scrub_context(self);

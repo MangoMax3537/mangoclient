@@ -386,7 +386,7 @@ async fn content_list_syncs_the_mods_folder_and_persists() {
         assert!(v.get(k).is_some(), "missing {k}");
     }
     // Persisted into the profile.
-    assert_eq!(f.svc.app_state().unwrap().profiles[1].mod_count, 2);
+    assert_eq!(f.svc.app_state().unwrap().profiles[0].mod_count, 2);
     // A jar deleted outside the launcher disappears.
     std::fs::remove_file(mods.join("foo.jar")).unwrap();
     let items = f.svc.content_list(f.pid.clone()).await.unwrap();
@@ -1029,7 +1029,7 @@ async fn modpack_install_creates_a_profile_with_loader_and_version() {
     let dir = f.paths().instance_dir(&p.id).unwrap();
     assert_eq!(std::fs::read(dir.join("mods/a.jar")).unwrap(), b"a-jar");
     assert_eq!(std::fs::read(dir.join("config/x.txt")).unwrap(), b"hello");
-    assert_eq!(f.svc.app_state().unwrap().profiles.len(), 3);
+    assert_eq!(f.svc.app_state().unwrap().profiles.len(), 2);
     let progress: Vec<_> = f
         .sink
         .events()
@@ -1624,7 +1624,7 @@ fn log_fixture(f: &Fx) -> PathBuf {
     std::fs::write(dir.join("logs/debug.md"), "ignored").unwrap();
     std::fs::write(dir.join("crash-reports/crash-1.txt"), "boom").unwrap();
     set_mtime(&dir.join("crash-reports/crash-1.txt"), 20);
-    let name = f.svc.app_state().unwrap().profiles[1].name.clone();
+    let name = f.svc.app_state().unwrap().profiles[0].name.clone();
     let launcher = mango_runtime::log_file_for(&f.paths().logs(), &name, &f.pid);
     std::fs::create_dir_all(launcher.parent().unwrap()).unwrap();
     std::fs::write(&launcher, "launcher text\n").unwrap();

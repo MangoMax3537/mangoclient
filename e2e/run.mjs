@@ -129,6 +129,7 @@ async function s2() {
   check(st && typeof st.config === 'object' && st.config !== null, 'app_state.config is not an object');
   check(Array.isArray(st.profiles), 'app_state.profiles is not an array');
   check(Array.isArray(st.accounts), 'app_state.accounts is not an array');
+  check(st.profiles.length === 0 && st.config.selectedProfile === null, `a fresh data dir must have no profile and no selection: ${st.profiles.length} / ${st.config.selectedProfile}`);
   // the UI's own boot must have rendered (no boot error panel, no skeleton-only screen)
   const ui = await page.exec(`return { text: document.body.innerText.length, busy: document.querySelectorAll('[aria-busy=true]').length, dialog: !!document.querySelector('.ob'), alert: [...document.querySelectorAll('[role=alert]')].map((e) => e.innerText).join(' | ') };`);
   check(ui.text > 20, 'UI rendered almost no text');
@@ -136,7 +137,7 @@ async function s2() {
   // least privilege: a plugin that is registered but not granted to the window must be refused
   const denied = await page.invoke('plugin:clipboard-manager|read_text');
   check(denied.err && /not allowed|permission|denied/i.test(denied.err), `ungranted plugin command was not refused: ${JSON.stringify(denied)}`);
-  return `config/profiles(${st.profiles.length})/accounts(${st.accounts.length}) ok; ungranted plugin call refused; first run onboarding shown=${ui.dialog}`;
+  return `config/profiles(${st.profiles.length}, a fresh dir has 0)/accounts(${st.accounts.length}) ok; ungranted plugin call refused; first run onboarding shown=${ui.dialog}`;
 }
 
 let probeAccount = null;
@@ -243,8 +244,14 @@ async function s6() {
   await page.shot('s6-05-home-empty');
 
   // new profile (Vanilla)
-  await page.click(/^(Library|Bibliothek)$/, { selector: 'button[aria-label]' });
-  await page.click(/^(New profile|Neues Profil)$/, { selector: 'button' });
+  // A fresh data dir has zero profiles: after onboarding the UI may already have
+  // opened the creation dialog by itself; otherwise open it from the library.
+  check(st.profiles.length === 0, `a fresh data dir must start with no profiles, found ${st.profiles.length}`);
+  const autoOpened = await waitFor(() => page.byCss('#np-name'), { timeout: 3000, what: 'auto-opened creation dialog' }).then(() => true, () => false);
+  if (!autoOpened) {
+    await page.click(/^(Library|Bibliothek)$/, { selector: 'button[aria-label]' });
+    await page.click(/^(New profile|Neues Profil)$/, { selector: 'button' });
+  }
   const name = await waitFor(() => page.byCss('#np-name'), { what: 'new-profile name field' });
   await sleep(700); // dialog open animation: clicks while it moves land on neighbours
   await page.s.sendKeys(name, 'E2E Vanilla');

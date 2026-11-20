@@ -168,20 +168,18 @@ impl Store {
             profiles,
             warnings,
         };
-        if store.profiles.is_empty() {
-            store.create_default_profile()?;
+        // A selection that points at a missing profile is normalised to an
+        // existing profile or null, and persisted.
+        let dangling = store
+            .config
+            .selected_profile
+            .as_deref()
+            .is_some_and(|id| store.get_profile(id).is_none());
+        if dangling {
+            store.config.selected_profile = store.profiles.first().map(|p| p.id.clone());
+            store.save_config()?;
         }
         Ok(store)
-    }
-
-    fn create_default_profile(&mut self) -> Result<()> {
-        let p = self.add_profile(&json!({
-            "name": "MangoClient 1.21.11",
-            "mcVersion": "1.21.11",
-            "loader": "fabric",
-        }))?;
-        self.config.selected_profile = Some(p.id);
-        self.save_config()
     }
 
     pub fn save_config(&self) -> Result<()> {
@@ -407,24 +405,71 @@ mod tests {
     }
 
     #[test]
-    fn empty_store_gets_default_profile_and_persists() {
+    fn empty_store_stays_empty_and_persists_no_selection() {
         let dir = tempfile::tempdir().unwrap();
         let store = open(dir.path());
-        assert_eq!(store.profiles.len(), 1);
-        assert_eq!(
-            store.config.selected_profile.as_deref(),
-            Some(store.profiles[0].id.as_str())
-        );
+        assert!(store.profiles.is_empty());
+        assert!(store.config.selected_profile.is_none());
+        assert!(store.selected_profile().is_none());
         let again = open(dir.path());
-        assert_eq!(again.profiles, store.profiles);
-        assert!(dir.path().join("config.json").exists());
+        assert!(again.profiles.is_empty());
+        assert!(again.config.selected_profile.is_none());
+    }
+
+    #[test]
+    fn dangling_selection_is_normalised_and_persisted() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = open(dir.path());
+        let a = store.add_profile(&json!({"name": "A"})).unwrap();
+        store
+            .set_config(&json!({"selectedProfile": "11111111-1111-4111-8111-111111111111"}))
+            .unwrap();
+        let again = open(dir.path());
+        assert_eq!(
+            again.config.selected_profile.as_deref(),
+            Some(a.id.as_str())
+        );
+        let raw = read_json_value(&dir.path().join("config.json")).unwrap();
+        assert_eq!(raw["selectedProfile"], json!(a.id));
+        // No profiles at all: null.
+        let mut again = again;
+        again.delete_profile(&a.id).unwrap();
+        again
+            .set_config(&json!({"selectedProfile": "11111111-1111-4111-8111-111111111111"}))
+            .unwrap();
+        let none = open(dir.path());
+        assert!(none.config.selected_profile.is_none());
+    }
+
+    #[test]
+    fn legacy_default_profile_loads_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = open(dir.path());
+        let p = store
+            .add_profile(
+                &json!({"name": "MangoClient 1.21.11", "mcVersion": "1.21.11", "loader": "fabric"}),
+            )
+            .unwrap();
+        store
+            .set_config(&json!({"selectedProfile": p.id.clone()}))
+            .unwrap();
+        let again = open(dir.path());
+        assert_eq!(again.profiles.len(), 1);
+        assert_eq!(again.profiles[0], p);
+        assert_eq!(
+            again.config.selected_profile.as_deref(),
+            Some(p.id.as_str())
+        );
     }
 
     #[test]
     fn update_and_delete_profile() {
         let dir = tempfile::tempdir().unwrap();
         let mut store = open(dir.path());
-        let id = store.profiles[0].id.clone();
+        let id = store.add_profile(&json!({})).unwrap().id;
+        store
+            .set_config(&json!({"selectedProfile": id.clone()}))
+            .unwrap();
         store
             .update_profile(&id, &json!({"name": " Renamed ", "ram": 4096}))
             .unwrap();
@@ -474,6 +519,7 @@ mod tests {
     fn corrupt_accounts_file_recovers_from_backup() {
         let dir = tempfile::tempdir().unwrap();
         let mut store = open(dir.path());
+        store.add_profile(&json!({})).unwrap();
         store
             .update_profile(&store.profiles[0].id.clone(), &json!({"name": "A"}))
             .unwrap();

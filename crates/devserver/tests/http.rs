@@ -105,7 +105,7 @@ async fn real_flow_over_http_matches_the_generated_types() {
 
     let state = fx.ok("app_state", Value::Null).await;
     ts_check::check_named(&state, "AppState").unwrap();
-    assert_eq!(state["profiles"].as_array().unwrap().len(), 1);
+    assert_eq!(state["profiles"].as_array().unwrap().len(), 0);
     assert_eq!(state["rootDir"], fx._home.path().display().to_string());
 
     let account = fx.ok("account_add_offline", json!({"name": "Dev"})).await;

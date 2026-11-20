@@ -165,7 +165,8 @@ async fn fx(chain: Chain, outcome: impl FnOnce(&mango_auth::Endpoints) -> LoginO
 
 impl Fx {
     fn file(&self) -> String {
-        std::fs::read_to_string(self.tmp.path().join("accounts.json")).unwrap()
+        // No profile and no account: the file is never written.
+        std::fs::read_to_string(self.tmp.path().join("accounts.json")).unwrap_or_default()
     }
 
     fn account_json(&self, uuid: &str) -> Value {

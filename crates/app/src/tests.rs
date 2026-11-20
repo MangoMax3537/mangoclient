@@ -41,19 +41,95 @@ fn new_profile(svc: &AppService, name: &str) -> ProfileView {
 }
 
 #[test]
-fn app_state_has_default_profile_and_camel_case_json() {
+fn app_state_with_zero_profiles_and_camel_case_json() {
     let (tmp, svc, _) = setup();
     let st = svc.app_state().unwrap();
-    assert_eq!(st.profiles.len(), 1);
+    assert!(st.profiles.is_empty());
+    assert!(st.config.selected_profile.is_none());
     assert!(st.running.is_empty());
     assert_eq!(st.root_dir, tmp.path().display().to_string());
     let v = serde_json::to_value(&st).unwrap();
     assert!(v["totalRamMb"].is_number());
     assert!(v["config"]["keepLauncherOpen"].is_boolean());
     assert!(v["config"].get("theme").is_none());
+    assert_eq!(v["profiles"], json!([]));
+    assert!(v["config"]["selectedProfile"].is_null());
+}
+
+#[test]
+fn app_state_profile_json_shape() {
+    let (_t, svc, _) = setup();
+    new_profile(&svc, "A");
+    let v = serde_json::to_value(svc.app_state().unwrap()).unwrap();
     assert_eq!(v["profiles"][0]["loader"], "fabric");
     assert!(v["profiles"][0]["coverUrl"].is_null());
     assert!(v["profiles"][0]["modCount"].is_number());
+}
+
+#[tokio::test]
+async fn launch_and_stop_without_or_with_unknown_profile() {
+    let (_t, svc, _) = setup();
+    let unknown = "11111111-1111-4111-8111-111111111111";
+    assert_eq!(
+        svc.game_launch(unknown.into(), None)
+            .await
+            .unwrap_err()
+            .code,
+        "profile_not_found"
+    );
+    assert_eq!(
+        svc.game_launch(String::new(), None).await.unwrap_err().code,
+        "invalid_profile_id"
+    );
+    assert!(!svc.game_stop(unknown.into()).unwrap());
+    assert_eq!(
+        svc.game_stop(String::new()).unwrap_err().code,
+        "invalid_profile_id"
+    );
+    assert_eq!(
+        svc.profile_select(unknown.into()).unwrap_err().code,
+        "profile_not_found"
+    );
+    assert_eq!(
+        svc.content_list(unknown.into()).await.unwrap_err().code,
+        "profile_not_found"
+    );
+}
+
+#[test]
+fn deleting_the_selected_profile_reselects_another_or_null() {
+    let (_t, svc, _) = setup();
+    let a = new_profile(&svc, "A");
+    let b = new_profile(&svc, "B");
+    svc.profile_select(a.id.clone()).unwrap();
+    svc.profile_delete(a.id.clone()).unwrap();
+    assert_eq!(
+        svc.app_state().unwrap().config.selected_profile,
+        Some(b.id.clone())
+    );
+    svc.profile_delete(b.id).unwrap();
+    let st = svc.app_state().unwrap();
+    assert!(st.profiles.is_empty());
+    assert!(st.config.selected_profile.is_none());
+}
+
+#[test]
+fn config_pointing_to_a_missing_profile_is_normalised_at_startup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = mango_core::Paths::new(tmp.path());
+    {
+        let mut store = mango_core::Store::open(paths.clone()).unwrap();
+        store
+            .set_config(&json!({"selectedProfile": "11111111-1111-4111-8111-111111111111"}))
+            .unwrap();
+    }
+    let svc = AppService::new(
+        paths,
+        Arc::new(MockSink::default()),
+        ServiceOptions::default(),
+    )
+    .unwrap();
+    assert!(svc.app_state().unwrap().config.selected_profile.is_none());
 }
 
 #[test]
@@ -336,7 +412,7 @@ fn startup_clears_sessions_of_dead_processes() {
     let paths = mango_core::Paths::new(tmp.path());
     {
         let mut store = mango_core::Store::open(paths.clone()).unwrap();
-        let id = store.profiles[0].id.clone();
+        let id = store.add_profile(&json!({"name": "S"})).unwrap().id;
         store
             .update_profile(
                 &id,
@@ -446,4 +522,65 @@ fn open_folder_returns_paths_and_rejects_bad_targets() {
     assert!(svc
         .game_stop("12345678-1234-1234-1234-123456789abc".into())
         .is_ok_and(|b| !b));
+}
+
+#[tokio::test]
+async fn mangoconfig_support_and_active_flags_follow_the_launch_rule() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bundle = tmp.path().join("bundle");
+    std::fs::create_dir_all(&bundle).unwrap();
+    std::fs::write(bundle.join("MangoConfig-1.0.0+mc1.21.4.jar"), b"jar").unwrap();
+    let opts = ServiceOptions {
+        open_folders: false,
+        bundle_dir: bundle,
+        ..ServiceOptions::default()
+    };
+    let svc = AppService::new(
+        mango_core::Paths::new(tmp.path().join("data")),
+        Arc::new(MockSink::default()),
+        opts,
+    )
+    .unwrap();
+    for (mc, loader) in [
+        ("26.3", "vanilla"),
+        ("1.20.1", "forge"),
+        ("1.19.4", "fabric"),
+        ("1.21.4", "vanilla"),
+    ] {
+        let p = svc
+            .profile_create(format!("{loader} {mc}"), mc.into(), loader.into(), None)
+            .unwrap();
+        assert!(!p.mango_config_supported, "{loader} {mc}");
+        assert!(!p.mango_config_active, "{loader} {mc}");
+    }
+    let p = new_profile_with(&svc, "1.21.4");
+    assert!(p.mango_config_supported && p.mango_config_active);
+    let v = serde_json::to_value(&p).unwrap();
+    assert_eq!(v["mangoConfigSupported"], true);
+    assert_eq!(v["mangoConfigActive"], true);
+
+    let off = svc
+        .profile_update(p.id.clone(), json!({"mangoConfig": false}))
+        .await
+        .unwrap();
+    assert!(off.mango_config_supported && !off.mango_config_active);
+    svc.profile_update(p.id.clone(), json!({"mangoConfig": null}))
+        .await
+        .unwrap();
+    svc.config_set(json!({"mangoConfig": false})).unwrap();
+    let st = svc.app_state().unwrap();
+    let v = st.profiles.iter().find(|x| x.id == p.id).unwrap();
+    assert!(v.mango_config_supported && !v.mango_config_active);
+    svc.config_set(json!({"mangoConfig": true})).unwrap();
+    assert!(svc
+        .app_state()
+        .unwrap()
+        .profiles
+        .iter()
+        .any(|x| x.id == p.id && x.mango_config_active));
+}
+
+fn new_profile_with(svc: &AppService, mc: &str) -> ProfileView {
+    svc.profile_create("Supported".into(), mc.into(), "fabric".into(), None)
+        .unwrap()
 }
