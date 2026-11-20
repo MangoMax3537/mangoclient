@@ -1,8 +1,11 @@
 <script lang="ts">
   import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import BroomIcon from 'phosphor-svelte/lib/BroomIcon';
+  import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
+  import XIcon from 'phosphor-svelte/lib/XIcon';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Seg from './Seg.svelte';
+  import { cleanDir, validateWatchDir } from '../lib/blocked';
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { sourceOptions } from '../lib/install';
@@ -39,6 +42,17 @@
     await loadProviders();
     toast(t(clear ? 'settings.cf.cleared' : 'settings.cf.saved'), 'ok');
   }
+  let dirInput = $state('');
+  let dirErr = $state<'invalid' | 'duplicate' | 'limit' | null>(null);
+  const watchDirs = $derived(cfg?.blockedModsWatchDirs ?? []);
+  async function addDir() {
+    const err = validateWatchDir(watchDirs, dirInput);
+    dirErr = err;
+    if (err) return;
+    await actions.setConfig({ blockedModsWatchDirs: [...watchDirs, cleanDir(dirInput)] });
+    dirInput = '';
+  }
+  const removeDir = (d: string) => actions.setConfig({ blockedModsWatchDirs: watchDirs.filter((x) => x !== d) });
   const us = $derived(updates.status);
   const usText = $derived(
     us.state === 'checking' ? t('update.status.checking')
@@ -101,6 +115,40 @@
         </div>
         {#if cfErr}<div id="cf-err" class="err" role="alert">{t('settings.cf.invalid')}</div>{/if}
         <div class="hint" role="status"><span class="sq" class:ok={cf && !cf.disabled} class:warn={cf?.disabled}></span> {cf?.disabled ? t(`settings.cf.status.${cf.reason ?? 'offline'}` as Key) : t('settings.cf.status.ok')}</div>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-blocked">
+      <h2 id="s-blocked" class="eyebrow">{t('settings.group.blocked')}</h2>
+
+      <div class="row">
+        <div class="txt"><label for="bfall">{t('settings.blocked.fallback')}</label><div class="hint">{t('settings.blocked.fallbackHint')}</div></div>
+        <span class="switch"><input id="bfall" type="checkbox" checked={cfg.blockedModsModrinthFallback} onchange={(e) => actions.setConfig({ blockedModsModrinthFallback: e.currentTarget.checked })} /><span></span></span>
+      </div>
+
+      <div class="row col">
+        <div class="txt"><label for="bdir">{t('settings.blocked.dirs')}</label><div class="hint">{t('settings.blocked.dirsHint')}</div></div>
+        {#if watchDirs.length}
+          <ul class="dirs">
+            {#each watchDirs as d (d)}
+              <li><span class="mono" title={d}>{d}</span>
+                <button class="btn ghost ic" type="button" aria-label={t('settings.blocked.remove', { dir: d })} onclick={() => removeDir(d)}><XIcon weight="bold" size={14} aria-hidden="true" /></button></li>
+            {/each}
+          </ul>
+        {:else}
+          <div class="hint warnline" role="status">{t('settings.blocked.noDirs')}</div>
+        {/if}
+        <div class="keyrow">
+          <input id="bdir" class="field mono" bind:value={dirInput} placeholder={t('settings.blocked.placeholder')} autocomplete="off" spellcheck="false"
+            aria-invalid={dirErr !== null} aria-describedby={dirErr ? 'bdir-err' : undefined} oninput={() => (dirErr = null)} onkeydown={(e) => e.key === 'Enter' && addDir()} />
+          <button class="btn" type="button" disabled={!dirInput.trim()} onclick={addDir}><PlusIcon weight="bold" size={14} aria-hidden="true" />{t('settings.blocked.add')}</button>
+        </div>
+        {#if dirErr}<div id="bdir-err" class="err" role="alert">{t(`settings.blocked.err.${dirErr}` as Key)}</div>{/if}
+      </div>
+
+      <div class="row">
+        <div class="txt"><label for="bsub">{t('settings.blocked.sub')}</label><div class="hint">{t('settings.blocked.subHint')}</div></div>
+        <span class="switch"><input id="bsub" type="checkbox" checked={cfg.blockedModsCheckSubfolders} onchange={(e) => actions.setConfig({ blockedModsCheckSubfolders: e.currentTarget.checked })} /><span></span></span>
       </div>
     </section>
 
@@ -171,6 +219,11 @@
   .settings { padding: var(--s-5) 32px 40px; max-width: 800px; display: grid; gap: 24px; align-content: start; }
   h1 { font-size: var(--fs-3xl); }
   .keyrow { display: flex; gap: var(--s-2); }
+  .dirs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .dirs li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 12px; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-sm); }
+  .dirs li:last-child { border-bottom: 0; }
+  .dirs .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .warnline { color: var(--mango); }
   .keyrow .field { flex: 1; }
   section { display: grid; border-top: 1px solid var(--line); }
   section h2 { padding: 14px 0 6px; }

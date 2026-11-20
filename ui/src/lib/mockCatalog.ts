@@ -1,7 +1,7 @@
 // Part 4 mock catalogue: per-project compatibility, dependencies, conflicts and CurseForge specifics.
 // Pure data and pure functions (no timers), shared by mockContent.ts and the tests.
 import { DEPS, MODPACKS, rowOf, TABLES, type Row } from './mockData';
-import type { ContentType, Provider, ProjectType } from './types';
+import type { BlockedFile, ContentType, Provider, ProjectType } from './types';
 
 export const hash = (s: string): number => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 
@@ -117,12 +117,13 @@ export function compat(slug: string, type: ContentType, mcVersion: string, loade
   return { ok: false, reason: 'no_compatible_version' };
 }
 
-export interface PackMeta { mcVersion: string; loader: 'fabric' | 'forge' | 'neoforge' | 'quilt'; loaderVersion: string; files: number; bytes: number; blocked: string[] }
+export interface PackMeta { mcVersion: string; loader: 'fabric' | 'forge' | 'neoforge' | 'quilt'; loaderVersion: string; files: number; bytes: number; blocked: string[]; matchedOnModrinth?: string[] }
 const PACKS: Record<string, PackMeta> = {
   'fabulously-optimized': { mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10', files: 61, bytes: 38_400_000, blocked: ['Custom Skybox Textures.zip'] },
   'better-mc-fabric': { mcVersion: '1.21.1', loader: 'fabric', loaderVersion: '0.16.9', files: 212, bytes: 190_300_000, blocked: [] },
   'prominence-ii': { mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0', files: 268, bytes: 412_900_000, blocked: ['Waystone Atlas.jar', 'Ancient Tomes.jar', 'Map Atlas Remix.jar'] },
-  'vault-hunters-reborn': { mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.2.20', files: 190, bytes: 301_500_000, blocked: ['Waystone Atlas.jar', 'Rift Compass.jar'] },
+  'vault-hunters-reborn': { mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.2.20', files: 190, bytes: 301_500_000, blocked: ['Waystone Atlas.jar', 'Rift Compass.jar', 'Ancient Tomes.jar', 'Skyforge Core.jar', 'Vault Lanterns.jar', 'Relic Dust Textures.zip'],
+    matchedOnModrinth: ['Ancient Tomes.jar', 'Vault Lanterns.jar'] },
 };
 export function packMeta(slug: string): PackMeta {
   const h = hash(slug);
@@ -136,3 +137,21 @@ export const websiteOf = (provider: Provider, slug: string, type: ProjectType): 
   provider === 'curseforge'
     ? `https://www.curseforge.com/minecraft/${type === 'modpack' ? 'modpacks' : type === 'shader' ? 'shaders' : type === 'resourcepack' ? 'texture-packs' : 'mc-mods'}/${slug}`
     : `https://modrinth.com/${type}/${slug}`;
+
+const hex = (seed: string, len: number): string => { let out = ''; let h = hash(seed); while (out.length < len) { out += h.toString(16).padStart(8, '0'); h = hash(out + seed); } return out.slice(0, len); };
+const slugFromFile = (fileName: string): string => fileName.replace(/\.\w+$/, '').toLowerCase().replace(/\s+/g, '-');
+/** Blocked files of a modpack as modpack_plan reports them: matched on Modrinth by hash, or pending (the user fetches them). */
+export function blockedFilesFor(slug: string): BlockedFile[] {
+  const m = packMeta(slug);
+  return m.blocked.map((fileName) => {
+    const s = slugFromFile(fileName);
+    const matched = !!m.matchedOnModrinth?.includes(fileName);
+    return {
+      name: fileName.replace(/\.\w+$/, ''), fileName, url: websiteOf('curseforge', s, 'mod'), sha1: hex(`sha1:${fileName}`, 40),
+      size: 120_000 + (hash(`bsize:${fileName}`) % 3_900_000), type: fileName.endsWith('.zip') ? 'resourcepack' : 'mod',
+      state: matched ? 'matched_modrinth' : 'pending',
+      modrinth: matched ? { projectId: hex(`mr:${s}`, 8), versionId: hex(`mrv:${s}`, 8), title: fileName.replace(/\.\w+$/, '') } : null,
+      foundPath: null,
+    } satisfies BlockedFile;
+  });
+}

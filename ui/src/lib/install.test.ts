@@ -248,7 +248,7 @@ describe('modpack flow', () => {
     expect(plan.blockedFiles).toHaveLength(3);
     expect(plan.blockedFiles.every((f) => f.url.startsWith('https://www.curseforge.com/minecraft/'))).toBe(true);
     const mr = await settle(api.modpackPlan({ provider: 'modrinth', projectId: 'fabulously-optimized' }), 400);
-    expect(mr.blockedFiles.length).toBeGreaterThan(0);
+    expect(mr.blockedFiles).toHaveLength(0); // Modrinth packs have no CurseForge-blocked files
     const t = await settle(api.installTargets({ provider: 'modrinth', projectId: 'fabulously-optimized' }), 300);
     expect(t).toHaveLength(profiles.length);
     expect(t.every((x) => x.state === 'incompatible' && x.reason === 'content_type')).toBe(true);

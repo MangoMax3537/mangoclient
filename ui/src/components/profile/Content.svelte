@@ -9,6 +9,7 @@
   import VirtualList from '../VirtualList.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import EmptyState from '../EmptyState.svelte';
+  import BlockedBanner from '../BlockedBanner.svelte';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import type { Key } from '../../lib/i18n';
   import { providerLabel } from '../../lib/install';
@@ -106,6 +107,7 @@
 </script>
 
 <div class="ct">
+  <BlockedBanner {profile} />
   <div class="bar">
     <Seg options={opts} value={filter} label={t('content.filter')} idPrefix="cf" onchange={(v) => (filter = v as Filter)} />
     <label class="search">

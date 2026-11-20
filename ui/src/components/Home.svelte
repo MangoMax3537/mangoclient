@@ -3,6 +3,7 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import SlidersIcon from 'phosphor-svelte/lib/SlidersIcon';
+  import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import Tile from './Tile.svelte';
   import PlayButton from './PlayButton.svelte';
   import LaunchProgress from './LaunchProgress.svelte';
@@ -17,7 +18,7 @@
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
   import {
-    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openProfile, selectedProfile, stageProgress, t, tp,
+    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBlocked, openProfile, selectedProfile, stageProgress, t, tp,
   } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
 
@@ -69,6 +70,7 @@
           <li>{t('chip.java')} {t('chip.auto')}</li>
           <li>{ram ? fmtRam(ram) : t('chip.default')}</li>
           {#if p.modCount}<li>{tp('profile.mods', p.modCount)}</li>{/if}
+          {#if p.pendingBlocked > 0}<li><button class="miss" type="button" onclick={() => openBlocked(p.id)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</button></li>{/if}
         </ul>
         <div class="actions">
           <PlayButton mode={running ? 'stop' : launching ? 'busy' : 'play'} {label} progress={prog} onclick={toggle} disabled={!app.accounts.length && !busy} />
@@ -147,6 +149,8 @@
   .live { animation: pulse 1.6s ease-in-out infinite; }
   h1 { font-size: var(--fs-hero); max-width: 14ch; text-wrap: balance; color: var(--paper); }
   .facts { color: var(--paper-dim); }
+  .miss { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; background: var(--accent-fill); color: var(--on-fill); font: 700 var(--fs-xs) var(--font-ui); border-radius: var(--r-s); }
+  .miss:hover { background: var(--accent-fill-hover); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 6px; }
   .total { position: absolute; right: 40px; bottom: 44px; display: grid; justify-items: end; gap: 4px; }
   .total .n { font-size: var(--fs-2xl); color: var(--paper); letter-spacing: -0.02em; font-feature-settings: 'tnum'; }

@@ -4,6 +4,7 @@
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import ScrollIcon from 'phosphor-svelte/lib/ScrollIcon';
   import ImagesIcon from 'phosphor-svelte/lib/ImagesIcon';
+  import BlockedBanner from '../BlockedBanner.svelte';
   import { fmtDate, fmtDuration, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
   import { actions, errorText, getApi, lang, nav, openDiscover, openProfile, t, toast } from '../../lib/stores.svelte';
@@ -41,6 +42,7 @@
 </script>
 
 <div class="ov">
+  <BlockedBanner {profile} />
   <dl class="tiles">
     <div><dt>{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
     <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>

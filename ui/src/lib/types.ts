@@ -9,6 +9,8 @@ export interface ProfileView {
   id: string; name: string; mcVersion: string; loader: Loader; loaderVersion: string | null;
   color: string | null; coverUrl: string | null; ram: number | null; javaArgs: string;
   mangoConfig: boolean | null; lastPlayed: number | null; playTimeMs: number; created: number; modCount: number;
+  /** Part 5: blocked CurseForge files not yet installed or skipped. */
+  pendingBlocked: number;
 }
 export interface PublicAccount {
   uuid: string; name: string; type: 'microsoft' | 'offline'; expiresAt: number | null; expired: boolean; hasCape: boolean;
@@ -28,6 +30,12 @@ export interface Config {
   selectedAccount: string | null; firstRunDone: boolean; telemetry: boolean; sidebarOpen: boolean;
   /** Write-only (config_set): the backend never returns the key. `null` or `""` clears it. */
   curseforgeApiKey?: string | null;
+  /** Part 5: look blocked CurseForge files up on Modrinth by hash (default true). */
+  blockedModsModrinthFallback: boolean;
+  /** Part 5: folders watched for manually downloaded files (default: the OS Downloads folder). Absolute paths. */
+  blockedModsWatchDirs: string[];
+  /** Part 5: also look into subfolders of the watched folders (default false). */
+  blockedModsCheckSubfolders: boolean;
 }
 export interface AppState {
   version: string; config: Config; profiles: ProfileView[]; accounts: PublicAccount[];
@@ -104,7 +112,17 @@ export interface InstallConflict { projectId: string; title: string; with: strin
 export interface InstallPlan { profileId: string; items: InstallPlanItem[]; totalBytes: number; conflicts: InstallConflict[] }
 export interface ModpackPlan {
   provider: Provider; projectId: string; versionId: string; name: string; mcVersion: string; loader: Loader; loaderVersion: string | null;
-  fileCount: number; sizeBytes: number | null; iconUrl: string | null; blockedFiles: { name: string; url: string }[];
+  fileCount: number; sizeBytes: number | null; iconUrl: string | null; blockedFiles: BlockedFile[];
+}
+
+/* ---- Part 5: blocked CurseForge files ---- */
+export type BlockedState = 'pending' | 'matched_modrinth' | 'found' | 'installed' | 'skipped';
+export interface BlockedFile {
+  name: string; fileName: string; url: string; sha1: string | null; size: number | null; type: ContentType;
+  /** matched_modrinth = will be / was installed from Modrinth. */
+  state: BlockedState;
+  modrinth: { projectId: string; versionId: string; title: string } | null;
+  foundPath: string | null;
 }
 
 export interface ServerEntry { id: string; name: string; address: string; partner: boolean; starred: boolean; iconUrl: string | null }
@@ -136,4 +154,5 @@ export interface ApiEvents {
   'update:status': UpdateStatus;
   'content:changed': { profileId: string };
   'accounts:changed': { uuid: string };
+  'blocked:changed': { profileId: string; files: BlockedFile[] };
 }

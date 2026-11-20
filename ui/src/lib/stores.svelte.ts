@@ -3,7 +3,7 @@ import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from '.
 import { runSteps, type RunStep } from './install';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
+  AppState, BlockedFile, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
   ProviderStatus, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
@@ -59,9 +59,11 @@ export type FlowRequest =
   | { kind: 'content'; project: FlowProject; versionId?: string; /** Skips the instance picker. */ scopeProfileId?: string | null; update?: boolean }
   | { kind: 'modpack'; project: FlowProject; versionId?: string }
   | { kind: 'updates'; profileId: string; infos: UpdateInfo[] }
-  | { kind: 'run'; runId: number };
+  | { kind: 'run'; runId: number }
+  | { kind: 'blocked'; profileId: string };
 export const flow = $state<{ req: FlowRequest | null }>({ req: null });
 export const startInstall = (req: FlowRequest): void => { flow.req = req; };
+export const openBlocked = (profileId: string): void => { flow.req = { kind: 'blocked', profileId }; };
 export const closeFlow = (): void => {
   const r = flow.req;
   if (r?.kind === 'run') { const run = runs.find((x) => x.id === r.runId); if (run) run.watching = false; }
@@ -87,6 +89,36 @@ export interface InstallRun {
 }
 export const runs = $state<InstallRun[]>([]);
 let runId = 0;
+
+/** Part 5: blocked CurseForge files per profile (blocked_files + blocked:changed) and the folders being watched. */
+export const blocked = $state({ files: {} as Record<string, BlockedFile[]>, watching: {} as Record<string, string[]> });
+/** Files not yet installed or skipped and not left to Modrinth: what ProfileView.pendingBlocked counts. */
+export const pendingOf = (files: readonly BlockedFile[]): number => files.filter((f) => f.state === 'pending' || f.state === 'found').length;
+export function applyBlocked(profileId: string, files: BlockedFile[]): void {
+  blocked.files[profileId] = files;
+  const p = app.profiles.find((x) => x.id === profileId);
+  if (p) p.pendingBlocked = pendingOf(files);
+}
+export async function loadBlocked(profileId: string): Promise<BlockedFile[]> {
+  const files = await currentApi.blockedFiles({ profileId });
+  applyBlocked(profileId, files);
+  return files;
+}
+/** Starts watching for the instance and returns a function that stops it again (idempotent). */
+export async function startBlockedWatch(profileId: string): Promise<() => Promise<void>> {
+  const dirs = await currentApi.blockedWatchStart({ profileId });
+  blocked.watching[profileId] = dirs;
+  let stopped = false;
+  return async () => {
+    if (stopped) return;
+    stopped = true;
+    delete blocked.watching[profileId];
+    try { await currentApi.blockedWatchStop({ profileId }); } catch { /* the watcher dies with the app anyway */ }
+  };
+}
+export async function skipBlocked(profileId: string, fileName: string): Promise<void> {
+  applyBlocked(profileId, await currentApi.blockedSkip({ profileId, fileName }));
+}
 
 /** Content sources (providers_status). `null` until the first answer. */
 export const providers = $state({ status: null as ProviderStatus[] | null });
@@ -242,6 +274,7 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('update:status', (u) => { updates.status = u; }),
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
     api.listen('accounts:changed', () => { void refreshAccounts(); }),
+    api.listen('blocked:changed', (e) => applyBlocked(e.profileId, e.files)),
   ]);
   try {
     applyAppState(await api.appState());
@@ -300,7 +333,10 @@ export async function startModpackRun(
       await actions.addProfile(p);
       live.finished = true;
       toast(t('discover.packInstalled', { name: p.name }), 'ok');
-      if (live.watching) { flow.req = null; openProfile(p.id, 'content'); }
+      if (p.pendingBlocked > 0) {
+        if (live.watching) { flow.req = { kind: 'blocked', profileId: p.id }; openProfile(p.id, 'content'); }
+        else toast(tp('blocked.toast', p.pendingBlocked, { name: p.name }), 'info', 9000);
+      } else if (live.watching) { flow.req = null; openProfile(p.id, 'content'); }
       return p;
     } catch (e) {
       live.jobs[0].status = 'error'; live.jobs[0].error = toAppError(e).code; live.finished = true;
@@ -321,6 +357,8 @@ export function resetStores(): void {
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
   runs.length = 0; flow.req = null; providers.status = null;
+  for (const k of Object.keys(blocked.files)) delete blocked.files[k];
+  for (const k of Object.keys(blocked.watching)) delete blocked.watching[k];
   updates.status = { state: 'idle' }; updates.overlay = false; updates.installing = false;
   auth.signingIn = false; auth.error = null; auth.relogin = null; auth.noticeDismissed = false;
   for (const k of Object.keys(auth.refreshing)) delete auth.refreshing[k];

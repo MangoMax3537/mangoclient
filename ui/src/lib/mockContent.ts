@@ -3,10 +3,10 @@ import type { Api } from './api';
 import { fallbackImage } from './fallbackImage';
 import { CONTENT, DEPS, FULL_PROFILE, rng } from './mockData';
 import {
-  accepts, CF_BLOCKED, catalogFor, compat, hash, idFor, metaOf, onProvider, packMeta, rowOfSlug, sizeOf, slugOf, typeOfSlug, UPDATE_NEW_DEPS, websiteOf,
+  accepts, blockedFilesFor, CF_BLOCKED, catalogFor, compat, hash, idFor, metaOf, onProvider, packMeta, rowOfSlug, sizeOf, slugOf, typeOfSlug, UPDATE_NEW_DEPS, websiteOf,
 } from './mockCatalog';
 import type {
-  ApiEvents, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, ProjectDetail, ProjectHit,
+  ApiEvents, BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, ProjectDetail, ProjectHit,
   ProjectType, ProjectVersion, Provider, Screenshot, ServerEntry, ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
 
@@ -20,6 +20,8 @@ export interface MockCtx {
   gameActive: () => boolean;
   /** false = no CurseForge API key (every CurseForge command fails with curseforge.no_api_key). */
   curseforge?: boolean;
+  /** Part 5: modpack_install seeds the blocked files of the new instance; returns how many are pending. */
+  seedBlocked?: (profileId: string, files: BlockedFile[]) => number;
 }
 
 export type Part2 = Pick<Api,
@@ -430,7 +432,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       return {
         provider, projectId, versionId: versionId ?? `${hit.slug}-v1`, name: hit.title, mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion,
         fileCount: m.files, sizeBytes: m.bytes, iconUrl: null,
-        blockedFiles: m.blocked.map((name) => ({ name, url: websiteOf('curseforge', name.replace(/\.\w+$/, '').toLowerCase().replace(/\s+/g, '-'), 'mod') })),
+        blockedFiles: provider === 'curseforge' ? blockedFilesFor(hit.slug) : [],
       };
     },
     async modpackInstall({ provider, projectId, name }) {
@@ -445,8 +447,9 @@ export function createContentApi(ctx: MockCtx): Part2 {
       }
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: null, ram: 4096,
-        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
+        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
       };
+      if (provider === 'curseforge' && ctx.seedBlocked) p.pendingBlocked = ctx.seedBlocked(id, blockedFilesFor(hit.slug));
       ctx.addProfile(p);
       lists.set(id, build(id, ['fabric-api', 'sodium', 'lithium', 'ferrite-core', 'modmenu', 'entityculling', 'immediatelyfast', 'moreculling']).map((i) => ({ ...i, provider })));
       syncCount(id);

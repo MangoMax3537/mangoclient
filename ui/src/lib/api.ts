@@ -2,10 +2,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen as tauriListen } from '@tauri-apps/api/event';
 import type {
   ApiEvents, AppError, AppState, Config, LoaderVersion, Loader, ProfileView, PublicAccount, VersionManifest,
-  ContentItem, ContentType, InstallPlan, InstallTarget, LogEntry, ModpackPlan, Provider, ProviderStatus, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
+  BlockedFile, ContentItem, ContentType, InstallPlan, InstallTarget, LogEntry, ModpackPlan, Provider, ProviderStatus, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
   ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
-import { createMockApi, mockOptionsFromSearch } from './mockApi';
+import { createMockApi, mockOptionsFromSearch, type MockApi } from './mockApi';
 
 export type Unlisten = () => void;
 
@@ -48,6 +48,14 @@ export interface Api {
   installApply(args: { provider: Provider; projectId: string; versionId?: string; profileId: string; include: string[] }): Promise<ContentItem[]>;
   modpackPlan(args: { provider: Provider; projectId: string; versionId?: string }): Promise<ModpackPlan>;
   modpackInstall(args: { provider: Provider; projectId: string; versionId?: string; name?: string }): Promise<ProfileView>;
+  /* Part 5: blocked CurseForge files */
+  blockedFiles(args: { profileId: string }): Promise<BlockedFile[]>;
+  /** Starts watching; resolves the watched folders. */
+  blockedWatchStart(args: { profileId: string }): Promise<string[]>;
+  blockedWatchStop(args: { profileId: string }): Promise<void>;
+  blockedSkip(args: { profileId: string; fileName: string }): Promise<BlockedFile[]>;
+  /** Opens the first watched folder, resolves its path. */
+  blockedOpenFolder(): Promise<string>;
   serversList(): Promise<ServerEntry[]>;
   serversPingAll(): Promise<void>;
   serversPing(args: { address: string }): Promise<ServerStatus>;
@@ -100,6 +108,11 @@ export const tauriApi: Api = {
   installApply: (a) => invoke('install_apply', a),
   modpackPlan: (a) => invoke('modpack_plan', a),
   modpackInstall: (a) => invoke('modpack_install', a),
+  blockedFiles: (a) => invoke('blocked_files', a),
+  blockedWatchStart: (a) => invoke('blocked_watch_start', a),
+  blockedWatchStop: (a) => invoke('blocked_watch_stop', a),
+  blockedSkip: (a) => invoke('blocked_skip', a),
+  blockedOpenFolder: () => invoke('blocked_open_folder'),
   serversList: () => invoke('servers_list'),
   serversPingAll: () => invoke('servers_ping_all'),
   serversPing: (a) => invoke('servers_ping', a),
@@ -119,7 +132,7 @@ export const tauriApi: Api = {
 };
 
 export { createMockApi };
-export const mockApi: Api = createMockApi(mockOptionsFromSearch(typeof location !== 'undefined' ? location.search : ''));
+export const mockApi: MockApi = createMockApi(mockOptionsFromSearch(typeof location !== 'undefined' ? location.search : ''));
 
 export function inTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -132,3 +145,6 @@ export function toAppError(e: unknown): AppError {
   if (e && typeof e === 'object' && 'code' in e && typeof (e as AppError).code === 'string') return e as AppError;
   return { code: 'unknown', message: e instanceof Error ? e.message : String(e), needsRelogin: false };
 }
+
+// Dev helper for the browser mock: `__mangoMock.download(profileId)` plays the user saving a blocked file into Downloads.
+if (!inTauri() && typeof window !== 'undefined') (window as unknown as { __mangoMock: MockApi['dev'] }).__mangoMock = mockApi.dev;

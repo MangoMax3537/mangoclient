@@ -2,6 +2,7 @@ import type {
   Api, Unlisten,
 } from './api';
 import { createContentApi } from './mockContent';
+import { createBlockedMock, type BlockedDev } from './mockBlocked';
 import { fallbackImage } from './fallbackImage';
 import type {
   ApiEvents, AppState, Config, LaunchState, LoaderVersion, ProfileView, PublicAccount, VersionManifest, VersionEntry, Loader,
@@ -22,6 +23,8 @@ export interface MockOptions {
   locked?: boolean;
   /** No CurseForge API key: providers_status reports it unavailable and every CurseForge command fails. */
   noCurseforge?: boolean;
+  /** Blocked files appear in the Downloads folder by themselves, one per watcher tick. */
+  blockedAuto?: boolean;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -31,7 +34,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -42,6 +45,7 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     needsRelogin: q.has('mockRelogin'),
     locked: q.has('mockLocked'),
     noCurseforge: q.has('mockNoCurseforge'),
+    blockedAuto: q.has('mockBlockedAuto'),
   };
 }
 
@@ -51,7 +55,7 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null };
+  const base = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0 };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
@@ -101,7 +105,9 @@ const LOADER_VERSIONS: Record<Exclude<Loader, 'vanilla'>, LoaderVersion[]> = {
   neoforge: [{ version: '21.4.100', stable: true }, { version: '21.4.40-beta', stable: false }],
 };
 
-export function createMockApi(opts: MockOptions = {}): Api {
+export type MockApi = Api & { dev: BlockedDev };
+
+export function createMockApi(opts: MockOptions = {}): MockApi {
   const scale = opts.timeScale ?? 1;
   const now = Date.now();
   const config: Config = {
@@ -109,6 +115,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
     keepLauncherOpen: true, hideOnLaunch: false, showSnapshots: false, mangoConfig: true, performanceMods: true,
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
+    blockedModsModrinthFallback: true, blockedModsWatchDirs: ['/home/mango/Downloads'], blockedModsCheckSubfolders: false,
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now, opts);
@@ -119,7 +126,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
-    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(),
+    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(), 'blocked:changed': new Set(),
   };
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
     for (const cb of listeners[name] as Set<(p: ApiEvents[K]) => void>) cb(payload);
@@ -139,12 +146,19 @@ export function createMockApi(opts: MockOptions = {}): Api {
     timers.delete(id);
   };
 
+  const blockedMock = createBlockedMock({
+    scale, emit, auto: !!opts.blockedAuto, dirs: () => config.blockedModsWatchDirs,
+    setPending: (id, n) => { const p = profiles.find((x) => x.id === id); if (p) p.pendingBlocked = n; },
+  });
   const part2 = createContentApi({
+    seedBlocked: blockedMock.seed,
     now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; }, find,
     gameActive: () => running.size > 0 || timers.size > 0, get curseforge() { return cfOn; },
   });
-  const api: Api = {
+  const api: MockApi = {
     ...part2,
+    ...blockedMock.api,
+    dev: blockedMock.dev,
     async appState(): Promise<AppState> {
       return {
         version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles), accounts: structuredClone(accounts),
@@ -160,7 +174,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
-        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
+        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
       };
       profiles = [...profiles, p];
       return structuredClone(p);

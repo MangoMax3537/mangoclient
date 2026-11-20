@@ -6,6 +6,7 @@
   import ModpackDialog from './ModpackDialog.svelte';
   import UpdatePreview from './UpdatePreview.svelte';
   import RunDialog from './RunDialog.svelte';
+  import BlockedDialog from './BlockedDialog.svelte';
   import { suggestInstance, type RunStep } from '../lib/install';
   import { closeFlow, flow, nav, rememberInstallProfile, startContentRun, startInstall, tp } from '../lib/stores.svelte';
 
@@ -43,4 +44,6 @@
   <UpdatePreview profileId={req.profileId} infos={req.infos} onconfirm={(steps) => start('update', tp('flow.upd.items', steps.length), null, steps)} onclose={closeFlow} />
 {:else if req?.kind === 'run'}
   <RunDialog runId={req.runId} onclose={closeFlow} />
+{:else if req?.kind === 'blocked'}
+  <BlockedDialog profileId={req.profileId} onclose={closeFlow} />
 {/if}
