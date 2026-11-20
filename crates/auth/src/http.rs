@@ -6,49 +6,121 @@ use serde_json::{Map, Value};
 use std::sync::OnceLock;
 use std::time::Duration;
 
+/// One pooled client for every auth and skin request. Only the connect
+/// timeout lives here; the total time of a request is `Endpoints::request_timeout`
+/// (per request, so tests can shorten it).
 fn client() -> Result<Client, AuthError> {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     if let Some(c) = CLIENT.get() {
         return Ok(c.clone());
     }
-    let c = Client::builder().user_agent(UA).build()?;
+    let c = Client::builder()
+        .user_agent(UA)
+        .connect_timeout(Duration::from_secs(5))
+        .pool_idle_timeout(Duration::from_secs(60))
+        .build()?;
     let _ = CLIENT.set(c.clone());
     Ok(c)
 }
 
-/// Send with retry on network errors, 5xx and 429; the last response is
-/// returned as is. The body is parsed leniently (non-JSON becomes `{}`).
+/// `Retry-After` as whole seconds (the HTTP-date form is not used by Mojang's
+/// services and counts as "unknown").
+fn retry_after_secs(res: &reqwest::Response) -> Option<u64> {
+    res.headers()
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+fn map_send_error(e: reqwest::Error) -> AuthError {
+    if e.is_timeout() {
+        AuthError::Timeout
+    } else {
+        AuthError::Request(e)
+    }
+}
+
+/// Send with a bounded total time per attempt, retry (with backoff) on
+/// network errors, timeouts and 5xx, and on 429 honoring `Retry-After`
+/// (waits at most `Endpoints::retry_after_cap`; a longer demand returns
+/// [`AuthError::RateLimited`] at once so the caller can show it). The last
+/// response is returned as is. Nothing here logs URLs, headers or bodies.
+pub(crate) async fn send_raw(
+    ep: &Endpoints,
+    build: impl Fn(&Client) -> RequestBuilder,
+) -> Result<(u16, Vec<u8>), AuthError> {
+    let client = client()?;
+    let started = std::time::Instant::now();
+    let mut n: u32 = 0;
+    loop {
+        let sent = build(&client).timeout(ep.request_timeout).send().await;
+        let wait = match sent {
+            Err(e) => {
+                let e = map_send_error(e);
+                if n >= ep.retries {
+                    tracing::debug!(
+                        attempts = n + 1,
+                        ms = elapsed_ms(started),
+                        "request failed: {}",
+                        e.code()
+                    );
+                    return Err(e);
+                }
+                ep.backoff.saturating_mul(1u32 << n.min(16))
+            }
+            Ok(res) => {
+                let status = res.status().as_u16();
+                if status == 429 {
+                    let asked = retry_after_secs(&res);
+                    let secs = asked.unwrap_or_else(|| ep.backoff.as_secs().max(1));
+                    let wait = Duration::from_secs(secs);
+                    if wait > ep.retry_after_cap || n >= ep.retries {
+                        tracing::debug!(
+                            attempts = n + 1,
+                            ms = elapsed_ms(started),
+                            "rate limited, retry after {secs} s"
+                        );
+                        return Err(AuthError::RateLimited(secs));
+                    }
+                    // A server that sends 0 still gets a short pause.
+                    wait.max(Duration::from_millis(50))
+                } else if res.status().is_server_error() && n < ep.retries {
+                    ep.backoff.saturating_mul(1u32 << n.min(16))
+                } else {
+                    let bytes = tokio::time::timeout(ep.request_timeout, res.bytes())
+                        .await
+                        .map_err(|_| AuthError::Timeout)?
+                        .map_err(map_send_error)?;
+                    tracing::debug!(
+                        status,
+                        attempts = n + 1,
+                        ms = elapsed_ms(started),
+                        "request done"
+                    );
+                    return Ok((status, bytes.to_vec()));
+                }
+            }
+        };
+        tokio::time::sleep(wait).await;
+        n += 1;
+    }
+}
+
+fn elapsed_ms(since: std::time::Instant) -> u64 {
+    u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// [`send_raw`] with the body parsed leniently (non-JSON becomes `{}`).
 pub(crate) async fn send_json(
     ep: &Endpoints,
     build: impl Fn(&Client) -> RequestBuilder,
 ) -> Result<(u16, Value), AuthError> {
-    let client = client()?;
-    let mut n: u32 = 0;
-    loop {
-        let sent = tokio::time::timeout(Duration::from_secs(60), build(&client).send()).await;
-        let retry = match sent {
-            Err(_) => Err(AuthError::Timeout),
-            Ok(Err(e)) => Err(AuthError::Request(e)),
-            Ok(Ok(res)) => {
-                let status = res.status().as_u16();
-                if (res.status().is_server_error() || status == 429) && n < ep.retries {
-                    Ok(())
-                } else {
-                    let bytes = res.bytes().await?;
-                    let json = serde_json::from_slice(&bytes)
-                        .unwrap_or_else(|_| Value::Object(Map::new()));
-                    return Ok((status, json));
-                }
-            }
-        };
-        if let Err(e) = retry {
-            if n >= ep.retries {
-                return Err(e);
-            }
-        }
-        tokio::time::sleep(ep.backoff.saturating_mul(1u32 << n.min(16))).await;
-        n += 1;
-    }
+    let (status, bytes) = send_raw(ep, build).await?;
+    let json = serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::Object(Map::new()));
+    Ok((status, json))
 }
 
 pub(crate) async fn post_form(

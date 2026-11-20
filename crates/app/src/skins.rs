@@ -28,6 +28,9 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use ts_rs::TS;
 
 /// Largest skin or cape PNG that is uploaded, stored or downloaded.
@@ -94,6 +97,10 @@ pub struct SkinInfo {
     pub capes: Vec<CapeInfo>,
     /// `false` for offline accounts (their skin cannot be changed).
     pub can_edit: bool,
+    /// `true` when this answer came from the cache and a refresh is running
+    /// in the background; `skin:updated` follows when that refresh found
+    /// something different.
+    pub stale: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -148,11 +155,6 @@ pub(crate) fn skin_version(paths: &Paths, uuid: &str) -> Option<String> {
         return None;
     }
     file_tag(&skin_cache_file(paths, uuid))
-}
-
-fn skin_digest(paths: &Paths, uuid: &str) -> Option<String> {
-    let bytes = std::fs::read(skin_cache_file(paths, uuid)).ok()?;
-    Some(hex::encode(Sha1::digest(bytes)))
 }
 
 // ---- validation ----
@@ -223,7 +225,7 @@ fn clean_name(raw: Option<String>, fallback: &str) -> String {
 }
 
 /// Map the auth crate's skin errors onto stable codes.
-fn skin_err(e: AuthError) -> AppError {
+pub(crate) fn skin_err(e: AuthError) -> AppError {
     match e {
         AuthError::OfflineSkin => AppError::new(
             "skin.offline_account",
@@ -236,8 +238,30 @@ fn skin_err(e: AuthError) -> AppError {
                 status / 100
             ),
         ),
+        AuthError::RateLimited(secs) => AppError::new(
+            "skin.rate_limited",
+            format!("The skin service is busy, try again in {secs} seconds"),
+        ),
+        AuthError::CapeNotApplied => AppError::new(
+            "skin.cape_not_applied",
+            "The skin service did not apply the cape",
+        ),
+        AuthError::Timeout => {
+            AppError::new("skin.timeout", "The skin service did not answer in time")
+        }
+        AuthError::Request(ref r) if r.is_timeout() => {
+            AppError::new("skin.timeout", "The skin service did not answer in time")
+        }
+        AuthError::Request(_) => AppError::new(
+            "skin.network",
+            "Could not reach the skin service; check the internet connection",
+        ),
         other => other.into(),
     }
+}
+
+fn skin_timeout() -> AppError {
+    AppError::new("skin.timeout", "The skin service did not answer in time")
 }
 
 fn offline_refusal() -> AppError {
@@ -352,8 +376,52 @@ fn library_read(paths: &Paths, id: &str) -> Res<(IndexEntry, Vec<u8>)> {
     Ok((entry, bytes))
 }
 
+/// Serializes everything that reads or changes one account's skin state, so
+/// a background refresh that started before a cape change cannot write its
+/// older answer over the newer one, and so concurrent loads share one fetch.
+#[derive(Default)]
+pub struct SkinFlight {
+    lock: Arc<tokio::sync::Mutex<()>>,
+    /// Refreshes finished (any kind) / finished with a token.
+    done: AtomicU64,
+    done_token: AtomicU64,
+}
+
+fn elapsed_ms(since: Instant) -> u64 {
+    u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 impl AppService {
     // ---- fetching and caching ----
+
+    fn skin_flight(&self, uuid: &str) -> Arc<SkinFlight> {
+        lock(&self.inner.skin_flights)
+            .entry(uuid.to_string())
+            .or_default()
+            .clone()
+    }
+
+    /// The auth endpoints with the retry budget skin calls use.
+    fn skin_ep(&self) -> mango_auth::Endpoints {
+        let ep = &self.inner.opts.auth_endpoints;
+        mango_auth::Endpoints {
+            retries: ep.retries.min(3),
+            ..ep.clone()
+        }
+    }
+
+    /// Longest a whole skin operation may take (every request has its own
+    /// timeout; this bounds retries and waits on top).
+    fn skin_deadline(&self) -> Duration {
+        let ep = &self.inner.opts.auth_endpoints;
+        ep.request_timeout * 3 + ep.retry_after_cap
+    }
+
+    async fn skin_bounded<T>(&self, fut: impl std::future::Future<Output = Res<T>>) -> Res<T> {
+        tokio::time::timeout(self.skin_deadline(), fut)
+            .await
+            .unwrap_or_else(|_| Err(skin_timeout()))
+    }
 
     /// Fetch a Microsoft account's skin in the background (never blocks, the
     /// failure is only logged). `use_token`: refresh the token and read the
@@ -398,90 +466,203 @@ impl AppService {
     }
 
     /// Fetch and cache the skin and capes of `uuid`; emits `skin:updated` when
-    /// the cached skin changed (or `force_emit`). Offline accounts: nothing.
+    /// what the UI shows changed (or `force_emit`). Offline accounts: nothing.
+    /// Concurrent calls for one account queue up and share the result of the
+    /// refresh that finished while they waited.
     pub(crate) async fn refresh_skin(
         &self,
         uuid: &str,
         use_token: bool,
         force_emit: bool,
     ) -> Res<()> {
-        let inner = &self.inner;
+        let flight = self.skin_flight(uuid);
+        let counter = |f: &SkinFlight| {
+            if use_token {
+                f.done_token.load(Ordering::SeqCst)
+            } else {
+                f.done.load(Ordering::SeqCst)
+            }
+        };
+        let seen = counter(&flight);
+        let guard = flight.lock.clone().lock_owned().await;
+        if !force_emit && counter(&flight) != seen {
+            return Ok(());
+        }
+        let r = self.refresh_in_flight(uuid, use_token, force_emit).await;
+        drop(guard);
+        r
+    }
+
+    /// Stale-while-revalidate: start a background refresh unless one is
+    /// already running for this account.
+    fn spawn_revalidate(&self, uuid: &str) {
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
+        let flight = self.skin_flight(uuid);
+        let Ok(guard) = flight.lock.clone().try_lock_owned() else {
+            return;
+        };
+        let svc = self.clone();
+        let uuid = uuid.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = svc.refresh_in_flight(&uuid, true, false).await {
+                tracing::info!("skin revalidation failed: {}", e.code);
+            }
+            drop(guard);
+        });
+    }
+
+    /// The refresh itself; the caller holds the account's flight lock.
+    async fn refresh_in_flight(&self, uuid: &str, use_token: bool, force_emit: bool) -> Res<()> {
+        let flight = self.skin_flight(uuid);
+        let started = Instant::now();
+        let r = self
+            .skin_bounded(self.refresh_inner(uuid, use_token, force_emit))
+            .await;
+        flight.done.fetch_add(1, Ordering::SeqCst);
+        if use_token {
+            flight.done_token.fetch_add(1, Ordering::SeqCst);
+        }
+        tracing::info!(
+            ms = elapsed_ms(started),
+            use_token,
+            outcome = r.as_ref().map_or_else(|e| e.code.as_str(), |()| "ok"),
+            "skin refresh"
+        );
+        r
+    }
+
+    async fn refresh_inner(&self, uuid: &str, use_token: bool, force_emit: bool) -> Res<()> {
         let account = self.session_account(uuid)?;
         if account.kind == AuthKind::Offline {
             return Ok(());
         }
-        let ep = inner.opts.auth_endpoints.clone();
-        let cache_root = inner.paths.cache();
-        let before = skin_digest(&inner.paths, uuid);
+        let ep = self.skin_ep();
+        let before = self.info_snapshot(uuid).await;
+        let first_load = before.is_none();
 
         let mut working: AuthAccount = account;
+        let mut failure: Option<AppError> = None;
         let mut fresh = false;
         if use_token {
-            match self.refresh_session(uuid, false).await {
-                Ok(acc) => {
-                    working = acc;
-                    match mango_auth::fetch_profile_textures(&ep, &working).await {
-                        Ok(t) => {
-                            working.skins = t.skins.clone();
-                            working.capes = t.capes.clone();
-                            self.store_textures(uuid, t.skins, t.capes).await;
-                            fresh = true;
-                        }
-                        Err(e) => tracing::debug!("profile textures not read: {}", e.code()),
-                    }
+            // The profile request and (on a first load) the textures of the
+            // stored lists run concurrently: textures are content-addressed,
+            // so an unchanged URL needs no second download.
+            let stored = working.clone();
+            let chain = async {
+                let acc = self.refresh_session(uuid, false).await?;
+                let t = mango_auth::fetch_profile_textures(&ep, &acc)
+                    .await
+                    .map_err(skin_err)?;
+                Ok::<_, AppError>((acc, t))
+            };
+            let prewarm = async {
+                if first_load && (!stored.skins.is_empty() || !stored.capes.is_empty()) {
+                    let mut tex = stored.clone();
+                    let capes = std::mem::take(&mut tex.capes);
+                    let cache = self.inner.paths.cache();
+                    tokio::join!(
+                        mango_auth::get_skin(&ep, &cache, &tex),
+                        self.fetch_cape_files(uuid, &capes),
+                    );
                 }
-                Err(e) => tracing::debug!("token not refreshed for the skin: {}", e.code),
+            };
+            let (chained, ()) = tokio::join!(chain, prewarm);
+            match chained {
+                Ok((acc, t)) => {
+                    working = acc;
+                    working.skins = t.skins.clone();
+                    self.store_textures(uuid, t.skins, t.capes).await;
+                    fresh = true;
+                }
+                Err(e) => {
+                    tracing::debug!("skin profile not read: {}", e.code);
+                    failure = Some(e);
+                }
             }
         }
         if !fresh {
             // Possibly stale stored texture urls: ask the session server.
             working.skins.clear();
-            working.capes.clear();
         }
-        let _ = mango_auth::get_skin(&ep, &cache_root, &working).await;
+        self.refresh_images(uuid, &working).await;
 
-        let capes = self
-            .session_account(uuid)
-            .map(|a| a.capes.clone())
-            .unwrap_or_default();
-        self.fetch_cape_files(uuid, &capes).await;
-
-        let after = skin_digest(&inner.paths, uuid);
+        let after = self.info_snapshot(uuid).await;
         if force_emit || before != after {
-            inner.emit(Event::SkinUpdated(SkinUpdatedEvent {
+            self.inner.emit(Event::SkinUpdated(SkinUpdatedEvent {
                 uuid: uuid.to_string(),
             }));
+        }
+        // Nothing usable came out of a failed lookup: the caller must hear why.
+        if let Some(e) = failure {
+            let usable = after.is_some_and(|i| i.source != SkinSourceName::Default);
+            if !usable {
+                return Err(e);
+            }
         }
         Ok(())
     }
 
-    /// Download the capes that are not cached yet (best effort).
+    /// Skin PNG (from `working`'s list or the session server) and every cape
+    /// file, concurrently.
+    async fn refresh_images(&self, uuid: &str, working: &AuthAccount) {
+        let ep = self.skin_ep();
+        let capes = self
+            .session_account(uuid)
+            .map(|a| a.capes.clone())
+            .unwrap_or_default();
+        let mut for_skin = working.clone();
+        // Cape files are cached by `fetch_cape_files`; the skin cache needs none.
+        for_skin.capes.clear();
+        let cache = self.inner.paths.cache();
+        tokio::join!(
+            mango_auth::get_skin(&ep, &cache, &for_skin),
+            self.fetch_cape_files(uuid, &capes),
+        );
+    }
+
+    /// What the UI would show now, ignoring `stale` (`None` = nothing cached).
+    async fn info_snapshot(&self, uuid: &str) -> Option<SkinInfo> {
+        mango_auth::get_cached_skin(&self.inner.paths.cache(), uuid)
+            .await
+            .as_ref()?;
+        self.build_skin_info(uuid, false).await.ok()
+    }
+
+    /// Download the capes that are not cached yet, all at once (best effort).
     async fn fetch_cape_files(&self, uuid: &str, capes: &[mango_auth::Texture]) {
-        let ep = &self.inner.opts.auth_endpoints;
+        let ep = self.skin_ep();
         let dir = cape_dir(&self.inner.paths, uuid);
+        let mut set = tokio::task::JoinSet::new();
         for cape in capes {
-            let Some((id, url)) = cape_id(cape).zip(cape.url.as_deref()) else {
+            let Some((id, url)) = cape_id(cape).zip(cape.url.clone()) else {
                 continue;
             };
             let file = dir.join(format!("{id}.png"));
             if std::fs::metadata(&file).is_ok_and(|m| m.len() > 0) {
                 continue;
             }
-            match mango_auth::fetch_texture_bytes(ep, url).await {
-                Ok(bytes)
-                    if bytes.len() as u64 <= MAX_SKIN_BYTES && bytes.starts_with(&PNG_MAGIC) =>
-                {
-                    let _ = write_atomic(&file, &bytes);
+            let ep = ep.clone();
+            set.spawn(async move {
+                match mango_auth::fetch_texture_bytes(&ep, &url).await {
+                    Ok(bytes)
+                        if bytes.len() as u64 <= MAX_SKIN_BYTES
+                            && bytes.starts_with(&PNG_MAGIC) =>
+                    {
+                        let _ = write_atomic(&file, &bytes);
+                    }
+                    Ok(_) => tracing::debug!("a cape texture was not a usable PNG"),
+                    Err(e) => tracing::debug!("cape not downloaded: {}", e.code()),
                 }
-                Ok(_) => tracing::debug!("a cape texture was not a usable PNG"),
-                Err(e) => tracing::debug!("cape not downloaded: {}", e.code()),
-            }
+            });
         }
+        while set.join_next().await.is_some() {}
     }
 
     // ---- commands: current skin ----
 
-    async fn build_skin_info(&self, uuid: &str) -> Res<SkinInfo> {
+    async fn build_skin_info(&self, uuid: &str, stale: bool) -> Res<SkinInfo> {
         let account = self.session_account(uuid)?;
         let paths = &self.inner.paths;
         let cached = mango_auth::get_cached_skin(&paths.cache(), uuid).await;
@@ -518,19 +699,27 @@ impl AppService {
             source: cached.map_or(SkinSourceName::Default, |c| c.source.into()),
             capes,
             can_edit,
+            stale,
         })
     }
 
-    /// The account's skin and capes. Microsoft accounts are (re)fetched first;
-    /// when that fails the cached data is returned.
+    /// The account's skin and capes. With a cache the cached answer returns
+    /// at once (`stale: true`) and a background refresh follows (`skin:updated`
+    /// when it found something different); only the very first load waits
+    /// for the network, and it ends in an error instead of waiting forever.
     pub async fn skin_get(&self, uuid: String) -> Res<SkinInfo> {
         let account = self.session_account(&uuid)?;
         if account.kind == AuthKind::Microsoft {
-            if let Err(e) = self.refresh_skin(&uuid, true, false).await {
-                tracing::debug!("skin_get: refresh failed: {}", e.code);
+            let cached = mango_auth::get_cached_skin(&self.inner.paths.cache(), &uuid)
+                .await
+                .is_some();
+            if cached {
+                self.spawn_revalidate(&uuid);
+                return self.build_skin_info(&uuid, true).await;
             }
+            self.refresh_skin(&uuid, true, false).await?;
         }
-        self.build_skin_info(&uuid).await
+        self.build_skin_info(&uuid, false).await
     }
 
     fn microsoft_account(&self, uuid: &str) -> Res<AuthAccount> {
@@ -541,7 +730,23 @@ impl AppService {
         Ok(account)
     }
 
-    /// Upload `bytes` as the account's skin, then refetch and announce it.
+    /// The lists a change answered with; one profile request only when the
+    /// answer carried none.
+    async fn textures_of_answer(
+        &self,
+        ep: &mango_auth::Endpoints,
+        account: &AuthAccount,
+        answer: &serde_json::Value,
+    ) -> Res<mango_auth::ProfileTextures> {
+        match mango_auth::profile_textures(answer) {
+            Some(t) => Ok(t),
+            None => mango_auth::fetch_profile_textures(ep, account)
+                .await
+                .map_err(skin_err),
+        }
+    }
+
+    /// Upload `bytes` as the account's skin, remember the answer and announce it.
     async fn upload_and_refresh(
         &self,
         uuid: &str,
@@ -549,13 +754,33 @@ impl AppService {
         variant: SkinVariant,
         filename: &str,
     ) -> Res<SkinInfo> {
-        let account = self.refresh_session(uuid, false).await?;
-        let ep = self.inner.opts.auth_endpoints.clone();
-        mango_auth::upload_skin_bytes(&ep, &account, bytes, variant, filename)
-            .await
-            .map_err(skin_err)?;
-        self.refresh_skin(uuid, true, true).await?;
-        self.build_skin_info(uuid).await
+        let started = Instant::now();
+        let flight = self.skin_flight(uuid);
+        let _guard = flight.lock.clone().lock_owned().await;
+        let r = self
+            .skin_bounded(async {
+                let account = self.refresh_session(uuid, false).await?;
+                let ep = self.skin_ep();
+                let answer = mango_auth::upload_skin_bytes(&ep, &account, bytes, variant, filename)
+                    .await
+                    .map_err(skin_err)?;
+                let t = self.textures_of_answer(&ep, &account, &answer).await?;
+                let mut working = account;
+                working.skins = t.skins.clone();
+                self.store_textures(uuid, t.skins, t.capes).await;
+                self.refresh_images(uuid, &working).await;
+                self.inner.emit(Event::SkinUpdated(SkinUpdatedEvent {
+                    uuid: uuid.to_string(),
+                }));
+                self.build_skin_info(uuid, false).await
+            })
+            .await;
+        tracing::info!(
+            ms = elapsed_ms(started),
+            outcome = r.as_ref().map_or_else(|e| e.code.as_str(), |_| "ok"),
+            "skin upload"
+        );
+        r
     }
 
     /// Upload a PNG chosen with `pick_image_file` as the account's skin.
@@ -614,7 +839,9 @@ impl AppService {
             .await
     }
 
-    /// Select a cape (`Some(id)`) or hide it (`None`).
+    /// Select a cape (`Some(id)`) or hide it (`None`). The service answers
+    /// with the updated profile: that answer (checked for the requested cape
+    /// being ACTIVE) updates the cache, no second round trip.
     pub async fn skin_set_cape(&self, uuid: String, cape_id: Option<String>) -> Res<SkinInfo> {
         self.microsoft_account(&uuid)?;
         if let Some(id) = &cape_id {
@@ -622,13 +849,38 @@ impl AppService {
                 return Err(AppError::validation("Invalid cape id"));
             }
         }
-        let account = self.refresh_session(&uuid, false).await?;
-        let ep = self.inner.opts.auth_endpoints.clone();
-        mango_auth::set_active_cape(&ep, &account, cape_id.as_deref())
-            .await
-            .map_err(skin_err)?;
-        self.refresh_skin(&uuid, true, true).await?;
-        self.build_skin_info(&uuid).await
+        let started = Instant::now();
+        let flight = self.skin_flight(&uuid);
+        let _guard = flight.lock.clone().lock_owned().await;
+        let r = self
+            .skin_bounded(async {
+                let account = self.refresh_session(&uuid, false).await?;
+                let ep = self.skin_ep();
+                let answer = mango_auth::set_active_cape(&ep, &account, cape_id.as_deref())
+                    .await
+                    .map_err(skin_err)?;
+                let t = self.textures_of_answer(&ep, &account, &answer).await?;
+                if !mango_auth::cape_applied(&t, cape_id.as_deref()) {
+                    return Err(skin_err(AuthError::CapeNotApplied));
+                }
+                let skins = if t.skins.is_empty() {
+                    account.skins.clone()
+                } else {
+                    t.skins
+                };
+                self.store_textures(&uuid, skins, t.capes.clone()).await;
+                self.fetch_cape_files(&uuid, &t.capes).await;
+                self.inner
+                    .emit(Event::SkinUpdated(SkinUpdatedEvent { uuid: uuid.clone() }));
+                self.build_skin_info(&uuid, false).await
+            })
+            .await;
+        tracing::info!(
+            ms = elapsed_ms(started),
+            outcome = r.as_ref().map_or_else(|e| e.code.as_str(), |_| "ok"),
+            "skin cape change"
+        );
+        r
     }
 
     // ---- commands: local library ----

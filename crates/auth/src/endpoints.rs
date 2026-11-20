@@ -1,4 +1,3 @@
-use mango_net::FetchOptions;
 use std::time::Duration;
 use url::Url;
 
@@ -35,6 +34,11 @@ pub struct Endpoints {
     /// Retries after the first attempt (5xx, 429, network errors).
     pub retries: u32,
     pub backoff: Duration,
+    /// Total time of one request attempt (connecting, sending, reading).
+    pub request_timeout: Duration,
+    /// Longest `Retry-After` that is waited out; a longer one is reported
+    /// as `AuthError::RateLimited` instead.
+    pub retry_after_cap: Duration,
 }
 
 impl Default for Endpoints {
@@ -60,6 +64,8 @@ impl Default for Endpoints {
             session_profile: "https://sessionserver.mojang.com/session/minecraft/profile".into(),
             retries: 4,
             backoff: Duration::from_millis(400),
+            request_timeout: Duration::from_secs(12),
+            retry_after_cap: Duration::from_secs(10),
         }
     }
 }
@@ -138,14 +144,5 @@ impl Endpoints {
             ));
         }
         Some(Redirect::Code(code))
-    }
-
-    pub(crate) fn fetch_opts(&self, headers: Vec<(String, String)>) -> FetchOptions {
-        FetchOptions {
-            retries: self.retries,
-            backoff: self.backoff,
-            headers,
-            ..FetchOptions::default()
-        }
     }
 }

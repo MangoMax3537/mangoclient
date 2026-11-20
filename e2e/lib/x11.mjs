@@ -35,6 +35,14 @@ export function webkitChildren(appPid) {
   return descendants(appPid).filter((p) => /WebKit/i.test(statOf(p)?.comm || ''));
 }
 
+/** WebKitWebProcess children (the renderer: the big one). The WebKitNetworkProcess is NOT included: wry keeps the WebContext for the whole app lifetime on Linux (tauri#14626), so the network process legitimately outlives the window. */
+export function webProcesses(appPid) {
+  return descendants(appPid).filter((p) => /^WebKitWebProc/i.test(statOf(p)?.comm || ''));
+}
+
+/** Process name (comm) of a pid. */
+export const commOf = (pid) => statOf(pid)?.comm || '?';
+
 /** Java processes below the app (the game). */
 export function javaChildren(appPid) {
   return descendants(appPid).filter((p) => /^java/i.test(statOf(p)?.comm || ''));

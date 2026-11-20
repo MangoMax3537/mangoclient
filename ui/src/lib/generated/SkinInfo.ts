@@ -15,4 +15,10 @@ capeUrl: string | null, slim: boolean, source: SkinSourceName, capes: Array<Cape
 /**
  * `false` for offline accounts (their skin cannot be changed).
  */
-canEdit: boolean, };
+canEdit: boolean, 
+/**
+ * `true` when this answer came from the cache and a refresh is running
+ * in the background; `skin:updated` follows when that refresh found
+ * something different.
+ */
+stale: boolean, };

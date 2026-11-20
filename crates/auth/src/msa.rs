@@ -1,8 +1,7 @@
 use crate::account::{now_ms, Account, AccountType, Texture};
 use crate::endpoints::{Endpoints, SCOPE, XBL_RELYING_PARTY, XSTS_RELYING_PARTY};
 use crate::error::AuthError;
-use crate::http::{post_form, post_json};
-use mango_net::{fetch_with_retry, get_json};
+use crate::http::{post_form, post_json, send_json};
 use serde_json::{json, Map, Value};
 use std::fmt;
 use zeroize::Zeroize;
@@ -187,31 +186,41 @@ pub async fn minecraft_login(
         .filter(|n| *n > 0)
         .unwrap_or(86400);
 
-    let headers = vec![("Authorization".to_string(), format!("Bearer {mc_token}"))];
-    // Entitlement lookup failures are ignored; it only refines the 404 message.
-    let owns = get_json::<Value>(&ep.mc_entitlements, &ep.fetch_opts(headers.clone()))
-        .await
+    // The entitlement lookup only refines the 404 message: it runs next to the
+    // profile request (bounded like every auth request) instead of before it.
+    let bearer = format!("Bearer {mc_token}");
+    let entitlements = send_json(ep, |c| {
+        c.get(&ep.mc_entitlements)
+            .header("Authorization", &bearer)
+            .header("Accept", "application/json")
+    });
+    let profile_req = send_json(ep, |c| {
+        c.get(&ep.mc_profile)
+            .header("Authorization", &bearer)
+            .header("Accept", "application/json")
+    });
+    let (entitlements, profile_res) = tokio::join!(entitlements, profile_req);
+    let owns = entitlements
         .ok()
-        .and_then(|v| {
+        .filter(|(status, _)| (200..300).contains(status))
+        .and_then(|(_, v)| {
             v.get("items")
                 .and_then(Value::as_array)
                 .map(|a| !a.is_empty())
         })
         .unwrap_or(false);
 
-    let res = fetch_with_retry(&ep.mc_profile, &ep.fetch_opts(headers)).await?;
-    let status = res.status();
-    if status.as_u16() == 404 {
+    let (status, profile) = profile_res?;
+    if status == 404 {
         return Err(if owns {
             AuthError::NoProfile
         } else {
             AuthError::NotOwned
         });
     }
-    if !status.is_success() {
-        return Err(AuthError::ProfileHttp(status.as_u16()));
+    if !(200..300).contains(&status) {
+        return Err(AuthError::ProfileHttp(status));
     }
-    let profile: Value = res.json().await?;
     let text = |k: &str| {
         profile
             .get(k)

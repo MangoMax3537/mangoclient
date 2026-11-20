@@ -390,8 +390,41 @@ async function startApp(tag, home) {
   log(`app '${tag}' started, pid ${appPid}`);
 }
 
+// S9 measures the REAL lifecycle, so by default it runs WITHOUT WebDriver/automation: with TAURI_WEBVIEW_AUTOMATION=true tauri-runtime-wry
+// (wry `register_automation`) keeps a clone of the first WebView in the WebContext for the whole app lifetime, which pins the
+// WebKitWebProcess even after the window is destroyed (a harness artefact, never present in a user run). Pass --s9-webdriver to use
+// the automation path anyway. The launch is started with the app's own shortcut (Ctrl+Shift+P = play the selected profile).
+const S9_NATIVE = !argv.includes('--s9-webdriver');
+let nativeChild = null;
+let nativeExit = null; // { code, sig } once the natively started app ended
+
+/** Start the app WITHOUT automation on `home`, focus its window, leave `session`/`page` unset. */
+async function startAppNative(tag, home) {
+  curHome = home;
+  nativeExit = null;
+  const env = { ...process.env, MANGOCLIENT_HOME: home };
+  delete env.TAURI_WEBVIEW_AUTOMATION;
+  const out = openSync(join(OUT, `app${tag}.log`), 'a');
+  nativeChild = spawn(BINARY, [], { env, stdio: ['ignore', out, out] });
+  nativeChild.on('exit', (code, sig) => { nativeExit = { code, sig }; });
+  appPid = nativeChild.pid;
+  await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 30000, what: 'the main window (native start)' });
+  await sleep(3500); // let the UI mount
+  log(`app '${tag}' started natively (no automation), pid ${appPid}`);
+}
+
+/** Press a key combination in the main window (activate it first). */
+function pressInWindow(keys) {
+  const w = x11.mainWindows(appPid, true)[0];
+  check(w, 'no visible window to send keys to');
+  x11.activate(w);
+  spawnSync('sleep', ['0.6']);
+  spawnSync('xdotool', ['key', '--clearmodifiers', keys]);
+}
+
 /** Terminate whatever is left of the current app instance (game first), by PID only. */
 async function endApp() {
+  nativeChild = null;
   if (appPid && alive(appPid)) {
     for (const j of x11.javaChildren(appPid)) kill(j, 'SIGTERM');
     kill(appPid, 'SIGTERM');
@@ -402,8 +435,10 @@ async function endApp() {
   page = null;
 }
 
-const exitCodeOf = (tag) => (existsSync(join(OUT, `exitcode${tag}`)) ? readFileSync(join(OUT, `exitcode${tag}`), 'utf8').trim() : '(no exitcode file)');
+const exitCodeOf = (tag) => (S9_NATIVE && nativeExit && /^-s9/.test(tag) ? String(nativeExit.code ?? nativeExit.sig) : existsSync(join(OUT, `exitcode${tag}`)) ? readFileSync(join(OUT, `exitcode${tag}`), 'utf8').trim() : '(no exitcode file)');
 const snap = () => ({ win: x11.mainWindows(appPid, false).length, vis: x11.mainWindows(appPid, true).length, wk: x11.webkitChildren(appPid).length, java: x11.javaChildren(appPid), mem: x11.memOf(appPid) });
+/** Remaining WebKit helpers: "WebKitWebProcess(pid) RSS x / PSS y; ..." (process role and memory, for the report). */
+const helperInfo = () => x11.webkitChildren(appPid).map((p) => { const m = x11.memOf(p); return `${x11.commOf ? x11.commOf(p) : 'helper'}(${p}) RSS ${m.rss} / PSS ${m.pss ?? 'n/a'} MiB`; }).join('; ') || 'none';
 const memStr = (m) => `RSS ${m.rss} MiB / PSS ${m.pss ?? 'n/a'} MiB`;
 const rectInfo = (id) => (id ? x11.geometry(id) : null);
 
@@ -419,31 +454,46 @@ function logTail(home) {
 
 /** Set hideOnLaunch=true / keepLauncherOpen=false, start the game for the Vanilla 1.21.4 profile, wait until the window is destroyed. */
 async function bootLaunchHidden(home, tag) {
-  await startApp(tag, home);
-  const st = (await page.invoke('app_state')).ok;
-  const prof = st.profiles.find((p) => p.name === 'Vanilla Test') || st.profiles.find((p) => p.loader === 'vanilla' && p.mcVersion === '1.21.4');
-  check(prof, 'no 1.21.4 Vanilla profile in the data copy');
-  const acc = st.accounts.find((a) => a.type === 'offline');
-  check(acc && st.accounts.every((a) => a.type === 'offline'), 'data copy must hold only the offline account');
-  const r = await page.invoke('config_set', { patch: { hideOnLaunch: true, keepLauncherOpen: false, selectedAccount: acc.uuid, selectedProfile: prof.id } });
-  check(!r.err, `config_set failed: ${r.err}`);
-  const cfg = (await page.invoke('app_state')).ok.config;
-  check(cfg.hideOnLaunch === true && cfg.keepLauncherOpen === false, `config not applied: hideOnLaunch=${cfg.hideOnLaunch} keepLauncherOpen=${cfg.keepLauncherOpen}`);
+  let prof;
+  if (S9_NATIVE) {
+    const cfgPath = join(home, 'config.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    Object.assign(cfg, { hideOnLaunch: true, keepLauncherOpen: false });
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    await startAppNative(tag, home);
+    prof = { id: cfg.selectedProfile };
+  } else {
+    await startApp(tag, home);
+    const st = (await page.invoke('app_state')).ok;
+    prof = st.profiles.find((p) => p.name === 'Vanilla Test') || st.profiles.find((p) => p.loader === 'vanilla' && p.mcVersion === '1.21.4');
+    check(prof, 'no 1.21.4 Vanilla profile in the data copy');
+    const acc = st.accounts.find((a) => a.type === 'offline');
+    check(acc && st.accounts.every((a) => a.type === 'offline'), 'data copy must hold only the offline account');
+    const r = await page.invoke('config_set', { patch: { hideOnLaunch: true, keepLauncherOpen: false, selectedAccount: acc.uuid, selectedProfile: prof.id } });
+    check(!r.err, `config_set failed: ${r.err}`);
+    const cfg = (await page.invoke('app_state')).ok.config;
+    check(cfg.hideOnLaunch === true && cfg.keepLauncherOpen === false, `config not applied: hideOnLaunch=${cfg.hideOnLaunch} keepLauncherOpen=${cfg.keepLauncherOpen}`);
+  }
   const before = snap();
+  before.helpers = helperInfo();
   check(before.vis >= 1, 'no visible main window before the launch');
-  await page.exec(
-    `window.__e2e.launch = 'pending';
-     window.__TAURI_INTERNALS__.invoke('game_launch', { profileId: arguments[0] }).then((v) => { window.__e2e.launch = { ok: v }; }, (e) => { window.__e2e.launch = { err: String((e && e.message) || JSON.stringify(e)) }; });
-     return true;`,
-    [prof.id],
-  );
+  if (S9_NATIVE) {
+    pressInWindow('ctrl+shift+p');
+  } else {
+    await page.exec(
+      `window.__e2e.launch = 'pending';
+       window.__TAURI_INTERNALS__.invoke('game_launch', { profileId: arguments[0] }).then((v) => { window.__e2e.launch = { ok: v }; }, (e) => { window.__e2e.launch = { err: String((e && e.message) || JSON.stringify(e)) }; });
+       return true;`,
+      [prof.id],
+    );
+  }
   const t0l = Date.now();
   let java = 0;
   await until(
     async () => {
       java = x11.javaChildren(appPid)[0] || 0;
       if (java) return true;
-      const l = await page.exec('return window.__e2e.launch;').catch(() => null);
+      const l = S9_NATIVE ? null : await page.exec('return window.__e2e.launch;').catch(() => null);
       if (l && l.err) throw new Abort(`game_launch failed: ${l.err}`);
       return false;
     },
@@ -457,9 +507,10 @@ async function bootLaunchHidden(home, tag) {
     },
     { timeout: 240000, interval: 300, what: 'the main window to be destroyed after the game reported running' },
   );
-  const gone = (await until(() => x11.webkitChildren(appPid).length === 0, { timeout: 20000, what: 'WebKit processes to disappear' }).then(() => true, () => false));
+  const gone = (await until(() => x11.webProcesses(appPid).length === 0, { timeout: 20000, what: 'the WebKitWebProcess to disappear' }).then(() => true, () => false));
   await sleep(3000);
   const after = snap();
+  after.helpers = helperInfo();
   return { prof, java, before, after, webkitGone: gone, goneMs: tGone - t0l };
 }
 
@@ -469,18 +520,18 @@ async function s9a() {
   if (!x11.hasXdotool()) throw new SkipError('xdotool not available');
   const home = prepareCopy('s9');
   const b = await bootLaunchHidden(home, '-s9a');
-  check(b.webkitGone, `WebKit helper processes still present 20 s after the window was destroyed (${b.after.wk} left)`);
+  check(b.webkitGone, `the WebKitWebProcess is still present 20 s after the window was destroyed (left: ${helperInfo()})`);
   check(alive(appPid), 'the main process died while the window was destroyed');
   check(alive(b.java), 'the game died while the window was destroyed');
   check(b.after.win === 0, `${b.after.win} main window(s) still exist in X11 after the destroy`);
-  const note = [`window+WebKit gone while java ${b.java} runs; before: ${memStr(b.before.mem)} with ${b.before.wk} WebKit procs; destroyed: ${memStr(b.after.mem)}`];
+  const note = [`window+WebKit gone while java ${b.java} runs; ${S9_NATIVE ? 'native' : 'automation'} run; before: main ${memStr(b.before.mem)}, helpers [${b.before.helpers}]; destroyed: main ${memStr(b.after.mem)}, helpers [${b.after.helpers}]`];
   // end the game from outside
   const tKill = Date.now();
   kill(b.java, 'SIGTERM');
   await until(() => !alive(b.java), { timeout: 30000, what: 'the game to exit after SIGTERM' });
   await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 30000, what: 'the window to be re-created after the game ended' });
   const backMs = Date.now() - tKill;
-  const wkBack = await until(() => x11.webkitChildren(appPid).length > 0, { timeout: 15000, what: 'WebKit processes to come back' }).then(() => true, () => false);
+  const wkBack = await until(() => x11.webProcesses(appPid).length > 0, { timeout: 15000, what: 'the WebKitWebProcess to come back' }).then(() => true, () => false);
   note.push(`window re-created ${backMs} ms after SIGTERM (WebKit back: ${wkBack})`);
   check(backMs <= 10000, `window came back only after ${backMs} ms (expected <= 10 s after the game ended)`);
   check(wkBack, 'WebKit processes did not come back with the window');
@@ -488,13 +539,14 @@ async function s9a() {
   // can anything attach to the re-created window?
   let usable = null;
   const alt = { err: '' };
-  try {
+  if (S9_NATIVE) alt.err = 'native run without automation: no WebDriver session exists to attach';
+  else try {
     const t = await Promise.race([session.title(), sleep(8000).then(() => { throw new Error('old session does not answer'); })]);
     usable = t === 'MangoClient' ? 'old session' : null;
   } catch (e) {
     alt.err = e.message;
   }
-  if (!usable) {
+  if (!usable && !S9_NATIVE) {
     try {
       // WebKitWebDriver always spawns its OWN browser process: with the single-instance lock held this only pokes the running app
       const s2 = await Promise.race([
@@ -767,15 +819,35 @@ async function s11() {
   return notes.join('; ');
 }
 
+/** Give the app window real keyboard focus (cycling and other focus-gated UI pause otherwise) and verify it with document.hasFocus(). */
+async function focusWindow() {
+  const wid = x11.mainWindows(appPid, true)[0];
+  check(wid, 'no visible window to focus');
+  const has = () => page.exec('return document.hasFocus();').catch(() => false);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    x11.activate(wid);
+    x11.focus(wid);
+    await sleep(700);
+    if (await has()) return `focused (attempt ${attempt + 1})`;
+    if (attempt >= 1) {
+      // some compositors refuse focus requests from xdotool: a real click on the title bar area does it (harmless: no control there)
+      const g = x11.geometry(wid);
+      spawnSync('xdotool', ['mousemove', String(Math.round(g.x + g.w / 2)), String(Math.round(g.y + 6)), 'click', '1']);
+      await sleep(700);
+      if (await has()) return `focused by click (attempt ${attempt + 1})`;
+    }
+  }
+  throw new Error('the app window never got focus (document.hasFocus() stays false after windowactivate/windowfocus and a title bar click)');
+}
+
 async function s12() {
   await ensureUi();
-  const wid = x11.mainWindows(appPid, true)[0];
-  if (wid) { x11.activate(wid); x11.focus(wid); }
+  const focusNote = await focusWindow();
   await goView('1', 'Home');
   await waitFor(() => page.byCss('.hero'), { timeout: 15000, what: '.hero on Home' });
   const sample = () => page.exec(
     `const st = document.querySelector('.hero .stack');
-     if (!st) return { stack: false, focus: document.hasFocus(), hidden: document.hidden };
+     if (!st) return { stack: false, focus: document.hasFocus(), hidden: document.hidden, rm: matchMedia('(prefers-reduced-motion: reduce)').matches };
      const slots = [...st.querySelectorAll('.slot')].map((s) => { const i = s.querySelector('img'); const b = s.querySelector('[style*="background"]'); return { cls: s.className.replace(/svelte-\\w+/g, '').trim(), key: i ? i.getAttribute('src') : b ? b.getAttribute('style').slice(0, 80) : s.innerHTML.length + ':' + s.innerHTML.slice(0, 60) }; });
      return { stack: true, focus: document.hasFocus(), hidden: document.hidden, slots };`,
   );
@@ -795,16 +867,17 @@ async function s12() {
   let changes = 0;
   let last = keys(first);
   let paused = 0;
-  while (Date.now() - t0c < 75000) {
+  // every unfocused/hidden period re-arms the cycler with a fresh 30-60 s delay (bgCycle.ts), so allow extra time after pauses
+  while (Date.now() - t0c < 75000 + Math.min(paused, 3) * 40000) {
     await sleep(1000);
     const s = await sample();
-    if (!s.focus || s.hidden) paused++;
+    if (!s.focus || s.hidden) { paused++; if (paused <= 3 || paused % 10 === 0) await focusWindow().catch(() => {}); } // regain focus: the cycler pauses while unfocused
     const k = keys(s);
     if (k !== last) { changes++; seen.add(k); last = k; if (changes === 1) await page.shot('s12-home-after-swap'); if (changes >= 2) break; }
   }
   const secs = Math.round((Date.now() - t0c) / 1000);
-  check(changes >= 1, `the Home hero background did not change within ${secs} s (focus lost in ${paused} samples; cycling pauses while the window is unfocused or the document hidden); pool sets ${pool.length}`);
-  return `hero swapped ${changes}x within ${secs} s (${seen.size} distinct layer states, ${pool.length} panorama set(s) in the pool, unfocused samples ${paused})`;
+  check(changes >= 1, `the Home hero background did not change within ${secs} s (focus lost in ${paused} samples, reduced-motion ${await page.exec("return matchMedia('(prefers-reduced-motion: reduce)').matches;").catch(() => '?')}; cycling pauses while the window is unfocused or the document hidden); pool sets ${pool.length}`);
+  return `${focusNote}; hero swapped ${changes}x within ${secs} s (${seen.size} distinct layer states, ${pool.length} panorama set(s) in the pool, unfocused samples ${paused})`;
 }
 
 async function s13() {

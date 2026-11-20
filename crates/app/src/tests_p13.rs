@@ -15,11 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const UUID: &str = "0123456789abcdef0123456789abcdef";
+pub(crate) const UUID: &str = "0123456789abcdef0123456789abcdef";
 const OTHER: &str = "fedcba9876543210fedcba9876543210";
 
 #[derive(Default)]
-struct Sink(Mutex<Vec<Event>>);
+pub(crate) struct Sink(pub(crate) Mutex<Vec<Event>>);
 
 impl EventSink for Sink {
     fn emit(&self, event: Event) {
@@ -28,7 +28,7 @@ impl EventSink for Sink {
 }
 
 impl Sink {
-    fn skin_updates(&self) -> usize {
+    pub(crate) fn skin_updates(&self) -> usize {
         self.0
             .lock()
             .unwrap()
@@ -46,7 +46,7 @@ impl Sink {
     }
 }
 
-async fn wait_for(mut f: impl FnMut() -> bool) {
+pub(crate) async fn wait_for(mut f: impl FnMut() -> bool) {
     for _ in 0..400 {
         if f() {
             return;
@@ -56,7 +56,7 @@ async fn wait_for(mut f: impl FnMut() -> bool) {
     panic!("condition not reached in time");
 }
 
-fn skin_png(w: u32, h: u32, tag: u8) -> Vec<u8> {
+pub(crate) fn skin_png(w: u32, h: u32, tag: u8) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(w, h, |x, y| {
         image::Rgba([tag, (x % 256) as u8, y as u8, 255])
     });
@@ -64,7 +64,7 @@ fn skin_png(w: u32, h: u32, tag: u8) -> Vec<u8> {
 }
 
 /// A cape PNG (only the signature matters to the cache).
-fn cape_png(tag: u8) -> Vec<u8> {
+pub(crate) fn cape_png(tag: u8) -> Vec<u8> {
     skin_png(64, 32, tag)
 }
 
@@ -209,7 +209,7 @@ struct Fx {
     dialog: Arc<CannedFileDialog>,
 }
 
-fn endpoints(base: &str) -> mango_auth::Endpoints {
+pub(crate) fn endpoints(base: &str) -> mango_auth::Endpoints {
     mango_auth::Endpoints {
         live_token: format!("{base}/live/token"),
         xbl_auth: format!("{base}/xbl"),
@@ -228,7 +228,7 @@ fn endpoints(base: &str) -> mango_auth::Endpoints {
     }
 }
 
-fn open_svc(
+pub(crate) fn open_svc(
     dir: &Path,
     ep: &mango_auth::Endpoints,
     keys: Arc<MemoryDeviceKey>,

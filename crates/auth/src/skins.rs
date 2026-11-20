@@ -1,9 +1,8 @@
 use crate::account::{Account, AccountType, Texture};
 use crate::endpoints::Endpoints;
 use crate::error::AuthError;
-use crate::http::send_json;
+use crate::http::{send_json, send_raw};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use mango_net::{get_bytes, get_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -30,6 +29,13 @@ pub struct SkinResult {
     pub cape: Option<String>,
     pub slim: bool,
     pub source: SkinSource,
+    /// Texture URL of `skin` / `cape` (textures are content-addressed: the
+    /// same URL is the same image, so an unchanged URL is never downloaded
+    /// again). Absent in files written by older versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cape_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +58,29 @@ fn data_url(bytes: &[u8]) -> String {
 }
 
 async fn fetch_data_url(ep: &Endpoints, url: &str) -> Result<String, AuthError> {
-    Ok(data_url(&get_bytes(url, &ep.fetch_opts(vec![])).await?))
+    Ok(data_url(&fetch_texture_bytes(ep, url).await?))
+}
+
+/// The session-server profile of `uuid` (the public textures), as JSON.
+async fn session_profile(ep: &Endpoints, uuid: &str) -> Result<Value, AuthError> {
+    let clean = uuid.replace('-', "");
+    let url = format!("{}/{clean}?unsigned=false", ep.session_profile);
+    let (status, json) =
+        send_json(ep, |c| c.get(&url).header("Accept", "application/json")).await?;
+    if (200..300).contains(&status) && status != 204 {
+        Ok(json)
+    } else {
+        Err(AuthError::ProfileHttp(status))
+    }
+}
+
+/// `skin` (base64 data URL) of the cached result when it was made from `url`.
+fn reuse<'a>(
+    cached: Option<&'a SkinResult>,
+    url: &str,
+    pick: fn(&SkinResult) -> Option<&str>,
+) -> Option<&'a SkinResult> {
+    cached.filter(|c| pick(c) == Some(url))
 }
 
 /// Only plain uuids may name a cache file.
@@ -79,49 +107,85 @@ fn decode_textures(value: &str) -> Option<(Option<String>, Option<String>, bool)
 
 /// Resolve a player's skin and cape: account data first, then the public
 /// session server, then Steve. Never fails; the result is cached best-effort
-/// under `<cache_root>/skins/<uuid>.json`.
+/// under `<cache_root>/skins/<uuid>.json`. Textures whose URL equals the one
+/// of the cached result are not downloaded again, and the skin and the cape
+/// are fetched concurrently.
 pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> SkinResult {
+    let started = std::time::Instant::now();
+    let previous = get_cached_skin(cache_root, &account.uuid).await;
     let mut result = SkinResult {
         skin: String::new(),
         cape: None,
         slim: false,
         source: SkinSource::Default,
+        skin_url: None,
+        cape_url: None,
     };
 
-    let from_account = async {
-        let mut r = (None, None, false);
-        if let Some(url) = account.skins.iter().find(|s| s.is_active()).and_then(|s| {
-            s.url
-                .as_deref()
-                .map(|u| (u, s.variant.as_deref().unwrap_or("")))
-        }) {
-            r.0 = Some(fetch_data_url(ep, url.0).await?);
-            r.2 = url.1.to_ascii_lowercase().contains("slim");
+    // Skin and cape textures, concurrently; an unchanged URL comes from the cache.
+    let load = |skin_url: Option<String>, cape_url: Option<String>| {
+        let prev = previous.as_ref();
+        async move {
+            let skin = async {
+                match skin_url {
+                    Some(u) => match reuse(prev, &u, |c| c.skin_url.as_deref()) {
+                        Some(c) => Ok(Some((c.skin.clone(), u))),
+                        None => fetch_data_url(ep, &u).await.map(|d| Some((d, u))),
+                    },
+                    None => Ok(None),
+                }
+            };
+            let cape = async {
+                match cape_url {
+                    Some(u) => match reuse(prev, &u, |c| c.cape_url.as_deref())
+                        .and_then(|c| c.cape.clone())
+                    {
+                        Some(d) => Some((d, u)),
+                        None => fetch_data_url(ep, &u).await.ok().map(|d| (d, u)),
+                    },
+                    None => None,
+                }
+            };
+            tokio::join!(skin, cape)
         }
-        if let Some(url) = account
-            .capes
-            .iter()
-            .find(|c| c.is_active())
-            .and_then(|c| c.url.as_deref())
-        {
-            r.1 = Some(fetch_data_url(ep, url).await?);
-        }
-        Ok::<_, AuthError>(r)
     };
-    if let Ok((skin, cape, slim)) = from_account.await {
-        if let Some(s) = skin {
-            result.skin = s;
-            result.slim = slim;
-            result.source = SkinSource::Account;
+
+    let acc_skin = account.skins.iter().find(|s| s.is_active()).and_then(|s| {
+        s.url.clone().map(|u| {
+            (
+                u,
+                s.variant
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    .contains("slim"),
+            )
+        })
+    });
+    let acc_cape = account
+        .capes
+        .iter()
+        .find(|c| c.is_active())
+        .and_then(|c| c.url.clone());
+    if acc_skin.is_some() || acc_cape.is_some() {
+        let slim = acc_skin.as_ref().is_some_and(|s| s.1);
+        if let (Ok(skin), cape) = load(acc_skin.map(|s| s.0), acc_cape).await {
+            if let Some((data, url)) = skin {
+                result.skin = data;
+                result.skin_url = Some(url);
+                result.slim = slim;
+                result.source = SkinSource::Account;
+            }
+            if let Some((data, url)) = cape {
+                result.cape = Some(data);
+                result.cape_url = Some(url);
+            }
         }
-        result.cape = cape;
     }
 
     if result.skin.is_empty() && account.kind != AccountType::Offline {
         let session = async {
-            let clean = account.uuid.replace('-', "");
-            let url = format!("{}/{clean}?unsigned=false", ep.session_profile);
-            let prof: Value = get_json(&url, &ep.fetch_opts(vec![])).await?;
+            let prof = session_profile(ep, &account.uuid).await?;
             let value = prof
                 .get("properties")
                 .and_then(Value::as_array)
@@ -134,22 +198,20 @@ pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> S
             let Some((skin_url, cape_url, slim)) = value else {
                 return Ok::<_, AuthError>(None);
             };
-            let skin = match skin_url {
-                Some(u) => Some(fetch_data_url(ep, &u).await?),
-                None => None,
-            };
-            let cape = match cape_url {
-                Some(u) if result.cape.is_none() => fetch_data_url(ep, &u).await.ok(),
-                _ => None,
-            };
-            Ok(Some((skin, cape, slim)))
+            let cape_url = cape_url.filter(|_| result.cape.is_none());
+            let (skin, cape) = load(skin_url, cape_url).await;
+            Ok(Some((skin?, cape, slim)))
         };
-        if let Ok(Some((Some(skin), cape, slim))) = session.await {
+        if let Ok(Some((Some((skin, skin_url)), cape, slim))) = session.await {
             result.skin = skin;
+            result.skin_url = Some(skin_url);
             result.slim = slim;
             result.source = SkinSource::Session;
             if result.cape.is_none() {
-                result.cape = cape;
+                if let Some((data, url)) = cape {
+                    result.cape = Some(data);
+                    result.cape_url = Some(url);
+                }
             }
         }
     }
@@ -158,13 +220,17 @@ pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> S
         result.skin = data_url(STEVE_PNG);
         result.slim = false;
         result.source = SkinSource::Default;
+        result.skin_url = None;
     }
 
     // A failed lookup (offline, server down) must not replace a skin that was
-    // cached earlier with the default one.
-    let keep_existing =
-        result.source == SkinSource::Default && cached_file_exists(cache_root, &account.uuid);
-    if let Some(file) = cache_file(cache_root, &account.uuid).filter(|_| !keep_existing) {
+    // cached earlier with the default one; an identical result is not written
+    // again (its file time versions the image URLs).
+    let keep_existing = result.source == SkinSource::Default && previous.is_some();
+    let unchanged = previous.as_ref() == Some(&result);
+    if let Some(file) =
+        cache_file(cache_root, &account.uuid).filter(|_| !keep_existing && !unchanged)
+    {
         let write = async {
             if let Some(dir) = file.parent() {
                 tokio::fs::create_dir_all(dir).await?;
@@ -177,11 +243,12 @@ pub async fn get_skin(ep: &Endpoints, cache_root: &Path, account: &Account) -> S
             tracing::debug!("skin cache write failed: {e}");
         }
     }
+    tracing::debug!(
+        ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        source = ?result.source,
+        "skin resolved"
+    );
     result
-}
-
-fn cached_file_exists(cache_root: &Path, uuid: &str) -> bool {
-    cache_file(cache_root, uuid).is_some_and(|f| f.is_file())
 }
 
 pub async fn get_cached_skin(cache_root: &Path, uuid: &str) -> Option<SkinResult> {
@@ -232,20 +299,53 @@ pub async fn fetch_profile_textures(
     if !(200..300).contains(&status) {
         return Err(services_error(status));
     }
+    Ok(parse_textures(&json))
+}
+
+fn parse_textures(json: &Value) -> ProfileTextures {
     let list = |k: &str| -> Vec<Texture> {
         json.get(k)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default()
     };
-    Ok(ProfileTextures {
+    ProfileTextures {
         skins: list("skins"),
         capes: list("capes"),
-    })
+    }
+}
+
+/// The skin and cape lists of a profile response (`PUT .../capes/active`,
+/// `POST .../skins` and `GET .../profile` all answer with the profile).
+/// `None` when the answer carries no cape list (an empty or foreign body).
+pub fn profile_textures(json: &Value) -> Option<ProfileTextures> {
+    json.get("capes")?.as_array()?;
+    Some(parse_textures(json))
+}
+
+/// Does `t` show the wanted cape as the one and only ACTIVE cape (`None`
+/// wanted = no cape active)? Cape ids are the profile's `id`, not the alias.
+pub fn cape_applied(t: &ProfileTextures, wanted: Option<&str>) -> bool {
+    let active: Vec<&Texture> = t.capes.iter().filter(|c| c.is_active()).collect();
+    match wanted {
+        None => active.is_empty(),
+        Some(id) => {
+            active.len() == 1 && active[0].extra.get("id").and_then(Value::as_str) == Some(id)
+        }
+    }
 }
 
 /// Download one texture PNG (a skin or cape URL from the profile APIs).
 pub async fn fetch_texture_bytes(ep: &Endpoints, url: &str) -> Result<Vec<u8>, AuthError> {
-    Ok(get_bytes(url, &ep.fetch_opts(vec![])).await?)
+    /// A skin or cape PNG is far smaller; anything bigger is not one.
+    const MAX_TEXTURE_BYTES: usize = 2 * 1024 * 1024;
+    let (status, bytes) = send_raw(ep, |c| c.get(url)).await?;
+    if !(200..300).contains(&status) {
+        return Err(AuthError::ProfileHttp(status));
+    }
+    if bytes.len() > MAX_TEXTURE_BYTES {
+        return Err(AuthError::ProfileHttp(413));
+    }
+    Ok(bytes)
 }
 
 /// A player's public skin (PNG bytes, slim model) from the session server.
@@ -258,8 +358,7 @@ pub async fn fetch_public_skin(
     if clean.is_empty() || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AuthError::InvalidAccount);
     }
-    let url = format!("{}/{clean}?unsigned=false", ep.session_profile);
-    let prof: Value = get_json(&url, &ep.fetch_opts(vec![])).await?;
+    let prof = session_profile(ep, &clean).await?;
     let textures = prof
         .get("properties")
         .and_then(Value::as_array)
@@ -360,8 +459,9 @@ pub async fn upload_skin_bytes(
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
+    // Both calls replace the state (idempotent), so a bounded retry is safe.
     let ep_one = Endpoints {
-        retries: 0,
+        retries: ep.retries.min(2),
         ..ep.clone()
     };
     let (status, json) = send_json(&ep_one, |c| {
@@ -391,8 +491,9 @@ pub async fn set_active_cape(
     cape_id: Option<&str>,
 ) -> Result<Value, AuthError> {
     require_microsoft(account)?;
+    // Both calls replace the state (idempotent), so a bounded retry is safe.
     let ep_one = Endpoints {
-        retries: 0,
+        retries: ep.retries.min(2),
         ..ep.clone()
     };
     let (status, json) = send_json(&ep_one, |c| {

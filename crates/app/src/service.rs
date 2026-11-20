@@ -213,6 +213,8 @@ pub(crate) struct Inner {
     pub grants: crate::path_grants::PathGrants,
     /// Serializes edits of the local skin library.
     pub skin_gate: Mutex<()>,
+    /// Per account: serializes skin refreshes and changes (see `skins::SkinFlight`).
+    pub skin_flights: Mutex<HashMap<String, Arc<crate::skins::SkinFlight>>>,
     /// Serializes panorama-pool extraction runs.
     pub pool_busy: Mutex<bool>,
 }
@@ -315,6 +317,7 @@ impl AppService {
                 backup_gate: Mutex::new(()),
                 grants,
                 skin_gate: Mutex::new(()),
+                skin_flights: Mutex::new(HashMap::new()),
                 pool_busy: Mutex::new(false),
             }),
         };

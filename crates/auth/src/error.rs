@@ -59,6 +59,10 @@ pub enum AuthError {
     Request(#[from] reqwest::Error),
     #[error("request timed out")]
     Timeout,
+    #[error("rate limited, retry in {0} s")]
+    RateLimited(u64),
+    #[error("the service did not apply the requested cape")]
+    CapeNotApplied,
     #[error(transparent)]
     Net(#[from] NetError),
     #[error(transparent)]
@@ -91,6 +95,8 @@ impl AuthError {
             Self::SkinUpload(_) => "auth.skin_upload",
             Self::Request(_) => "auth.request",
             Self::Timeout => "auth.timeout",
+            Self::RateLimited(_) => "auth.rate_limited",
+            Self::CapeNotApplied => "auth.cape_not_applied",
             Self::Net(e) => e.code(),
             Self::Store(StoreError::Locked) => "auth.store_locked",
             Self::Store(_) => "auth.store",
