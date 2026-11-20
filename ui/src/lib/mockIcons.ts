@@ -39,7 +39,7 @@ const WALLPAPER_STEM = /^[a-z0-9-]{1,64}$/;
 
 const isUrl = (s: string) => /^(blob:|data:|https?:|\/|\.\/|assets\/)/.test(s) || /\.(png|jpe?g|webp|gif)$/i.test(s) && s.includes('/');
 
-export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () => void } {
+export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () => void; pool: () => PanoramaSet[] } {
   const mode = ctx.blocks ?? 'default';
   const faceUrl = brandIcon(256);
   const gallery: BlockIcon[] = BLOCK_IDS.map(([id, label]) => ({ id, label, faces: { top: faceUrl, left: faceUrl, right: faceUrl } }));
@@ -153,5 +153,12 @@ export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () =>
       return view(id);
     },
   };
-  return { api, sync };
+  /** `panorama_pool`: one set per installed version; the first call answers empty and `panorama:ready` (empty profileId) follows. */
+  let poolAsked = false;
+  const pool = (): PanoramaSet[] => {
+    if (ctx.panorama === 'off') return [];
+    if (!poolAsked) { poolAsked = true; setTimeout(() => ctx.emit('panorama:ready', { profileId: '' }), 1500 * ctx.scale); return []; }
+    return INSTALLED.map((v) => ({ mcVersion: v, source: 'own' as const, faces: Array.from({ length: 6 }, () => brandIcon(512)) }));
+  };
+  return { api, sync, pool };
 }

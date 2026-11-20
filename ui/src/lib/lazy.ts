@@ -20,6 +20,7 @@ export function memo(load: Loader): Loader {
 export const screens = {
   discover: memo(() => import('../components/Discover.svelte')),
   servers: memo(() => import('../components/Servers.svelte')),
+  skins: memo(() => import('../components/Skins.svelte')),
   stats: memo(() => import('../components/Stats.svelte')),
   settings: memo(() => import('../components/Settings.svelte')),
   onboarding: memo(() => import('../components/Onboarding.svelte')),
@@ -42,6 +43,7 @@ export const dialogs = {
   runDialog: memo(() => import('../components/RunDialog.svelte')),
   reloginDialog: memo(() => import('../components/ReloginDialog.svelte')),
   updateOverlay: memo(() => import('../components/UpdateOverlay.svelte')),
+  shortcutSheet: memo(() => import('../components/ShortcutSheet.svelte')),
 } satisfies Record<string, Loader>;
 
 export const tabs = {

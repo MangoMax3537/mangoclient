@@ -1,25 +1,27 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Brand from './components/Brand.svelte';
+  import TitleBar from './components/TitleBar.svelte';
+  import ResizeBorders from './components/ResizeBorders.svelte';
+  import ConfirmDialog from './components/ConfirmDialog.svelte';
   import Rail from './components/Rail.svelte';
   import Home from './components/Home.svelte';
   import Library from './components/Library.svelte';
   import ProfilePage from './components/ProfilePage.svelte';
   import Toasts from './components/Toasts.svelte';
-  import UpdatePill from './components/UpdatePill.svelte';
-  import Activity from './components/Activity.svelte';
   import Lazy from './components/Lazy.svelte';
   import { BusyGate } from './lib/loadState.svelte';
   import DropHint from './components/DropHint.svelte';
   import { dialogs, screens, skeletons } from './lib/lazy';
   import { pf, watchDrops } from './lib/portability.svelte';
-  import { actions, app, auth, errorText, flow, init, initTheme, nav, t, updates } from './lib/stores.svelte';
-  import { inHttp, inTauri, kind } from './lib/api';
+  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, t, ui, updates } from './lib/stores.svelte';
+  import { inTauri, kind } from './lib/api';
+  import { installShortcuts } from './lib/shortcutActions';
+  import { enter } from './lib/motion';
 
   // Dev: `?view=library|discover|servers|stats|settings` opens that view at start (used to look at the skeletons).
   try {
     const v = new URLSearchParams(location.search).get('view');
-    if (v && ['home', 'library', 'discover', 'servers', 'stats', 'settings'].includes(v)) nav.view = v as typeof nav.view;
+    if (v && ['home', 'library', 'discover', 'servers', 'skins', 'stats', 'settings'].includes(v)) nav.view = v as typeof nav.view;
   } catch { /* no location */ }
   // Boot: nothing for the first ~150 ms, then the skeleton of the screen that is about to appear.
   const boot = new BusyGate();
@@ -27,22 +29,24 @@
   onMount(() => {
     initTheme();
     void init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); });
-    return watchDrops({ tauri: inTauri(), mock: kind === 'mock' });
+    const off = installShortcuts();
+    const stop = watchDrops({ tauri: inTauri(), mock: kind === 'mock' });
+    return () => { off(); stop(); };
   });
+  $effect(() => { document.documentElement.dataset.shell = platform.mode; });
+  const stopName = $derived(app.profiles.find((p) => p.id === ui.confirmStop)?.name ?? '');
+  async function confirmStop() {
+    const id = ui.confirmStop;
+    ui.confirmStop = null;
+    if (id) await actions.stop(id);
+  }
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
 
 {#snippet skel()}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/snippet}
 
 <div class="shell">
-  <div class="strip" data-tauri-drag-region>
-    <Brand drag />
-    {#if !inTauri()}<span class="dev mono" data-tauri-drag-region>{inHttp() ? 'dev server' : 'mock'}</span>{/if}
-    <span class="grow" data-tauri-drag-region></span>
-    <Activity />
-    <UpdatePill />
-    <span class="ver mono" data-tauri-drag-region>{app.version}</span>
-  </div>
+  <TitleBar />
   <div class="body">
     <Rail />
     <main>
@@ -54,13 +58,18 @@
             <button class="btn ghost" type="button" onclick={() => (app.error = null)}>{t('common.dismiss')}</button>
           </div>
         {/if}
-        {#if nav.view === 'home'}<Home />
-        {:else if nav.view === 'library'}<Library />
-        {:else if nav.view === 'profile' && nav.profileId}<ProfilePage id={nav.profileId} />
-        {:else if nav.view === 'discover'}<Lazy load={screens.discover} fallback={skel} />
-        {:else if nav.view === 'servers'}<Lazy load={screens.servers} fallback={skel} />
-        {:else if nav.view === 'stats'}<Lazy load={screens.stats} fallback={skel} />
-        {:else}<Lazy load={screens.settings} fallback={skel} />{/if}
+        {#key nav.view}
+          <div class="view" in:enter>
+            {#if nav.view === 'home'}<Home />
+            {:else if nav.view === 'library'}<Library />
+            {:else if nav.view === 'profile' && nav.profileId}<ProfilePage id={nav.profileId} />
+            {:else if nav.view === 'discover'}<Lazy load={screens.discover} fallback={skel} />
+            {:else if nav.view === 'servers'}<Lazy load={screens.servers} fallback={skel} />
+            {:else if nav.view === 'skins'}<Lazy load={screens.skins} fallback={skel} />
+            {:else if nav.view === 'stats'}<Lazy load={screens.stats} fallback={skel} />
+            {:else}<Lazy load={screens.settings} fallback={skel} />{/if}
+          </div>
+        {/key}
       {/if}
     </main>
   </div>
@@ -75,17 +84,19 @@
   {#if updates.overlay}<Lazy load={dialogs.updateOverlay} />{/if}
   {#if app.ready && app.config && !app.config.firstRunDone}<Lazy load={screens.onboarding} />{/if}
   {#if auth.relogin}<Lazy load={dialogs.reloginDialog} />{/if}
+  {#if ui.shortcuts}<Lazy load={dialogs.shortcutSheet} props={{ onclose: () => (ui.shortcuts = false) }} />{/if}
+  {#if ui.confirmStop}
+    <ConfirmDialog danger title={t('keys.stopTitle', { name: stopName })} body={t('keys.stopBody')} confirmLabel={t('home.stop')} onconfirm={confirmStop} oncancel={() => (ui.confirmStop = null)} />
+  {/if}
   {#if pf.dragging}<DropHint />{/if}
+  <ResizeBorders />
   <Toasts />
 </div>
 
 <style>
   .shell { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 960px; min-height: 600px; background: var(--ink-0); }
-  .strip { position: relative; z-index: 20; height: 32px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--ink-0); border-bottom: 1px solid var(--line-soft); font-size: 12px; color: var(--paper-dim); }
-  .dev { padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; }
-  .grow { flex: 1; }
-  .ver { color: var(--paper-mute); }
   .body { flex: 1; display: flex; min-height: 0; }
   main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); }
+  .view { height: 100%; min-height: 0; }
   .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); border-radius: var(--r-m); color: var(--paper); }
 </style>

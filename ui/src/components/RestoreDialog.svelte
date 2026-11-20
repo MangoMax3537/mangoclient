@@ -56,7 +56,7 @@
   .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; color: var(--tomato); }
   .opts { display: grid; gap: 8px; }
-  .opts label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .opts label { display: flex; gap: 10px; align-items: flex-start; cursor: default; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); }
   .opts label.on { border-color: var(--mango); }
   .opts input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
   .opts span { display: grid; gap: 2px; }

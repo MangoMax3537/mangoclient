@@ -1,11 +1,12 @@
 <script lang="ts">
   // A titled group of settings. The hairline above it is drawn by `.set-sections > * + *` (app.css), never by the section itself.
   import type { Snippet } from 'svelte';
+  import { enter } from '../lib/motion';
   interface Props { id: string; title: string; danger?: boolean; children: Snippet }
   let { id, title, danger = false, children }: Props = $props();
 </script>
 
-<section class="set-sec" class:danger aria-labelledby="sec-{id}">
+<section class="set-sec" class:danger aria-labelledby="sec-{id}" in:enter={{ y: 6, duration: 160 }}>
   <h2 id="sec-{id}" class="eyebrow">{title}</h2>
   <div class="set-rows">{@render children()}</div>
 </section>

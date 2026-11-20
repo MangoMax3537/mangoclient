@@ -74,7 +74,7 @@
     <label class="search">
       <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
       <span class="sr-only">{t('library.searchAll')}</span>
-      <input class="field" type="search" placeholder={t('library.searchAll')} bind:value={query} />
+      <input class="field" type="search" data-search placeholder={t('library.searchAll')} bind:value={query} />
     </label>
     {#if tagList.length}
       <label class="sort">

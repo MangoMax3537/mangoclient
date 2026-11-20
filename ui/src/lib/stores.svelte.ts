@@ -1,4 +1,8 @@
-import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
+import { untrack } from 'svelte';
+import { api as defaultApi, inTauri, toAppError, type Api, type Unlisten } from './api';
+import { NavHistory, type NavSnapshot } from './history';
+import { INITIAL_WIN, type WinState } from './titlebar';
+import { currentPlatform, type Platform } from './platform';
 import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from './auth';
 import { runSteps, type RunStep } from './install';
 import { listenDropped } from './drop';
@@ -36,7 +40,7 @@ export const app = $state({
 
 export const launches = $state<Record<string, LaunchInfo>>({});
 export const consoles = $state<Record<string, ConsoleLine[]>>({});
-export type View = 'home' | 'library' | 'discover' | 'servers' | 'stats' | 'settings' | 'profile';
+export type View = 'home' | 'library' | 'discover' | 'servers' | 'skins' | 'stats' | 'settings' | 'profile';
 export type ProfileTab = 'overview' | 'mods' | 'shaders' | 'resourcepacks' | 'datapacks' | 'media' | 'backups' | 'logs' | 'settings';
 /** The profile tab that lists a content type (a modpack has none: it is an instance of its own). */
 export const tabForType = (type: ProjectType): ProfileTab =>
@@ -93,6 +97,59 @@ export function openProfile(id: string, tab: ProfileTab = 'overview'): void {
 export function openDiscover(profileId: string | null = null, type: ProjectType = 'mod'): void {
   nav.discoverProfile = profileId;
   nav.discoverType = type; nav.view = 'discover';
+}
+
+/* ---- navigation history (back / forward): main views, profile page + tab, discover scope. Dialogs are never recorded. ---- */
+export const navHistory = new NavHistory();
+export const hist = $state({ back: false, forward: false });
+const syncHist = (): void => { hist.back = navHistory.canBack; hist.forward = navHistory.canForward; };
+const snapshotNav = (): NavSnapshot => ({ view: nav.view, profileId: nav.profileId, profileTab: nav.profileTab, discoverProfile: nav.discoverProfile, discoverType: nav.discoverType });
+/** Records the current restorable state (a no-op when it equals the current entry). */
+export const recordNav = (): void => { navHistory.record(snapshotNav()); syncHist(); };
+// Records every change of the restorable fields once per tick (openProfile sets three fields at once = one entry).
+$effect.root(() => {
+  $effect(() => {
+    void snapshotNav();
+    untrack(recordNav);
+  });
+});
+function applyNav(s: NavSnapshot): void {
+  nav.view = s.view as View;
+  if (s.view === 'profile') { nav.profileId = s.profileId; nav.profileTab = s.profileTab as ProfileTab; }
+  if (s.view === 'discover') { nav.discoverProfile = s.discoverProfile; nav.discoverType = s.discoverType as ProjectType; }
+  nav.accounts = false;
+}
+const stillValid = (s: NavSnapshot): boolean => s.view !== 'profile' || app.profiles.some((p) => p.id === s.profileId);
+export function navBack(): boolean { const s = navHistory.back(stillValid); syncHist(); if (s) applyNav(s); return !!s; }
+export function navForward(): boolean { const s = navHistory.forward(stillValid); syncHist(); if (s) applyNav(s); return !!s; }
+export const goView = (v: View): void => { if (v === 'discover') openDiscover(); else nav.view = v; };
+
+/* ---- shell: platform, window state, transient UI (shortcut sheet, stop confirm) ---- */
+export const platform: Platform = currentPlatform(inTauri());
+export const win = $state<WinState>({ ...INITIAL_WIN });
+export const ui = $state({
+  /** The keyboard shortcut sheet is open. */
+  shortcuts: false,
+  /** Instance whose game the user asked to stop with the keyboard (a confirm is shown first). */
+  confirmStop: null as string | null,
+  /** UI preference (localStorage): Home crossfades through the background pool while the instance background is `auto`. */
+  cycleBackgrounds: true,
+});
+const CYCLE_KEY = 'mango-cycle-bg';
+try { ui.cycleBackgrounds = globalThis.localStorage?.getItem(CYCLE_KEY) !== '0'; } catch { /* storage may be unavailable */ }
+export function setCycleBackgrounds(on: boolean): void {
+  ui.cycleBackgrounds = on;
+  try { globalThis.localStorage?.setItem(CYCLE_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+}
+
+/** Bumped per account when its skin or capes changed (`skin:updated`); the Skins page reloads on it. */
+export const skinRev = $state<Record<string, number>>({});
+
+/* ---- panorama pool (one extracted set per installed version) ---- */
+export const panoramaPool = $state({ sets: [] as PanoramaSet[], loaded: false });
+export async function loadPanoramaPool(): Promise<void> {
+  try { panoramaPool.sets = await currentApi.panoramaPool(); } catch { /* keep the previous pool */ }
+  panoramaPool.loaded = true;
 }
 
 /* ---- install flow (picker, dependency dialog, modpack dialog, update preview) ---- */
@@ -169,7 +226,7 @@ export const auth = $state({
   signingIn: false,
   error: null as LoginErrorInfo | null,
   /** Set when game_launch failed with needsRelogin; the dialog retries this launch after a successful login. */
-  relogin: null as { profileId: string; quickJoin?: string } | null,
+  relogin: null as { profileId: string; quickJoin?: string; /** Retried after the login instead of a launch (the Skins page). */ retry?: () => void } | null,
   /** The "login lasts only this session" notice was dismissed (in memory only, so it returns next start). */
   noticeDismissed: false,
   refreshing: {} as Record<string, boolean>,
@@ -282,8 +339,11 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
     api.listen('accounts:changed', () => { void refreshAccounts(); }),
     api.listen('blocks:status', applyBlocksStatus),
-    api.listen('panorama:ready', (e) => { void loadPanorama(e.profileId, true); }),
+    api.listen('panorama:ready', (e) => { if (e.profileId) void loadPanorama(e.profileId, true); else void loadPanoramaPool(); }),
+    api.listen('skin:updated', (e) => { skinRev[e.uuid] = (skinRev[e.uuid] ?? 0) + 1; void refreshAccounts(); }),
+    api.listen('window:state', (e) => { Object.assign(win, e); }),
   ]);
+  void api.windowIsMaximized().then((m) => { win.maximized = !!m; }, () => {});
   try {
     applyAppState(await api.appState());
     app.error = null;
@@ -294,6 +354,7 @@ export async function init(api: Api = defaultApi): Promise<void> {
   }
   app.ready = true;
   void initBlocks();
+  void loadPanoramaPool();
 }
 
 export function applyInstallProgress(e: InstallProgressEvent): void {
@@ -365,7 +426,9 @@ export function resetStores(): void {
   for (const k of Object.keys(consoles)) delete consoles[k];
   nav.view = 'home'; nav.newProfile = false; nav.newProfilePrefill = null; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
   nav.discoverProfile = null; nav.discoverType = 'mod'; nav.iconPicker = null; nav.backgroundPicker = null; nav.contentQuery = null;
-  blocks.status = null; blocks.requested = false; panoramaAsked.clear();
+  navHistory.clear(); syncHist(); ui.shortcuts = false; ui.confirmStop = null;
+  blocks.status = null; blocks.requested = false; panoramaAsked.clear(); panoramaPool.sets = []; panoramaPool.loaded = false;
+  for (const k of Object.keys(skinRev)) delete skinRev[k];
   for (const k of Object.keys(panoramas)) delete panoramas[k];
   toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
   for (const k of Object.keys(installs)) delete installs[k];
@@ -455,7 +518,7 @@ export const actions = {
     const a = await actions.signInMicrosoft();
     if (!a || auth.relogin !== pending) return; // cancelled, failed (error stays visible) or dialog closed meanwhile
     auth.relogin = null;
-    await actions.play(pending.profileId, pending.quickJoin);
+    if (pending.retry) pending.retry(); else await actions.play(pending.profileId, pending.quickJoin);
   },
   openExternal(url: string) {
     if (!isAllowedExternalUrl(url)) return Promise.resolve();

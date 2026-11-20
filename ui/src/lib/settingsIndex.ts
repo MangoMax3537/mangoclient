@@ -35,6 +35,7 @@ const e = (scope: SettingsScope, section: string, id: string, label: Key, aliase
 export const SETTINGS_INDEX: readonly SettingEntry[] = [
   /* ---- launcher settings ---- */
   e('app', 'look', 'theme', 'settings.theme', ['theme', 'design', 'darkmode', 'dark mode', 'dunkel', 'dunkelmodus', 'hell', 'light', 'light mode', 'farbschema', 'appearance', 'darstellung', 'color scheme', 'nachtmodus'], 'settings.theme.hint'),
+  e('app', 'look', 'cycleBg', 'settings.cycleBg', ['hintergrund', 'wallpaper', 'wechseln', 'cycle', 'slideshow', 'diashow', 'background', 'home', 'panorama', 'rotate', 'überblenden', 'crossfade', 'animation'], 'settings.cycleBgHint'),
   e('app', 'launcher', 'language', 'settings.language', ['language', 'sprache', 'locale', 'deutsch', 'english', 'englisch', 'german', 'translation', 'übersetzung']),
   e('app', 'launcher', 'keepOpen', 'settings.keepOpen', ['launcher', 'fenster', 'window', 'hide', 'ausblenden', 'minimieren', 'close', 'schließen', 'tray'], 'settings.keepOpenHint'),
   e('app', 'launcher', 'telemetry', 'settings.telemetry', ['telemetry', 'telemetrie', 'ping', 'analytics', 'statistik', 'privacy', 'datenschutz', 'tracking', 'anonym', 'anonymous', 'nutzungsdaten'], 'settings.telemetryHint'),
@@ -56,6 +57,8 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   e('instance', 'game', 'version', 'psettings.version', ['loader', 'fabric', 'forge', 'quilt', 'neoforge', 'version', 'minecraft', 'mc', 'snapshot', 'release', 'wechseln', 'change', 'modpack', 'mrpack']),
   e('instance', 'game', 'ram', 'new.ram', ['ram', 'memory', 'speicher', 'arbeitsspeicher', 'heap', 'xmx', 'gb', 'gigabyte'], 'ram.hint.instance'),
   e('instance', 'game', 'javaArgs', 'settings.javaArgs', ['java', 'jvm', 'args', 'arguments', 'argumente', 'flags', 'runtime', 'parameter', 'xx'], 'psettings.argsHint'),
+  e('instance', 'game', 'java', 'psettings.java', ['java', 'jre', 'jdk', 'runtime', 'laufzeit', 'temurin', 'pfad', 'path', 'installieren', 'install', 'automatisch', 'automatic', 'auto', 'version', 'custom', 'eigener pfad', 'oracle', 'openjdk'], 'psettings.java.hint'),
+  e('instance', 'game', 'window', 'psettings.window', ['fenster', 'window', 'fullscreen', 'vollbild', 'auflösung', 'resolution', 'größe', 'size', 'width', 'height', 'breite', 'höhe', 'pixel', 'maximiert', 'maximized', '1920', '1280', '854', 'bildschirm', 'display'], 'psettings.window.hint'),
   e('instance', 'game', 'mango', 'psettings.mango', ['mangoconfig', 'mango', 'config', 'mod', 'ingame', 'in game', 'einstellungen im spiel']),
   e('instance', 'danger', 'delete', 'psettings.deleteTitle', ['delete', 'löschen', 'entfernen', 'remove', 'danger', 'gefahr', 'gefahrenbereich', 'papierkorb', 'trash'], 'psettings.deleteHint'),
 ];

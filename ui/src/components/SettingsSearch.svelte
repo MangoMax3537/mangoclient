@@ -51,7 +51,7 @@
   <label class="box">
     <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
     <span class="sr-only">{t('settings.search.label')}</span>
-    <input class="field" type="text" role="combobox" autocomplete="off" spellcheck="false" placeholder={t('settings.search.placeholder')}
+    <input class="field" type="text" data-search role="combobox" autocomplete="off" spellcheck="false" placeholder={t('settings.search.placeholder')}
       aria-expanded={typing && results.length > 0} aria-controls="{uid}-list" aria-activedescendant={typing && results.length ? `${uid}-${active}` : undefined}
       bind:value={query} onkeydown={key} />
     {#if typing}<button class="btn ghost ic" type="button" aria-label={t('settings.search.clear')} onclick={clear}><XIcon weight="bold" size={14} aria-hidden="true" /></button>{/if}

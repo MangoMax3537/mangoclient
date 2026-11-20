@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import Skeleton from '../skeleton/Skeleton.svelte';
   import { BusyGate } from '../../lib/loadState.svelte';
   import SwapIcon from 'phosphor-svelte/lib/SwapIcon';
@@ -20,8 +20,11 @@
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
   import type { Key } from '../../lib/i18n';
   import { fmtDuration, fmtRelative } from '../../lib/format';
+  import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
   import { actions, app, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
-  import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
+  import { toAppError } from '../../lib/api';
+  import { WINDOW_PRESETS, checkInstanceSize, javaLabel, missingMajor, normalizeJavaPath, requiredJavaMajor, windowPatch } from '../../lib/javaHint';
+  import type { JavaInfo, Loader, LoaderVersion, ProfileView, VersionManifest, WindowSettings } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
   let matches = $state<Set<string> | null>(null);
@@ -60,6 +63,77 @@
     try { await actions.deleteProfile(profile.id); toast(t('psettings.deleted', { name: profile.name }), 'ok'); }
     catch (e) { toast(errorText(e), 'error'); deleting = false; confirmDelete = false; }
   }
+
+  /* ---- Java: a runtime from java_list, automatic (null) or a custom path validated by Rust ---- */
+  const CUSTOM = '__custom';
+  let javas = $state<JavaInfo[] | null>(null);
+  let javaErr = $state('');
+  let customText = $state(untrack(() => profile.javaPath ?? ''));
+  let customMode = $state(false);
+  let installing = $state<{ major: number; fraction: number } | null>(null);
+  let unlistenJava: (() => void) | null = null;
+  const needMajor = $derived(requiredJavaMajor(profile.mcVersion));
+  const needInstall = $derived(javas !== null && missingMajor(javas, needMajor));
+  /** A saved path that no listed runtime has is a custom path; the list may still be loading (then it is not judged yet). */
+  const isCustom = $derived(customMode || (profile.javaPath !== null && javas !== null && !javas.some((j) => j.path === profile.javaPath)));
+  const javaValue = $derived(isCustom ? CUSTOM : profile.javaPath ?? '');
+  const loadJava = () => getApi().javaList().then((l) => (javas = l), () => { javas = []; });
+  onMount(() => {
+    void loadJava();
+    void getApi().listen('java:progress', (e) => { if (installing && e.major === installing.major) installing = { major: e.major, fraction: e.total > 0 ? Math.min(1, e.done / e.total) : 0 }; }).then((u) => { unlistenJava = u; });
+  });
+  onDestroy(() => unlistenJava?.());
+  async function saveJava(path: string | null) {
+    javaErr = '';
+    try {
+      await actions.updateProfile(profile.id, { javaPath: path });
+      saved = true; clearTimeout(savedTimer); savedTimer = setTimeout(() => (saved = false), 1600);
+      void loadJava();
+    } catch (e) {
+      javaErr = toAppError(e).code.startsWith('java.') ? errorText(e) : errorText(e);
+    }
+  }
+  function pickJava(v: string) {
+    if (v === CUSTOM) { customMode = true; javaErr = ''; return; }
+    customMode = false; customText = ''; javaErr = '';
+    void saveJava(v === '' ? null : v);
+  }
+  function commitCustom() {
+    const p = normalizeJavaPath(customText);
+    if (p === profile.javaPath) return;
+    if (p === null) { customMode = false; void saveJava(null); return; }
+    void saveJava(p);
+  }
+  async function installJava() {
+    if (needMajor === null || installing) return;
+    installing = { major: needMajor, fraction: 0 };
+    try {
+      await getApi().javaInstall({ major: needMajor });
+      await loadJava();
+      toast(t('psettings.java.installed', { major: needMajor }), 'ok');
+    } catch (e) { toast(errorText(e), 'error'); }
+    installing = null;
+  }
+
+  /* ---- game window: default | custom size | fullscreen; saved debounced, validated like Rust ---- */
+  const win0 = untrack(() => profile.window);
+  let wMode = $state<WindowSettings['mode']>(win0.mode);
+  let wW = $state(String(win0.width ?? app.config?.width ?? 1280));
+  let wH = $state(String(win0.height ?? app.config?.height ?? 720));
+  const wCheck = $derived(checkInstanceSize(wW, wH));
+  let wTimer: ReturnType<typeof setTimeout> | undefined;
+  function saveWindow(mode: WindowSettings['mode'], size?: { width: number; height: number }) {
+    clearTimeout(wTimer);
+    wTimer = setTimeout(() => save({ window: windowPatch(mode, size) }), mode === 'size' ? 450 : 0);
+  }
+  function setMode(m: string) {
+    wMode = m as WindowSettings['mode'];
+    if (wMode === 'size') { const c = checkInstanceSize(wW, wH); if (c.ok) saveWindow('size', c.value); }
+    else saveWindow(wMode);
+  }
+  function onDims() { if (wMode === 'size' && wCheck.ok) saveWindow('size', wCheck.value); }
+  function preset(w: number, h: number) { wW = String(w); wH = String(h); saveWindow('size', { width: w, height: h }); }
+  onDestroy(() => { clearTimeout(wTimer); clearTimeout(timer); });
 
   /* ---- change version dialog ---- */
   let manifest = $state<VersionManifest | null>(null);
@@ -155,6 +229,62 @@
           </SettingRow>
         {/if}
 
+        {#if show('java')}
+          <SettingRow id="java" stack label={t('psettings.java')} hint={needMajor !== null ? t('psettings.java.needs', { mc: profile.mcVersion, major: needMajor }) : t('psettings.java.hint')} forId="ps-java">
+            <select id="ps-java" class="field" value={javaValue} disabled={javas === null || locked} onchange={(e) => pickJava(e.currentTarget.value)}>
+              <option value="">{t('psettings.java.auto')}</option>
+              {#each javas ?? [] as j (j.path)}<option value={j.path}>{javaLabel(j)}</option>{/each}
+              <option value={CUSTOM}>{t('psettings.java.custom')}</option>
+            </select>
+            {#snippet extra()}
+              {#if isCustom}
+                <div class="cust">
+                  <input id="ps-java-path" class="field mono" bind:value={customText} spellcheck="false" autocomplete="off" aria-label={t('psettings.java.path')} aria-invalid={!!javaErr} aria-describedby={javaErr ? 'ps-java-err' : undefined}
+                    placeholder={t('psettings.java.pathPlaceholder')} onblur={commitCustom} onkeydown={(e) => e.key === 'Enter' && commitCustom()} />
+                </div>
+              {/if}
+              {#if javaErr}<div id="ps-java-err" class="err" role="alert">{javaErr}</div>{/if}
+              {#if javaValue === '' && needInstall && needMajor !== null}
+                <div class="jinst">
+                  <span class="hint">{t('psettings.java.missing', { major: needMajor })}</span>
+                  {#if installing}
+                    <span class="jbar" role="progressbar" aria-label={t('psettings.java.installing', { major: installing.major })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(installing.fraction * 100)}><span style:transform="scaleX({installing.fraction})"></span></span>
+                    <span class="hint mono">{Math.round(installing.fraction * 100)}%</span>
+                  {:else}
+                    <button class="btn small" type="button" disabled={locked} onclick={installJava}><DownloadSimpleIcon weight="bold" size={14} aria-hidden="true" />{t('psettings.java.install', { major: needMajor })}</button>
+                  {/if}
+                </div>
+              {/if}
+            {/snippet}
+          </SettingRow>
+        {/if}
+
+        {#if show('window')}
+          <SettingRow id="window" stack label={t('psettings.window')} hint={t('psettings.window.hint')}>
+            <Seg label={t('psettings.window')} value={wMode} idPrefix="pswin"
+              options={[{ value: 'default', label: t('psettings.window.default') }, { value: 'size', label: t('psettings.window.size') }, { value: 'fullscreen', label: t('psettings.window.fullscreen') }]}
+              onchange={setMode} />
+            {#snippet extra()}
+              {#if wMode === 'default'}
+                <span class="hint">{t('psettings.window.defaultNow', { w: app.config?.fullscreen ? t('psettings.window.fullscreen') : `${app.config?.width ?? 1280} × ${app.config?.height ?? 720}` })}</span>
+              {:else if wMode === 'size'}
+                <div class="dims">
+                  <input class="field mono" inputmode="numeric" autocomplete="off" aria-label={t('settings.width')} aria-invalid={!wCheck.width} bind:value={wW} oninput={onDims} />
+                  <span class="x" aria-hidden="true">&times;</span>
+                  <input class="field mono" inputmode="numeric" autocomplete="off" aria-label={t('settings.height')} aria-invalid={!wCheck.height} bind:value={wH} oninput={onDims} />
+                </div>
+                <div class="presets" role="group" aria-label={t('psettings.window.presets')}>
+                  {#each WINDOW_PRESETS as [pw, ph] (pw)}
+                    <button class="btn small mono" class:cur={wW === String(pw) && wH === String(ph)} type="button" onclick={() => preset(pw, ph)}>{pw}&times;{ph}</button>
+                  {/each}
+                </div>
+                {#if !wCheck.ok}<div class="err" role="alert">{t('psettings.window.invalid')}</div>{/if}
+              {/if}
+              <span class="hint">{t('psettings.window.noMax')}</span>
+            {/snippet}
+          </SettingRow>
+        {/if}
+
         {#if show('mango')}
           <SettingRow id="mango" label={t('psettings.mango')} hint={t('psettings.mangoHint', { state: app.config?.mangoConfig ? t('psettings.on') : t('psettings.off') })}>
             <Seg label={t('psettings.mango')} value={mc3} idPrefix="psmc"
@@ -218,6 +348,15 @@
   .top { display: grid; gap: 4px; }
   .status { height: 18px; font-size: 13px; }
   .ok { color: var(--leaf); }
+  .cust { display: grid; }
+  .jinst { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .jbar { width: 160px; height: 6px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
+  .jbar span { display: block; height: 100%; background: var(--mango); transform-origin: left; transition: transform var(--dur) var(--ease); }
+  .dims { display: flex; gap: 8px; align-items: center; }
+  .dims .field { width: 96px; text-align: center; }
+  .x { color: var(--paper-mute); }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .presets .cur { border-color: var(--accent-fill); }
   .chg { display: grid; gap: 6px; }
   .chg label { margin-top: 8px; font-weight: 500; }
 </style>

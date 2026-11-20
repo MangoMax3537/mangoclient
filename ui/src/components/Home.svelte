@@ -11,7 +11,7 @@
   import Console from './Console.svelte';
   import ProfileMenu from './ProfileMenu.svelte';
   import QuickJoin from './QuickJoin.svelte';
-  import PanoramaBackground from './PanoramaBackground.svelte';
+  import HomeBackground from './HomeBackground.svelte';
   import Spark from './Spark.svelte';
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
@@ -56,7 +56,7 @@
 <div class="home">
   {#if p && info}
     <section class="hero on-stage" aria-labelledby="hero-h">
-      <PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />
+      {#key p.id}<HomeBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />{/key}
       <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
       <div class="content">
         <div class="idrow">

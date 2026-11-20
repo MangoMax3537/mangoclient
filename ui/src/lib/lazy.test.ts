@@ -28,9 +28,9 @@ describe('memo', () => {
 });
 
 describe('lazy-load boundaries', () => {
-  const HEAVY_SCREENS = ['Discover', 'Servers', 'Stats', 'Settings', 'Onboarding', 'NewProfile'];
+  const HEAVY_SCREENS = ['Discover', 'Servers', 'Skins', 'Stats', 'Settings', 'Onboarding', 'NewProfile'];
   const HEAVY_DIALOGS = ['InstallFlow', 'IconPicker', 'BackgroundPicker', 'ImportDialog', 'ExportDialog', 'DiagnosticsDialog', 'CrashPanel', 'ReloginDialog', 'UpdateOverlay',
-    'ProjectDrawer', 'InstancePicker', 'DependencyDialog', 'ModpackDialog', 'UpdatePreview', 'RunDialog'];
+    'ShortcutSheet', 'ProjectDrawer', 'InstancePicker', 'DependencyDialog', 'ModpackDialog', 'UpdatePreview', 'RunDialog'];
   const TABS = ['ContentTab', 'Media', 'Backups', 'Logs', 'ProfileSettings'];
   const all = [...HEAVY_SCREENS, ...HEAVY_DIALOGS, ...TABS];
 
@@ -43,7 +43,7 @@ describe('lazy-load boundaries', () => {
   it('the dialogs opened from the stores and App are only reached through the registry', () => {
     const app = src('App.svelte');
     for (const k of ['importDialog', 'exportDialog', 'diagnosticsDialog', 'crashPanel', 'iconPicker', 'backgroundPicker']) expect(app).toContain(`dialogs.${k}`);
-    for (const k of ['discover', 'servers', 'stats', 'settings', 'onboarding']) expect(app).toContain(`screens.${k}`);
+    for (const k of ['discover', 'servers', 'skins', 'stats', 'settings', 'onboarding']) expect(app).toContain(`screens.${k}`);
   });
   it('the registry covers every heavy part exactly once and each loader resolves to a component', async () => {
     const regs: Record<string, () => Promise<ComponentModule>> = { ...screens, ...dialogs, ...tabs };

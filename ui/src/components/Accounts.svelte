@@ -111,7 +111,7 @@
   .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--ink-3); color: var(--paper-dim); font-size: 12px; font-weight: 500; line-height: 1; }
   .badge.use { color: var(--mango); border-color: rgba(255, 173, 50, 0.4); }
   .badge.warn { color: var(--mango); border-color: rgba(255, 173, 50, 0.5); background: rgba(255, 173, 50, 0.08); }
-  button.badge.act { cursor: pointer; color: var(--mango-ink); background: var(--mango); border-color: var(--mango); font-weight: 700; }
+  button.badge.act { cursor: default; color: var(--mango-ink); background: var(--mango); border-color: var(--mango); font-weight: 700; }
   button.badge.act:hover:not(:disabled) { background: #ffbd57; }
   button.badge.act:disabled { opacity: 0.5; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }

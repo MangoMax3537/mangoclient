@@ -101,7 +101,7 @@
     <label class="search">
       <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
       <span class="sr-only">{t(k('content.search'))}</span>
-      <input class="field" type="search" placeholder={t(k('content.search'))} bind:value={query} />
+      <input class="field" type="search" data-search placeholder={t(k('content.search'))} bind:value={query} />
     </label>
     <button class="btn" type="button" onclick={openFolder}><FolderOpenIcon weight="bold" size={16} aria-hidden="true" />{t('content.openFolder')}</button>
     <button class="btn accent" type="button" onclick={add}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t(k('content.add'))}</button>

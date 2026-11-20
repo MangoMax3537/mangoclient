@@ -1,6 +1,6 @@
 // Part 2 of the mock backend: content, discover, servers, media, logs, stats, storage, updates (docs/ipc.md Part 2).
 import type { Api } from './api';
-import { fallbackImage } from './fallbackImage';
+import { brandIcon, fallbackImage } from './fallbackImage';
 import { CONTENT, DEPS, FULL_PROFILE, rng } from './mockData';
 import {
   accepts, catalogFor, compat, hash, metaOf, packMeta, rowOfSlug, sizeOf, typeOfSlug, UPDATE_NEW_DEPS,
@@ -51,13 +51,13 @@ function toHit(projectId: string, now: number): ProjectHit {
 const SERVERS: ServerEntry[] = [
   { id: 'srv-mango', name: 'MangoMC Network', address: 'play.mangomc.example', partner: true, starred: true, iconUrl: null },
   { id: 'srv-bedwars', name: 'Bedwars Arena', address: 'bw.arena.example', partner: true, starred: false, iconUrl: null },
-  { id: 'srv-hollow', name: 'Iron Hollow SMP', address: 'smp.ironhollow.example:25570', partner: false, starred: true, iconUrl: null },
+  { id: 'srv-hollow', name: 'Iron Hollow SMP', address: 'smp.ironhollow.example:25570', partner: false, starred: true, iconUrl: brandIcon(128) },
   { id: 'srv-skyblock', name: 'Skyblock Realms', address: 'sky.realms.example', partner: false, starred: false, iconUrl: null },
   { id: 'srv-creative', name: 'Creative Plots', address: 'plots.example.net', partner: false, starred: false, iconUrl: null },
   { id: 'srv-old', name: 'Old Survival 1.8', address: '192.168.1.40', partner: false, starred: false, iconUrl: null },
 ];
 const STATUS: Record<string, ServerStatus> = {
-  'srv-mango': { id: 'srv-mango', online: true, ping: 38, motd: '§6§lMangoMC §r§7Bedwars, Skyblock, Survival', players: { online: 1284, max: 5000 }, version: '1.21.4', iconUrl: null },
+  'srv-mango': { id: 'srv-mango', online: true, ping: 38, motd: '§6§lMangoMC §r§7Bedwars, Skyblock, Survival', players: { online: 1284, max: 5000 }, version: '1.21.4', iconUrl: brandIcon(128) },
   'srv-bedwars': { id: 'srv-bedwars', online: true, ping: 61, motd: '§aSeason 14 started! Queue now.', players: { online: 342, max: 1000 }, version: '1.8.9 - 1.21.4', iconUrl: null },
   'srv-hollow': { id: 'srv-hollow', online: true, ping: 14, motd: 'Iron Hollow, whitelisted friends only', players: { online: 3, max: 12 }, version: '1.21.4', iconUrl: null },
   'srv-skyblock': { id: 'srv-skyblock', online: false, ping: null, motd: '', players: null, version: null, iconUrl: null },

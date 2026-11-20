@@ -117,13 +117,13 @@
   .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .head p { margin: 0; }
   .list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
-  .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; background: var(--ink-2); transition: background var(--dur) var(--ease); }
+  .row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); cursor: default; background: var(--ink-2); transition: background var(--dur) var(--ease); }
   .row:last-child { border-bottom: 0; }
   .row:hover { background: var(--ink-3); }
   .row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
   .row.on { background: color-mix(in srgb, var(--accent-fill) 12%, var(--ink-2)); }
   /* dark: not selectable. Image and text dimmed, the reason stays readable. */
-  .row.dark { cursor: not-allowed; background: var(--ink-1); }
+  .row.dark { cursor: default; background: var(--ink-1); }
   .row.dark:hover { background: var(--ink-1); }
   .row.dark :global(.tile) { opacity: 0.4; filter: grayscale(1); }
   .row.dark .who { opacity: 0.6; }

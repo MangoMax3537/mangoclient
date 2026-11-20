@@ -3,6 +3,7 @@
   import BooksIcon from 'phosphor-svelte/lib/BooksIcon';
   import CompassIcon from 'phosphor-svelte/lib/CompassIcon';
   import HardDrivesIcon from 'phosphor-svelte/lib/HardDrivesIcon';
+  import TShirtIcon from 'phosphor-svelte/lib/TShirtIcon';
   import ChartBarIcon from 'phosphor-svelte/lib/ChartBarIcon';
   import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import Tile from './Tile.svelte';
@@ -11,7 +12,8 @@
   import Skeleton from './skeleton/Skeleton.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
   import { tip } from '../lib/tooltip';
-  import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
+  import { shortcutLabel, type ShortcutAction } from '../lib/keybinds';
+  import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, platform, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
 
   const recent = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 5));
   const acc = $derived(selectedAccount());
@@ -21,19 +23,21 @@
   const cred = $derived(!acc || acc.type !== 'microsoft' ? null : accountNeedsLogin(acc) ? 'login' : (acc.credentialsLocked || acc.credentialsPersisted === false) ? 'warn' : 'ok');
   const credText = $derived(cred === 'login' ? t('rail.cred.login') : cred === 'warn' ? t('rail.cred.warn') : cred === 'ok' ? t('rail.cred.ok') : '');
   const items = $derived([
-    { v: 'home', label: t('nav.home'), icon: HouseIcon, go: () => (nav.view = 'home') },
-    { v: 'library', label: t('nav.library'), icon: BooksIcon, go: () => (nav.view = 'library') },
-    { v: 'discover', label: t('nav.discover'), icon: CompassIcon, go: () => openDiscover() },
-    { v: 'servers', label: t('nav.servers'), icon: HardDrivesIcon, go: () => (nav.view = 'servers') },
-    { v: 'stats', label: t('nav.stats'), icon: ChartBarIcon, go: () => (nav.view = 'stats') },
-  ] as const);
+    { v: 'home', a: 'home', label: t('nav.home'), icon: HouseIcon, go: () => (nav.view = 'home') },
+    { v: 'library', a: 'library', label: t('nav.library'), icon: BooksIcon, go: () => (nav.view = 'library') },
+    { v: 'discover', a: 'discover', label: t('nav.discover'), icon: CompassIcon, go: () => openDiscover() },
+    { v: 'servers', a: 'servers', label: t('nav.servers'), icon: HardDrivesIcon, go: () => (nav.view = 'servers') },
+    { v: 'skins', a: 'skins', label: t('nav.skins'), icon: TShirtIcon, go: () => (nav.view = 'skins') },
+    { v: 'stats', a: 'stats', label: t('nav.stats'), icon: ChartBarIcon, go: () => (nav.view = 'stats') },
+  ] as { v: string; a: ShortcutAction; label: string; icon: typeof HouseIcon; go: () => void }[]);
+  const withKey = (label: string, a: ShortcutAction): string => `${label} (${shortcutLabel(a, platform.mac)})`;
 </script>
 
 <nav class="rail" aria-label={t('nav.main')}>
   <ul class="top">
     {#each items as it (it.v)}
       <li class:on={nav.view === it.v}>
-        <button type="button" class="nav" use:tip={it.label} aria-current={nav.view === it.v ? 'page' : undefined} aria-label={it.label} onclick={it.go}>
+        <button type="button" class="nav" use:tip={withKey(it.label, it.a)} aria-current={nav.view === it.v ? 'page' : undefined} aria-label={it.label} onclick={it.go}>
           <it.icon weight="bold" size={22} aria-hidden="true" />
         </button>
       </li>
@@ -68,7 +72,7 @@
       {#if nav.accounts}<Accounts />{/if}
     </li>
     <li class:on={nav.view === 'settings'}>
-      <button type="button" class="nav" use:tip={t('nav.settings')} aria-current={nav.view === 'settings' ? 'page' : undefined} aria-label={t('nav.settings')} onclick={() => (nav.view = 'settings')}><GearIcon weight="bold" size={22} aria-hidden="true" /></button>
+      <button type="button" class="nav" use:tip={withKey(t('nav.settings'), 'settings')} aria-current={nav.view === 'settings' ? 'page' : undefined} aria-label={t('nav.settings')} onclick={() => (nav.view = 'settings')}><GearIcon weight="bold" size={22} aria-hidden="true" /></button>
     </li>
   </ul>
 </nav>

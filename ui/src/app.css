@@ -91,8 +91,13 @@ body {
   -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; background: none; border: 0; padding: 0; }
-button:disabled { cursor: not-allowed; }
+/* native feel: controls use the default arrow (only real links get the hand), chrome is not selectable, text fields and content are */
+a { cursor: pointer; }
+button, [role='button'], [role='tab'], [role='radio'], summary, select, label { cursor: default; }
+button, .rail, nav, header, [role='tablist'], [role='radiogroup'], .btn, .chip, .eyebrow, .tooltip { -webkit-user-select: none; user-select: none; }
+img { -webkit-user-drag: none; }
+button { cursor: default; background: none; border: 0; padding: 0; }
+button:disabled { cursor: default; }
 h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; letter-spacing: -0.015em; }
 .mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 0; }
 .px { image-rendering: pixelated; }
@@ -168,7 +173,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
 .field[aria-invalid='true'] { border-color: var(--tomato); }
 .field::placeholder { color: var(--paper-mute); opacity: 1; }
 select.field {
-  appearance: none; padding-right: 32px; cursor: pointer;
+  appearance: none; padding-right: 32px; cursor: default;
   background-image: linear-gradient(45deg, transparent 50%, var(--paper-dim) 50%), linear-gradient(135deg, var(--paper-dim) 50%, transparent 50%);
   background-position: calc(100% - 17px) 15px, calc(100% - 12px) 15px; background-size: 5px 5px; background-repeat: no-repeat;
 }
@@ -205,7 +210,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-fill); 
 .set-row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
 .set-row .txt { display: grid; gap: 2px; min-width: 0; }
 .set-row .txt label, .set-row .txt .lbl { font-weight: 500; }
-label.set-row { cursor: pointer; }
+label.set-row { cursor: default; }
 /* the settings search jumps here: a pulse by opacity only */
 .set-flash { position: relative; }
 .set-flash::after { content: ''; position: absolute; inset: 0 -8px; border: 2px solid var(--accent-fill); border-radius: var(--r-m); pointer-events: none; animation: set-flash 1.4s ease-out both; }
@@ -230,7 +235,8 @@ label.set-row { cursor: pointer; }
 }
 .tooltip[data-open='true'] { opacity: 1; transform: none; }
 .tooltip[data-side='top'] { transform: translateY(4px); }
-.tooltip[data-side='top'][data-open='true'] { transform: none; }
+.tooltip[data-side='top'][data-open='true'], .tooltip[data-side='bottom'][data-open='true'] { transform: none; }
+.tooltip[data-side='bottom'] { transform: translateY(-4px); }
 
 /* ---- skeletons: flat grey shapes, opacity pulse only (CLAUDE.md "Skeleton loading") ----------- */
 /* --skel is derived from the surface tokens (paper over ink-0); the mix is tuned so the shape has >= 3:1 against ink-0 and ink-2 in both

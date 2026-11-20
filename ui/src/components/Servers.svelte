@@ -5,6 +5,7 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import SealCheckIcon from 'phosphor-svelte/lib/SealCheckIcon';
   import Tile from './Tile.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
   import ServerCardSkeleton from './skeleton/ServerCardSkeleton.svelte';
   import { BusyGate, LOAD_TIMEOUT_MS } from '../lib/loadState.svelte';
   import LoadError from './LoadError.svelte';
@@ -69,8 +70,14 @@
     <ul class="grid">
       {#each sorted as s (s.id)}
         {@const st = servers.status[s.id]}
+        {@const icon = st?.iconUrl ?? s.iconUrl}
         <li class="card" class:off={st && !st.online}>
-          <Tile kind="server" id={s.id} src={s.iconUrl} size={64} radius={8} />
+          <!-- icon: the stored favicon at once, the one a ping returns as soon as it arrives; the fallback only when there is no icon at all -->
+          {#if !icon && !st && !pingLate}
+            <span class="slot">{#if pingGate.show}<Skeleton variant="box" w={64} h={64} radius={8} />{/if}</span>
+          {:else}
+            <Tile kind="server" id={s.id} src={icon} size={64} radius={8} />
+          {/if}
           <div class="info">
             <div class="l1">
               <b class="nm">{s.name}</b>
@@ -129,6 +136,7 @@
   .dot.on { background: var(--leaf); }
   .dot.unk { background: var(--paper-mute); }
   .ic { display: inline-flex; }
+  .slot { display: block; width: 64px; height: 64px; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

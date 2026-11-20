@@ -6,6 +6,7 @@ import { createContentApi } from './mockContent';
 import { mockDevFromSearch, withDevControls, type MockDevOptions } from './mockDev';
 import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
 import { createWorldsMock } from './mockWorlds';
+import { createSkinsMock } from './mockSkins';
 import { createPortabilityMock, MOCK_CRASHES, type MockCrash, type PortabilityDev } from './mockPortability';
 import { checkGroup, checkTag } from './portability';
 import { fallbackImage } from './fallbackImage';
@@ -41,6 +42,9 @@ export interface MockOptions {
   exportError?: string;
   /** Part 9: simulate `files:dropped` shortly after the app listens (`?mockDrop=mrpack|curseforge|prism|bad`; a CurseForge zip is rejected with import.unsupported_curseforge). */
   drop?: string;
+  /** Part 13: `?mockSkinError=<code>` makes uploads, username copies and cape changes fail; `?mockCapes=0` = an account without capes. */
+  skinError?: string;
+  noCapes?: boolean;
   /** Latency / slow / fail controls (`?mockLatency`, `?mockDelay`, `?mockSlow`, `?mockFail`). Absent = no wrapping (unit tests). */
   dev?: MockDevOptions;
 }
@@ -70,6 +74,8 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     importError: q.get('mockImportError') || undefined,
     exportError: q.get('mockExportError') || undefined,
     drop: q.has('mockDrop') ? q.get('mockDrop') || 'mrpack' : undefined,
+    skinError: q.get('mockSkinError') || undefined,
+    noCapes: q.get('mockCapes') === '0',
     dev: mockDevFromSearch(search),
   };
 }
@@ -145,6 +151,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now, opts);
+  setTimeout(() => skinsMock.init(), 0);
   config.selectedProfile = profiles[0].id;
   config.selectedAccount = accounts[0].uuid;
   const running = new Set<string>(opts.running ? [profiles[0].id] : []);
@@ -183,6 +190,16 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     scale, emit, emitDrop, profiles: () => profiles, find, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); },
     crash: opts.crash, importError: opts.importError, exportError: opts.exportError,
   });
+  const skinsMock = createSkinsMock({
+    scale, emit, accounts: () => accounts, error: opts.skinError, noCapes: opts.noCapes,
+    setHead: (id, url) => { accounts = accounts.map((a) => (a.uuid === id ? { ...a, headUrl: url } : a)); },
+  });
+  const javaMock = {
+    list: [
+      { path: '/usr/lib/jvm/java-21-openjdk/bin/java', major: 21, raw: 'openjdk version "21.0.5" 2024-10-15', vendor: 'OpenJDK', source: 'system' as const },
+      { path: '~/.mangoclient/runtimes/temurin-17/bin/java', major: 17, raw: 'openjdk version "17.0.13" 2024-10-15', vendor: 'Temurin', source: 'managed' as const },
+    ],
+  };
   const part2 = createContentApi({
     now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); }, find,
     gameActive: () => running.size > 0 || timers.size > 0,
@@ -190,6 +207,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   const api: MockApi = {
     ...part2,
     ...iconsMock.api,
+    ...skinsMock.api,
     ...worldsMock,
     ...portabilityMock.api,
     dev: { ...portabilityMock.dev },
@@ -236,6 +254,19 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
           else if (r.error === 'long' || r.error === 'control' || r.error === 'limit') throw { code: 'validation', message: `tag: ${r.error}`, needsRelogin: false };
         }
         next.tags = out;
+      }
+      if ('javaPath' in patch) {
+        const jp = (patch.javaPath ?? '').trim();
+        if (jp && !(jp.startsWith('/') || /^[A-Za-z]:\\/.test(jp))) throw { code: 'java.not_runnable', message: 'not an absolute path', needsRelogin: false };
+        if (jp && !javaMock.list.some((j) => j.path === jp) && !/\bjava(\.exe)?$/i.test(jp)) throw { code: 'java.not_runnable', message: 'does not run', needsRelogin: false };
+        next.javaPath = jp || null;
+      }
+      if (patch.window) {
+        const w = patch.window;
+        if (w.mode === 'size' && !(Number.isInteger(w.width) && Number.isInteger(w.height) && (w.width ?? 0) >= 640 && (w.width ?? 0) <= 16384 && (w.height ?? 0) >= 480 && (w.height ?? 0) <= 16384)) {
+          throw { code: 'validation', message: 'window size out of range', needsRelogin: false };
+        }
+        next.window = w.mode === 'size' ? w : { mode: w.mode, width: null, height: null };
       }
       if ('ram' in patch) {
         const r = patch.ram ?? null;
@@ -359,10 +390,15 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     async gameRunning() { return [...running]; },
     // Commands of features the browser mock does not simulate (skins, Java installs, the frameless window): they answer like the service
     // does before the feature exists, so the UI never hangs on them in a plain browser.
-    async skinGet() { return nope(); }, async skinUpload() { return nope(); }, async skinUseUsername() { return nope(); }, async skinSetCape() { return nope(); },
-    async skinLibraryList() { return []; }, async skinLibraryAdd() { return nope(); }, async skinLibrarySaveCurrent() { return nope(); },
-    async skinLibraryRemove() { return []; }, async skinLibraryApply() { return nope(); },
-    async javaList() { return []; }, async javaInstall() { return nope(); }, async panoramaPool() { return []; },
+    async javaList() { return structuredClone(javaMock.list); },
+    async javaInstall({ major }) {
+      const total = 100;
+      for (let i = 1; i <= 5; i++) { await new Promise((r) => setTimeout(r, 350 * scale)); emit('java:progress', { major, done: (total * i) / 5, total }); }
+      const j = { path: `~/.mangoclient/runtimes/temurin-${major}/bin/java`, major, raw: `openjdk version "${major}.0.1"`, vendor: 'Temurin', source: 'managed' as const };
+      javaMock.list = [...javaMock.list.filter((x) => x.major !== major), j];
+      return structuredClone(j);
+    },
+    async panoramaPool() { return icons.pool(); },
     async windowMinimize() {}, async windowToggleMaximize() {}, async windowClose() {}, async windowIsMaximized() { return false; },
     async windowStartDrag() {}, async windowStartResize() {},
     async pickImageFile() { return null; }, // no native dialog in the browser: the UI uses <input type=file> there

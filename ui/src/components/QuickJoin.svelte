@@ -30,7 +30,7 @@
         {@const st = servers.status[s.id]}
         {@const disabled = !prof || isBusy(prof.id) || !app.accounts.length}
         <li>
-          <Tile kind="server" id={s.id} src={s.iconUrl} size={32} notch={6} />
+          {#if !(st?.iconUrl ?? s.iconUrl) && !st}<span class="slot"></span>{:else}<Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} size={32} notch={6} />{/if}
           <div class="i">
             <b>{s.name}</b>
             <span class="m"><span class="sq" class:ok={st?.online} class:bad={st && !st.online} aria-hidden="true"></span>
@@ -46,6 +46,7 @@
 {/if}
 
 <style>
+  .slot { display: block; width: 32px; height: 32px; flex: none; }
   .qj { min-width: 0; }
   header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-2); }
   h2 { font-size: var(--fs-xl); }

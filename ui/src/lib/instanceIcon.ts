@@ -1,6 +1,7 @@
 // Pure rules for instance icons and backgrounds (docs/ipc.md Parts 6 and 7). No Svelte, no Tauri: unit tested.
 import { hashId } from './fallbackImage';
-import { DEFAULT_SCRIM, autoWallpaper, type Wallpaper } from './wallpapers';
+import { DEFAULT_SCRIM, type Wallpaper } from './wallpapers';
+import { resolveAuto, type PoolItem } from './bgCycle';
 import type { BlockIcon, Loader, BlockIconsStatus, InstanceIcon, PanoramaSet, ProfileBackground, ProfileView } from './types';
 
 export type IconInput = Pick<ProfileView, 'coverUrl' | 'icon' | 'autoBlock'>;
@@ -72,12 +73,19 @@ export interface BackgroundContext {
   mcVersion: string; profileId: string;
   panorama: PanoramaSet | null | undefined;
   wallpapers: readonly Wallpaper[];
+  /** Generic wallpapers + panorama sets + the brand surface (bgCycle.buildPool); empty = just the brand surface. */
+  pool?: readonly PoolItem[];
+}
+
+/** A pool member as something a hero can draw. */
+export function resolvePoolItem(i: PoolItem): ResolvedBackground {
+  return i.kind === 'wallpaper' ? { kind: 'image', url: i.url, scrim: i.scrim, source: 'wallpaper' } : i.kind === 'panorama' ? { kind: 'panorama', set: i.set } : { kind: 'watermark' };
 }
 
 /**
  * image -> that image; none -> plain surface; panorama -> the Minecraft panorama (watermark until it is extracted);
- * wallpaper -> the bundled wallpaper with that id (auto when it no longer exists); auto -> the curated wallpaper
- * (version rule, then generic pool by id hash), else the watermark surface.
+ * wallpaper -> the bundled wallpaper with that id (auto when it no longer exists); auto -> version wallpaper, else the instance's own
+ * panorama, else a deterministic pool member (generic wallpapers + panorama sets + the brand surface).
  */
 export function resolveBackground(bg: ProfileBackground | null | undefined, c: BackgroundContext): ResolvedBackground {
   const b = bg ?? { kind: 'auto' as const };
@@ -88,8 +96,8 @@ export function resolveBackground(bg: ProfileBackground | null | undefined, c: B
     const w = c.wallpapers.find((x) => x.id === b.id);
     if (w) return { kind: 'image', url: w.url, scrim: w.scrim, source: 'wallpaper' };
   }
-  const w = autoWallpaper(c.wallpapers, c.mcVersion, c.profileId);
-  return w ? { kind: 'image', url: w.wallpaper.url, scrim: w.wallpaper.scrim, source: 'wallpaper' } : { kind: 'watermark' };
+  // auto: (a) the wallpaper whose version rule matches, (b) the instance's own panorama, (c) a deterministic pick from the pool
+  return resolvePoolItem(resolveAuto({ mcVersion: c.mcVersion, profileId: c.profileId, wallpapers: c.wallpapers, ownPanorama: c.panorama, pool: c.pool ?? [] }).item);
 }
 
 /** Overlay strength and blur (px) a background is drawn with: the instance's dim/blur override, else the resolved defaults. */

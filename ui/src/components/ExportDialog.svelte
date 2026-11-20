@@ -83,7 +83,7 @@
   .grow { margin-right: auto; min-width: 0; }
   .top { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .lead { margin: 0; color: var(--paper-dim); }
-  .opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); cursor: pointer; }
+  .opt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); cursor: default; }
   .opt input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
   .opt span { display: grid; gap: 2px; }
   .rules { margin: 14px 0; padding: 10px 12px; background: var(--ink-1); border: 1px solid var(--line-soft); border-radius: var(--r-m); }

@@ -173,7 +173,7 @@
   .t { display: grid; gap: 1px; min-width: 0; cursor: default; }
   .t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .t .hint { font-size: var(--fs-xs); }
-  label.t { cursor: pointer; }
+  label.t { cursor: default; }
   .sz { font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; }
   .lock { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--paper-mute); }
   .lock input { width: 16px; height: 16px; margin: 0; }

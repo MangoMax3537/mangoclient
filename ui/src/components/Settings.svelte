@@ -22,7 +22,7 @@
   import { entriesFor } from '../lib/settingsIndex';
   import { jumpTo } from '../lib/settingsJump';
   import { parseWindowSize } from '../lib/windowSize';
-  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, t, theme, toast, updates, type ThemeMode } from '../lib/stores.svelte';
+  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
@@ -99,6 +99,11 @@
           {#if show('theme')}
             <SettingRow id="theme" label={t('settings.theme')} hint={t('settings.theme.hint')}>
               <Seg options={themeOpts} value={theme.mode} label={t('settings.theme')} idPrefix="theme" onchange={(v) => applyTheme(v as ThemeMode)} />
+            </SettingRow>
+          {/if}
+          {#if show('cycleBg')}
+            <SettingRow id="cycleBg" asLabel label={t('settings.cycleBg')} hint={t('settings.cycleBgHint')}>
+              <Toggle checked={ui.cycleBackgrounds} onchange={(on) => setCycleBackgrounds(on)} />
             </SettingRow>
           {/if}
         </SettingSection>

@@ -136,7 +136,7 @@
     <label class="search">
       <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
       <span class="sr-only">{t('discover.search')}</span>
-      <input class="field" type="search" placeholder={t('discover.searchIn')} bind:value={query} />
+      <input class="field" type="search" data-search placeholder={t('discover.searchIn')} bind:value={query} />
     </label>
     {#if type === 'mod' || type === 'modpack'}
       <label class="f"><span class="hint">{t('new.loader')}</span>

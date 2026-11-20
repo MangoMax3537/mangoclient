@@ -1,3 +1,4 @@
+import { buildPool } from './bgCycle';
 import { describe, expect, it } from 'vitest';
 import {
   PANORAMA_BLUR, backgroundStyle, blockErrorKey, blockForSeed, choiceFromBackground, panoramaAngle, panoramaDelay, pickerState, previewBackground, resolveBackground,
@@ -77,11 +78,13 @@ describe('background resolution', () => {
   it('auto = the wallpaper of the version rule, with its own scrim', () => {
     expect(resolveBackground({ kind: 'auto' }, ctx())).toMatchObject({ kind: 'image', url: 'pale.url', scrim: 0.4, source: 'wallpaper' });
   });
-  it('auto without a rule uses the generic pool; without wallpapers the watermark surface', () => {
-    expect(resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10' }))).toMatchObject({ url: 'bad.url' });
-    expect(resolveBackground({ kind: 'auto' }, ctx({ wallpapers: [] }))).toEqual({ kind: 'watermark' });
+  it('auto without a version rule: the instance\'s own panorama, else a deterministic pool member (generic wallpapers, panoramas, brand surface)', () => {
+    expect(resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10' })).kind).toBe('panorama');
+    const noOwn = resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10', panorama: null, pool: buildPool(walls, []) }));
+    expect(noOwn).toMatchObject({ url: 'bad.url' }); // pool = [badlands, brand]; profile p1 hashes to the wallpaper
+    expect(resolveBackground({ kind: 'auto' }, ctx({ wallpapers: [], panorama: null }))).toEqual({ kind: 'watermark' });
   });
-  it('auto never shows the panorama; the persisted panorama kind does (watermark until extracted)', () => {
+  it('the version wallpaper beats the own panorama; the persisted panorama kind shows the panorama (watermark until extracted)', () => {
     expect(resolveBackground({ kind: 'auto' }, ctx()).kind).toBe('image');
     expect(resolveBackground({ kind: 'panorama' }, ctx()).kind).toBe('panorama');
     expect(resolveBackground({ kind: 'panorama' }, ctx({ panorama: null })).kind).toBe('watermark');

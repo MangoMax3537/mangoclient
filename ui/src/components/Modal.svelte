@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
   import XIcon from 'phosphor-svelte/lib/XIcon';
+  import { leaveDialog } from '../lib/motion';
   import { t } from '../lib/stores.svelte';
 
   interface Props {
@@ -41,7 +42,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<dialog bind:this={dlg} class="{variant} {size}" aria-labelledby={uid} oncancel={cancel} onclick={backdrop} onkeydown={key}>
+<dialog bind:this={dlg} class="{variant} {size}" aria-labelledby={uid} oncancel={cancel} onclick={backdrop} onkeydown={key} out:leaveDialog|global={{ drawer: variant === 'drawer' }}>
   <header>
     <h2 id={uid}>{title}</h2>
     <div class="acts">
@@ -58,7 +59,8 @@
 <style>
   dialog { padding: 0; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-modal); max-height: min(86vh, 760px); overflow: hidden; }
   dialog[open] { display: flex; flex-direction: column; animation: pop var(--dur-slow) var(--ease); }
-  dialog::backdrop { background: var(--backdrop); }
+  dialog::backdrop { background: var(--backdrop); transition: opacity var(--dur) var(--ease); animation: fade var(--dur-slow) var(--ease); }
+  dialog:global(.closing)::backdrop { opacity: 0; }
   dialog.dialog { width: min(480px, calc(100vw - 48px)); }
   dialog.dialog.lg { width: min(640px, calc(100vw - 48px)); }
   dialog.drawer { width: min(560px, 100vw); height: 100vh; max-height: none; margin: 0 0 0 auto; border-radius: var(--r-l) 0 0 var(--r-l); border-right: 0; animation: slide var(--dur-slow) var(--ease); }
@@ -69,6 +71,7 @@
   .x { width: 34px; padding: 0; justify-content: center; }
   .body { padding: 16px 20px; overflow: auto; min-height: 0; flex: 1; user-select: text; }
   footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-soft); flex: none; }
+  @keyframes fade { from { opacity: 0; } }
   @keyframes pop { from { opacity: 0; transform: translateY(8px); } }
   @keyframes slide { from { transform: translateX(32px); opacity: 0; } }
 </style>

@@ -15,6 +15,8 @@
   import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import { tip } from '../lib/tooltip';
+  import { enter } from '../lib/motion';
+  import { rememberScroll } from '../lib/scrollMemory';
   import NoAccountHint from './NoAccountHint.svelte';
   import { fmtDuration, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
@@ -108,14 +110,16 @@
 
     <div class="tabs"><Seg options={opts} value={tab} label={p.name} role="tablist" idPrefix="ptab" onchange={(v) => (nav.profileTab = v as ProfileTab)} /></div>
 
-    <div class="panel" role="tabpanel" aria-labelledby="ptab-{tab}">
+    <div class="panel" role="tabpanel" aria-labelledby="ptab-{tab}" use:rememberScroll={`${p.id}:${tab}`}>
       {#key `${p.id}:${tab}`}
+        <div class="tabbody" in:enter={{ y: 6, duration: 160 }}>
         {#if tab === 'overview'}<Overview profile={p} />
         {:else if isContentTab(tab)}<Lazy load={tabs.content} props={{ profile: p, type: CONTENT_TAB_TYPE[tab], items, infos, load: cl, onitems: (l: ContentItem[]) => (items = l) }} fallback={skContent} />
         {:else if tab === 'media'}<Lazy load={tabs.media} props={{ profile: p }} fallback={skMedia} />
         {:else if tab === 'backups'}<Lazy load={tabs.backups} props={{ profile: p }} fallback={skBackups} />
         {:else if tab === 'logs'}<Lazy load={tabs.logs} props={{ profile: p }} fallback={skLogs} />
         {:else}<Lazy load={tabs.settings} props={{ profile: p }} fallback={skSettings} />{/if}
+        </div>
       {/key}
     </div>
   </div>

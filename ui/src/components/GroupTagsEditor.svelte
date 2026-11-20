@@ -89,6 +89,6 @@
   .add { display: flex; gap: 8px; }
   .add .field { flex: 1; }
   .sug { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .pick { cursor: pointer; }
+  .pick { cursor: default; }
   .pick:hover { border-color: var(--accent-fill); color: var(--paper); }
 </style>

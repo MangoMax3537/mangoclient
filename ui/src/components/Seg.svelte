@@ -37,7 +37,7 @@
   /* page tabs: tighter, so the nine instance tabs fit a 960px window without scrolling */
   .seg[role='tablist'] button { padding: 0 10px; }
   button:hover { color: var(--paper); background: var(--ink-3); }
-  button.off { color: var(--paper-mute); opacity: 0.55; cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
+  button.off { color: var(--paper-mute); opacity: 0.55; cursor: default; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.off:hover { color: var(--paper-mute); background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.on { background: var(--ink-4); color: var(--paper); }
   button.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--accent-fill); }
