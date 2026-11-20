@@ -41,7 +41,6 @@
   let loaderVersions = $state<LoaderVersion[]>([]);
   let loaderVersion = $state('');
   let loaderLoading = $state(false);
-  let ram = $state(app.config?.ram ?? 4096);
   let creating = $state(false);
   // icon: auto previews a block from a per-dialog seed; on create it is saved as that explicit block so what you saw is what you get
   const seed = crypto.randomUUID?.() ?? String(Math.random());
@@ -55,7 +54,6 @@
   let error = $state('');
 
   const steps = ['new.step.name', 'new.step.version', 'new.step.resources'] as const;
-  const maxRam = $derived(Math.max(2048, Math.floor((app.totalRamMb || 8192) * 0.75 / 512) * 512));
   const filtered = $derived.by(() => {
     const s = q.trim().toLowerCase();
     return (manifest?.versions ?? []).filter((v) =>
@@ -106,7 +104,7 @@
     try {
       const p = await actions.createProfile(
         { name: name.trim(), mcVersion, loader, loaderVersion: loader === 'vanilla' ? null : loaderVersion },
-        { color, ram },
+        { color },
       );
       try {
         const b = iconChoice.kind === 'block' ? iconChoice.block : iconChoice.kind === 'auto' ? iconBlock?.id : null;
@@ -215,15 +213,13 @@
         {/if}
       {/if}
     {:else}
-      <label class="lbl" for="np-ram">{t('new.ram')}</label>
-      <div class="ram"><input id="np-ram" type="range" min="1024" max={maxRam} step="512" bind:value={ram} aria-valuetext={fmtRam(ram)} /><output class="mono">{fmtRam(ram)}</output></div>
-      <p class="hint">{t('new.ramHint')}</p>
+      <p class="hint">{t('new.ramDefault', { ram: fmtRam(app.config?.ram ?? app.defaultRamMb) })}</p>
       <div class="lbl">{t('new.summary')}</div>
       <dl class="sum">
         <dt>{t('new.name')}</dt><dd>{name.trim()}</dd>
         <dt>{t('col.version')}</dt><dd class="mono">{mcVersion}</dd>
         <dt>{t('col.loader')}</dt><dd>{loader === 'vanilla' ? t('profile.vanilla') : `${loader} ${loaderVersion}`}</dd>
-        <dt>{t('new.ram')}</dt><dd class="mono">{fmtRam(ram)}</dd>
+        <dt>{t('new.ram')}</dt><dd class="mono">{fmtRam(app.config?.ram ?? app.defaultRamMb)}</dd>
       </dl>
     {/if}
     {#if error}<div class="err" role="alert">{error}</div>{/if}
@@ -246,9 +242,10 @@
 {/if}
 
 <style>
-  .dlg { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); }
+  .dlg { width: min(640px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); padding: 0; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); }
   .dlg[open] { display: flex; flex-direction: column; }
   .dlg::backdrop { background: rgba(5, 6, 7, 0.7); }
+  header, .steps, footer { flex: none; }
   header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 0; }
   h2 { font-size: 22px; }
   .steps { display: flex; gap: 20px; list-style: none; margin: 0; padding: 14px 20px; border-bottom: 1px solid var(--line); color: var(--paper-mute); font-size: 13px; }
@@ -257,7 +254,7 @@
   .cur { color: var(--paper); font-weight: 600; }
   .cur .n { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); }
   .done .n { border-color: var(--leaf); color: var(--leaf); }
-  .body { display: grid; gap: 10px; padding: 18px 20px; overflow: auto; align-content: start; min-height: 320px; }
+  .body { display: grid; gap: 10px; padding: 18px 20px; overflow: auto; align-content: start; flex: 1 1 auto; min-height: 0; }
   .irow { display: flex; align-items: center; gap: 14px; }
   .ibox { flex: none; display: block; }
   .itxt { flex: 1; display: grid; gap: 2px; min-width: 0; }
@@ -279,8 +276,6 @@
   .tags { display: flex; gap: 6px; }
   em { font-style: normal; font-size: 12px; padding: 0 6px; border-radius: 3px; background: var(--ink-4); color: var(--paper-dim); }
   em.inst { color: var(--leaf); }
-  .ram { display: flex; gap: 14px; align-items: center; }
-  .ram output { min-width: 70px; text-align: right; color: var(--mango); }
   .sum { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
   .sum dt { color: var(--paper-mute); } .sum dd { margin: 0; }
   footer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }

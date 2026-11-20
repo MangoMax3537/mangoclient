@@ -19,6 +19,7 @@
   --mango: #ffad32; --mango-ink: #1a1100; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
   --leaf: #86b86b; --tomato: #ed665c; --sky: #7fa9c4;
   --focus: #ffad32;
+  --brand-gold: #FBA103; /* sampled from the mango icon's golden-yellow */
   /* the hero is a stage: always dark, whatever the theme */
   --hero-bg: #21252c; --hero-ink: #f4f1ea; --hero-dim: #c4c0b5; --hero-line: rgba(244, 241, 234, 0.22);
   --scrim: 11, 12, 14;
@@ -60,6 +61,7 @@
     --mango: #854d00; --mango-ink: #ffffff; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
     --leaf: #356a25; --tomato: #b02f26; --sky: #2d6182;
     --focus: #854d00;
+    --brand-gold: #8a5600;
     --shadow-float: 0 10px 28px rgba(60, 45, 20, 0.22), 0 0 0 1px rgba(60, 45, 20, 0.12);
     --shadow-modal: 0 24px 64px rgba(60, 45, 20, 0.3), 0 0 0 1px rgba(60, 45, 20, 0.16);
     --backdrop: rgba(40, 32, 16, 0.5);
@@ -74,6 +76,7 @@
   --mango: #854d00; --mango-ink: #ffffff; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
   --leaf: #356a25; --tomato: #b02f26; --sky: #2d6182;
   --focus: #854d00;
+  --brand-gold: #8a5600;
   --shadow-float: 0 10px 28px rgba(60, 45, 20, 0.22), 0 0 0 1px rgba(60, 45, 20, 0.12);
   --shadow-modal: 0 24px 64px rgba(60, 45, 20, 0.3), 0 0 0 1px rgba(60, 45, 20, 0.16);
   --backdrop: rgba(40, 32, 16, 0.5);
@@ -106,7 +109,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
   --ink-0: #0b0c0e; --ink-1: #111316; --ink-2: #16181c; --ink-3: #1c1f24; --ink-4: #262a31;
   --line: #3a3f48; --line-soft: #1f2328;
   --paper: #f4f1ea; --paper-dim: #c4c0b5; --paper-mute: #a19e95;
-  --mango: #ffad32; --mango-ink: #1a1100; --leaf: #86b86b; --tomato: #ed665c; --focus: #ffad32;
+  --mango: #ffad32; --mango-ink: #1a1100; --leaf: #86b86b; --tomato: #ed665c; --focus: #ffad32; --brand-gold: #FBA103;
   --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
   --skel-mix: 40%; --skel: color-mix(in srgb, var(--paper) var(--skel-mix), var(--ink-0));
   color: var(--paper); color-scheme: dark;

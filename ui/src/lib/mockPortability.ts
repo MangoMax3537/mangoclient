@@ -58,16 +58,17 @@ export function planFor(path: string): ImportPlan {
   if (low.includes('unsafe')) throw err('import.unsafe_archive');
   if (low.includes('nokey')) throw err('curseforge.no_api_key');
   if (low.endsWith('.mrpack')) {
-    return { kind: 'mrpack', name, mcVersion: '1.21.1', loader: 'fabric' as Loader, loaderVersion: '0.16.10', fileCount: 142, sizeBytes: 218 * MB, blockedFiles: [] };
+    return { kind: 'mrpack', name, mcVersion: '1.21.1', loader: 'fabric' as Loader, loaderVersion: '0.16.10', fileCount: 142, sizeBytes: 218 * MB, blockedFiles: [], ram: null, appliedRamMb: null };
   }
   if (low.includes('curseforge') || low.includes('(cf)')) {
     return {
       kind: 'curseforge', name, mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172', fileCount: 211, sizeBytes: 486 * MB,
       blockedFiles: [cf('Waystone Atlas', 'pending'), cf('Quark Oddities Extra', 'pending'), cf('Ars Elemental Compat', 'pending'), cf('Supplementaries Squared', 'matched_modrinth'), cf('Glass Pane Fixes', 'matched_modrinth')],
+      ram: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' }, appliedRamMb: 4096,
     };
   }
   if (low.includes('prism') || low.includes('multimc') || low.includes('instance')) {
-    return { kind: 'prism', name, mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0', fileCount: 96, sizeBytes: null, blockedFiles: [] };
+    return { kind: 'prism', name, mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0', fileCount: 96, sizeBytes: null, blockedFiles: [], ram: { recommendedMb: 6144, minMb: 2048, maxMb: null, source: 'prism' }, appliedRamMb: 6144 };
   }
   throw err('import.unsupported_format');
 }
@@ -137,7 +138,7 @@ export function createPortabilityMock(c: PortabilityCtx): { api: PartPortability
         await sleep(380);
       }
       const p: ProfileView = {
-        id, name: (name ?? plan.name).trim() || plan.name, mcVersion: plan.mcVersion, loader: plan.loader, loaderVersion: plan.loaderVersion, color: null, coverUrl: null, ram: null,
+        id, name: (name ?? plan.name).trim() || plan.name, mcVersion: plan.mcVersion, loader: plan.loader, loaderVersion: plan.loaderVersion, color: null, coverUrl: null, ram: plan.appliedRamMb, ramSource: plan.appliedRamMb === null ? 'default' : 'modpack', ramHint: plan.ram, effectiveRamMb: plan.appliedRamMb ?? 4096,
         javaArgs: '', mangoConfig: null, group: null, tags: [], lastPlayed: null, playTimeMs: 0, created: Date.now(),
         modCount: plan.kind === 'prism' ? 31 : Math.max(0, plan.fileCount - 12), pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' },
       };

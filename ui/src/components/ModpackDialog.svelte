@@ -7,6 +7,7 @@
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import BlockedPlanNote from './BlockedPlanNote.svelte';
+  import PlanRam from './PlanRam.svelte';
   import { fmtBytes } from '../lib/format';
   import { providerLabel } from '../lib/install';
   import { errorText, getApi, installs, lang, startModpackRun, t, tp, type FlowProject, type InstallRun } from '../lib/stores.svelte';
@@ -66,6 +67,7 @@
       <div><dt>{t('flow.pack.size')}</dt><dd class="mono">{plan.sizeBytes ? fmtBytes(plan.sizeBytes, lang()) : '-'}</dd></div>
     </dl>
 
+    <PlanRam {plan} />
     <BlockedPlanNote files={plan.blockedFiles} id="mp-blocked" />
 
     {#if run}

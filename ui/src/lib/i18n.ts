@@ -7,11 +7,12 @@ import { de7, en7 } from './i18n7';
 import { de8, en8 } from './i18n8';
 import { de9, en9 } from './i18n9';
 import { de10, en10 } from './i18n10';
+import { de11, en11 } from './i18n11';
 
 export type Lang = 'de' | 'en';
 
 const en = {
-  'app.name': 'MangoClient',
+  'app.name': 'Mango Client',
   'nav.home': 'Home', 'nav.library': 'Library', 'nav.discover': 'Discover', 'nav.servers': 'Servers',
   'nav.settings': 'Settings', 'nav.soon': 'Coming soon', 'nav.recent': 'Recent profiles', 'nav.main': 'Main navigation',
   'nav.accounts': 'Accounts', 'nav.noAccount': 'No account',
@@ -39,7 +40,7 @@ const en = {
   'new.color': 'Accent colour', 'new.search': 'Search versions', 'new.releases': 'Releases', 'new.snapshots': 'Snapshots',
   'new.all': 'All', 'new.loader': 'Loader', 'new.loaderVersion': 'Loader version', 'new.loadingVersions': 'Loading versions...',
   'new.noVersions': 'No version matches.', 'new.showMore': 'Show more', 'new.latest': 'latest', 'new.installed': 'installed',
-  'new.recommended': 'Recommended', 'new.ram': 'Memory', 'new.ramHint': 'Memory for this profile.',
+  'new.recommended': 'Recommended', 'new.ram': 'Memory',
   'new.summary': 'Summary', 'new.next': 'Next', 'new.back': 'Back', 'new.create': 'Create profile', 'new.cancel': 'Cancel',
   'new.creating': 'Creating...', 'new.pickVersion': 'Pick a version.', 'new.noLoaderVersion': 'No loader version for this game version.',
   'accounts.title': 'Accounts', 'accounts.addOffline': 'Add offline account', 'accounts.offlineName': 'Player name',
@@ -47,7 +48,7 @@ const en = {
   'accounts.msa': 'Microsoft', 'accounts.expired': 'Session expired', 'accounts.active': 'Active', 'accounts.select': 'Use account',
   'accounts.remove': 'Remove', 'accounts.empty': 'No accounts yet.', 'accounts.nameInvalid': '3 to 16 letters, digits or underscores.',
   'settings.title': 'Settings', 'settings.language': 'Language', 'settings.language.de': 'Deutsch', 'settings.language.en': 'English',
-  'settings.ram': 'Default memory', 'settings.ramOf': 'of {total} installed', 'settings.javaArgs': 'Java arguments',
+  'settings.ramOf': 'of {total} installed', 'settings.javaArgs': 'Java arguments',
   'settings.javaArgsHint': 'Added to every launch. Per-profile arguments are appended.', 'settings.keepOpen': 'Keep launcher open while playing',
   'settings.keepOpenHint': 'Otherwise the window hides until the game closes.', 'settings.telemetry': 'Send anonymous usage ping',
   'settings.telemetryHint': 'Random install id, version and platform. Nothing else.', 'settings.group.general': 'Launcher',
@@ -67,6 +68,7 @@ const en = {
   ...en8,
   ...en9,
   ...en10,
+  ...en11,
 } as const;
 
 export type Key = keyof typeof en;
@@ -74,7 +76,7 @@ type PluralBase<K> = K extends `${infer B}.other` ? B : never;
 export type PluralKey = PluralBase<Key>;
 
 const de: Record<Key, string> = {
-  'app.name': 'MangoClient',
+  'app.name': 'Mango Client',
   'nav.home': 'Start', 'nav.library': 'Bibliothek', 'nav.discover': 'Entdecken', 'nav.servers': 'Server',
   'nav.settings': 'Einstellungen', 'nav.soon': 'Bald verfügbar', 'nav.recent': 'Zuletzt gespielt', 'nav.main': 'Hauptnavigation',
   'nav.accounts': 'Konten', 'nav.noAccount': 'Kein Konto',
@@ -102,7 +104,7 @@ const de: Record<Key, string> = {
   'new.color': 'Akzentfarbe', 'new.search': 'Versionen suchen', 'new.releases': 'Releases', 'new.snapshots': 'Snapshots',
   'new.all': 'Alle', 'new.loader': 'Loader', 'new.loaderVersion': 'Loader-Version', 'new.loadingVersions': 'Versionen werden geladen...',
   'new.noVersions': 'Keine passende Version.', 'new.showMore': 'Mehr anzeigen', 'new.latest': 'aktuell', 'new.installed': 'installiert',
-  'new.recommended': 'Empfohlen', 'new.ram': 'Arbeitsspeicher', 'new.ramHint': 'Arbeitsspeicher für dieses Profil.',
+  'new.recommended': 'Empfohlen', 'new.ram': 'Arbeitsspeicher',
   'new.summary': 'Zusammenfassung', 'new.next': 'Weiter', 'new.back': 'Zurück', 'new.create': 'Profil erstellen', 'new.cancel': 'Abbrechen',
   'new.creating': 'Wird erstellt...', 'new.pickVersion': 'Wähle eine Version.', 'new.noLoaderVersion': 'Keine Loader-Version für diese Spielversion.',
   'accounts.title': 'Konten', 'accounts.addOffline': 'Offline-Konto hinzufügen', 'accounts.offlineName': 'Spielername',
@@ -110,7 +112,7 @@ const de: Record<Key, string> = {
   'accounts.msa': 'Microsoft', 'accounts.expired': 'Sitzung abgelaufen', 'accounts.active': 'Aktiv', 'accounts.select': 'Konto verwenden',
   'accounts.remove': 'Entfernen', 'accounts.empty': 'Noch keine Konten.', 'accounts.nameInvalid': '3 bis 16 Buchstaben, Ziffern oder Unterstriche.',
   'settings.title': 'Einstellungen', 'settings.language': 'Sprache', 'settings.language.de': 'Deutsch', 'settings.language.en': 'English',
-  'settings.ram': 'Standard-Arbeitsspeicher', 'settings.ramOf': 'von {total} installiert', 'settings.javaArgs': 'Java-Argumente',
+  'settings.ramOf': 'von {total} installiert', 'settings.javaArgs': 'Java-Argumente',
   'settings.javaArgsHint': 'Werden bei jedem Start übergeben. Profil-Argumente folgen danach.', 'settings.keepOpen': 'Launcher beim Spielen geöffnet lassen',
   'settings.keepOpenHint': 'Sonst wird das Fenster bis zum Spielende ausgeblendet.', 'settings.telemetry': 'Anonymen Nutzungs-Ping senden',
   'settings.telemetryHint': 'Zufällige Installations-ID, Version und Plattform. Sonst nichts.', 'settings.group.general': 'Launcher',
@@ -130,6 +132,7 @@ const de: Record<Key, string> = {
   ...de8,
   ...de9,
   ...de10,
+  ...de11,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };

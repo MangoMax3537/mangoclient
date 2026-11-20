@@ -1,0 +1,38 @@
+// Part 11: memory (RAM) per instance, the global default, and the RAM line of the plan dialogs.
+export const en11 = {
+  'ram.sliderLabel': 'Memory in steps of 256 MB', 'ram.gbLabel': 'Memory in GB', 'ram.gbInvalid': 'Enter a number of gigabytes, for example 4 or 4.5.',
+  'ram.source.default': 'Default', 'ram.source.modpack': 'From modpack', 'ram.source.user': 'Set by you',
+  'ram.useDefault': 'Use default ({ram})', 'ram.usePack': 'Use pack recommendation ({ram})', 'ram.useSuggestion': 'Use suggestion ({ram})',
+  'ram.marker.default': 'Default {ram}', 'ram.marker.recommended': 'Pack recommends {ram}', 'ram.marker.min': 'Pack minimum {ram}', 'ram.marker.cap': 'Pack maximum {ram}', 'ram.marker.total': 'This computer {ram}',
+  'ram.warn.cap': 'The pack author advises at most {ram}. More memory can make the game stutter, because the garbage collector then pauses for longer.',
+  'ram.warn.high': 'More than 75 percent of this computer\'s memory ({total}). Windows, your browser and other programs may slow down.',
+  'ram.warn.min': 'The pack needs at least {ram}. With less, the game may not start or may crash.',
+  'ram.warn.limit': 'This is the most this computer allows ({ram}); the rest stays free for the system.',
+  'ram.effective': 'The game starts with {ram}.', 'ram.hint.instance': 'Memory the game may use. More is not always better: modded setups usually run well with 4 to 8 GB.',
+  'settings.ram': 'Default for new instances',
+  'settings.ramHint': 'New instances start with this much memory. Each instance can use its own value in its settings.',
+  'settings.ramTable': 'The suggestion grows with your memory: 4 GB on 16 GB machines, 5 GB on 32 GB, 6 GB on 64 GB and more.',
+  'settings.ramSuggestion': 'Suggested for this computer ({total}): {ram}.',
+  'ram.plan.pack': 'This instance will get {ram} (recommended by the pack).', 'ram.plan.default': 'This instance will get {ram} (the default).',
+  'ram.plan.cap': 'The pack advises at most {ram}.',
+  'new.ramDefault': 'Memory: {ram} (the default). Change it later in the instance settings.',
+} as const;
+
+export const de11: Record<keyof typeof en11, string> = {
+  'ram.sliderLabel': 'Arbeitsspeicher in Schritten von 256 MB', 'ram.gbLabel': 'Arbeitsspeicher in GB', 'ram.gbInvalid': 'Gib eine Zahl in Gigabyte ein, zum Beispiel 4 oder 4,5.',
+  'ram.source.default': 'Standard', 'ram.source.modpack': 'Vom Modpack', 'ram.source.user': 'Von dir gesetzt',
+  'ram.useDefault': 'Standard verwenden ({ram})', 'ram.usePack': 'Empfehlung des Packs verwenden ({ram})', 'ram.useSuggestion': 'Vorschlag verwenden ({ram})',
+  'ram.marker.default': 'Standard {ram}', 'ram.marker.recommended': 'Pack empfiehlt {ram}', 'ram.marker.min': 'Pack-Minimum {ram}', 'ram.marker.cap': 'Pack-Maximum {ram}', 'ram.marker.total': 'Dieser Computer {ram}',
+  'ram.warn.cap': 'Der Pack-Autor rät zu höchstens {ram}. Mehr Speicher kann das Spiel ruckeln lassen, weil die Speicherbereinigung dann länger pausiert.',
+  'ram.warn.high': 'Mehr als 75 Prozent des Speichers dieses Computers ({total}). Das System, dein Browser und andere Programme können langsamer werden.',
+  'ram.warn.min': 'Das Pack braucht mindestens {ram}. Mit weniger startet das Spiel eventuell nicht oder stürzt ab.',
+  'ram.warn.limit': 'Mehr erlaubt dieser Computer nicht ({ram}); der Rest bleibt für das System frei.',
+  'ram.effective': 'Das Spiel startet mit {ram}.', 'ram.hint.instance': 'Arbeitsspeicher, den das Spiel nutzen darf. Mehr ist nicht immer besser: Mod-Setups laufen meist gut mit 4 bis 8 GB.',
+  'settings.ram': 'Standard für neue Instanzen',
+  'settings.ramHint': 'Neue Instanzen starten mit so viel Arbeitsspeicher. Jede Instanz kann in ihren Einstellungen einen eigenen Wert nutzen.',
+  'settings.ramTable': 'Der Vorschlag wächst mit deinem Speicher: 4 GB bei 16 GB, 5 GB bei 32 GB, 6 GB ab 64 GB.',
+  'settings.ramSuggestion': 'Vorschlag für diesen Computer ({total}): {ram}.',
+  'ram.plan.pack': 'Diese Instanz bekommt {ram} (vom Pack empfohlen).', 'ram.plan.default': 'Diese Instanz bekommt {ram} (der Standard).',
+  'ram.plan.cap': 'Das Pack rät zu höchstens {ram}.',
+  'new.ramDefault': 'Arbeitsspeicher: {ram} (der Standard). Ändere ihn später in den Instanz-Einstellungen.',
+};

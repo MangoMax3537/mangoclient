@@ -33,7 +33,7 @@
   const busy = $derived(p ? isBusy(p.id) : false);
   const running = $derived(p ? isRunning(p.id) : false);
   const launching = $derived(busy && !running);
-  const ram = $derived(p ? (p.ram ?? app.config?.ram ?? 0) : 0);
+  const ram = $derived(p ? p.effectiveRamMb : 0);
   const loaderLabel = $derived(p ? (p.loader === 'vanilla' ? t('profile.vanilla') : `${p.loader} ${p.loaderVersion ?? ''}`.trim()) : '');
   const showConsole = $derived(p ? busy || (consoles[p.id]?.length ?? 0) > 0 : false);
   const others = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 12));

@@ -8,6 +8,8 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import MinusIcon from 'phosphor-svelte/lib/MinusIcon';
   import XIcon from 'phosphor-svelte/lib/XIcon';
+  import RamControl from './RamControl.svelte';
+  import Brand from './Brand.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Seg from './Seg.svelte';
   import { inTauri } from '../lib/api';
@@ -21,7 +23,6 @@
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
-  const maxRam = $derived(Math.max(2048, app.totalRamMb || 8192));
   let args = $state(app.config?.javaArgs ?? '');
   let argTimer: ReturnType<typeof setTimeout> | undefined;
   const usageLoad = createLoadState<StorageUsage[]>({ isEmpty: () => false });
@@ -197,12 +198,10 @@
       <h2 id="s-game" class="eyebrow">{t('settings.group.game')}</h2>
 
       <div class="row col">
-        <div class="txt"><label for="ram">{t('settings.ram')}</label></div>
-        <div class="ram">
-          <input id="ram" type="range" min="1024" max={maxRam} step="512" value={cfg.ram} aria-valuetext={fmtRam(cfg.ram)}
-            oninput={(e) => actions.setConfig({ ram: Number(e.currentTarget.value) })} />
-          <output class="mono"><b>{fmtRam(cfg.ram)}</b> <span class="hint">{t('settings.ramOf', { total: fmtRam(app.totalRamMb) })}</span></output>
-        </div>
+        <div class="txt"><b>{t('settings.ram')}</b><div class="hint">{t('settings.ramHint')}</div>
+          <div class="hint">{t('settings.ramTable')}</div></div>
+        <RamControl id="ram" mode="global" value={cfg.ram} limits={app.ramLimits} defaultMb={app.defaultRamMb} onsave={(ram) => ram !== null && actions.setConfig({ ram })} />
+        <div class="hint">{t('settings.ramSuggestion', { total: fmtRam(app.totalRamMb), ram: fmtRam(app.defaultRamMb) })}</div>
       </div>
 
       <div class="row col">
@@ -262,7 +261,7 @@
     <section aria-labelledby="s-updates">
       <h2 id="s-updates" class="eyebrow">{t('update.title')}</h2>
       <div class="row">
-        <div class="txt"><b>{t('settings.version')} <span class="mono">{app.version}</span></b>{#if us.state === 'checking' && updGate.show}<Skeleton variant="bar" lh={20} h={11} w={180} />{:else}<div class="hint" role="status" aria-live="polite">{usText}</div>{/if}</div>
+        <div class="txt"><b class="ver"><Brand /> <span class="mono">{app.version}</span></b>{#if us.state === 'checking' && updGate.show}<Skeleton variant="bar" lh={20} h={11} w={180} />{:else}<div class="hint" role="status" aria-live="polite">{usText}</div>{/if}</div>
         {#if us.state === 'ready'}
           <button class="btn accent" type="button" onclick={() => (updates.overlay = true)}>{t('update.install')}</button>
         {:else}
@@ -302,9 +301,6 @@
   .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
   .row.col { flex-direction: column; align-items: stretch; gap: 8px; }
   .txt label { font-weight: 500; }
-  .ram { display: flex; align-items: center; gap: 16px; }
-  .ram output { white-space: nowrap; font-size: 13px; }
-  .ram b { color: var(--mango); font-weight: 500; }
   footer { word-break: break-all; }
   .usage { list-style: none; margin: 0; padding: 0; display: grid; }
   .usage li { display: grid; grid-template-columns: minmax(0, 1fr) 36% auto; gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }

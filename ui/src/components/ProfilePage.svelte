@@ -26,7 +26,7 @@
   const compact = $derived(nav.profileTab !== 'overview');
   const TABS: ProfileTab[] = ['overview', 'content', 'media', 'backups', 'logs', 'settings'];
   const opts = $derived(TABS.map((k) => ({ value: k, label: t(`profile.tab.${k}` as Key) })));
-  const ram = $derived(p ? (p.ram ?? app.config?.ram ?? 0) : 0);
+  const ram = $derived(p ? p.effectiveRamMb : 0);
   const loaderLabel = $derived(p ? (p.loader === 'vanilla' ? t('profile.vanilla') : `${p.loader} ${p.loaderVersion ?? ''}`.trim()) : '');
 
   $effect(() => { if (!p && app.ready) { nav.view = 'library'; } });

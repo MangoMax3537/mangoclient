@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Brand from './components/Brand.svelte';
   import Rail from './components/Rail.svelte';
   import Home from './components/Home.svelte';
   import Library from './components/Library.svelte';
@@ -35,7 +36,7 @@
 
 <div class="shell">
   <div class="strip" data-tauri-drag-region>
-    <span class="brand" data-tauri-drag-region>{t('app.name')}</span>
+    <Brand drag />
     {#if !inTauri()}<span class="dev mono" data-tauri-drag-region>{inHttp() ? 'dev server' : 'mock'}</span>{/if}
     <span class="grow" data-tauri-drag-region></span>
     <Activity />
@@ -81,7 +82,6 @@
 <style>
   .shell { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 960px; min-height: 600px; background: var(--ink-0); }
   .strip { position: relative; z-index: 20; height: 32px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--ink-0); border-bottom: 1px solid var(--line-soft); font-size: 12px; color: var(--paper-dim); }
-  .brand { font: 800 13px var(--font-display); color: var(--mango); letter-spacing: 0.02em; }
   .dev { padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; }
   .grow { flex: 1; }
   .ver { color: var(--paper-mute); }

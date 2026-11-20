@@ -1,3 +1,4 @@
+import { derivedRam } from './ram';
 import type {
   Api, Unlisten,
 } from './api';
@@ -86,20 +87,20 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'ramSource' | 'ramHint' | 'effectiveRamMb' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: 4096, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
-      color: '#ffad32', ram: 6144, group: 'Survival', tags: ['main', 'fabric'], lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
+      color: '#ffad32', ram: 6144, ramSource: 'user', effectiveRamMb: 6144, group: 'Survival', tags: ['main', 'fabric'], lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
     { ...base, id: '8a4be9d0-2f6c-4f3e-8b0c-7d1e93a4c5f2', name: 'Vanilla Survival', mcVersion: '1.21.4', loader: 'vanilla', loaderVersion: null,
       color: '#86b86b', icon: { kind: 'block', block: 'grass_block' }, group: 'Survival', tags: ['vanilla', 'friends'], lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
     { ...base, id: 'c27d11f4-91a8-4e22-b3a6-4c8f0e9d6b37', name: 'Bedwars Practice', mcVersion: '1.8.9', loader: 'forge', loaderVersion: '11.15.1.2318',
-      color: '#ed665c', icon: { kind: 'block', block: 'tnt' }, group: 'PvP', tags: ['1.8', 'practice'], ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
+      color: '#ed665c', icon: { kind: 'block', block: 'tnt' }, group: 'PvP', tags: ['1.8', 'practice'], ram: 3072, ramSource: 'user', effectiveRamMb: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
     { ...base, id: 'e90a6b35-17c4-4d8f-a2e1-5b3c7f4d8a09', name: 'Shader Showcase', mcVersion: '1.20.6', loader: 'quilt', loaderVersion: '0.26.1',
-      color: '#6fa8d6', ram: 8192, tags: ['shaders'], lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
+      color: '#6fa8d6', ram: 8192, ramSource: 'user', effectiveRamMb: 8192, tags: ['shaders'], lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
     { ...base, id: '1b9d4c68-6e0f-4a35-8c27-d3f5a7e91b40', name: 'Create Expedition', mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172',
-      color: '#d6c27a', ram: 8192, group: 'Modpacks', tags: ['create', 'tech'], lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
+      color: '#d6c27a', ram: 4096, ramSource: 'modpack', effectiveRamMb: 4096, ramHint: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' }, group: 'Modpacks', tags: ['create', 'tech'], lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
     { ...base, id: '6e2a85f1-0b7d-4d94-9a13-c48e2f6b7d05', name: 'Classic Forge 1.20.1', mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0',
-      color: '#e6a3b8', background: { kind: 'none' }, group: 'Modpacks', ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
+      color: '#e6a3b8', background: { kind: 'none' }, group: 'Modpacks', ram: 6144, ramSource: 'user', effectiveRamMb: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
   ];
 }
 
@@ -208,8 +209,8 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     dev: { ...blockedMock.dev, ...portabilityMock.dev },
     async appState(): Promise<AppState> {
       return {
-        version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles), accounts: structuredClone(accounts),
-        totalRamMb: 16384, running: [...running], rootDir: '~/.mangoclient',
+        version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram) })), accounts: structuredClone(accounts),
+        totalRamMb: 16384, defaultRamMb: 4096, ramLimits: { minMb: 1024, maxMb: 14336, totalMb: 16384 }, running: [...running], rootDir: '~/.mangoclient',
       };
     },
     async configSet({ patch }) {
@@ -226,7 +227,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     },
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
-        id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
+        id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: config.ram,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
         icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [],
       };
@@ -252,7 +253,14 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
         }
         next.tags = out;
       }
+      if ('ram' in patch) {
+        const r = patch.ram ?? null;
+        if (r !== null && !(Number.isInteger(r) && r >= 1024 && r <= 14336)) throw { code: 'validation', message: 'ram out of range', needsRelogin: false };
+        const hit = p.ramHint?.recommendedMb ?? null;
+        next.ramSource = r === null ? 'default' : hit !== null && r === hit ? 'modpack' : 'user';
+      }
       Object.assign(p, next);
+      Object.assign(p, derivedRam(p.ram, p.ramSource, config.ram));
       return structuredClone(p);
     },
     async profileDelete({ id }) {

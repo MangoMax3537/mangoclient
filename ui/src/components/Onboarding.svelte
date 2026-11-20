@@ -3,24 +3,21 @@
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import Brand from './Brand.svelte';
   import Tile from './Tile.svelte';
   import MicrosoftButton from './MicrosoftButton.svelte';
   import PersistNotice from './PersistNotice.svelte';
   import { brandIcon } from '../lib/fallbackImage';
-  import { fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { actions, app, errorText, t } from '../lib/stores.svelte';
 
-  const STEPS = ['welcome', 'language', 'account', 'ram', 'done'] as const;
+  const STEPS = ['welcome', 'language', 'account', 'done'] as const;
   let step = $state(0);
   let name = $state('');
   let error = $state('');
   let busy = $state(false);
   let root: HTMLDivElement | undefined = $state();
-  let ram = $state(app.config?.ram ?? 4096);
 
-  const maxRam = $derived(Math.max(2048, Math.floor((app.totalRamMb || 8192) * 0.75 / 512) * 512));
-  const recommended = $derived(Math.min(maxRam, Math.max(2048, Math.round((app.totalRamMb || 8192) / 4 / 512) * 512)));
   const cfg = $derived(app.config);
 
   onMount(() => { root?.querySelector<HTMLElement>('h1')?.focus(); });
@@ -34,9 +31,9 @@
     busy = false;
   }
   async function finish() {
-    await actions.setConfig({ ram, firstRunDone: true });
+    await actions.setConfig({ firstRunDone: true });
   }
-  function next() { if (step === 3) actions.setConfig({ ram }); step = Math.min(STEPS.length - 1, step + 1); }
+  function next() { step = Math.min(STEPS.length - 1, step + 1); }
 </script>
 
 <div class="ob" bind:this={root} role="dialog" aria-modal="true" aria-labelledby="ob-h" style:--bg="url({brandIcon(512)})">
@@ -47,7 +44,7 @@
     </ol>
 
     {#if step === 0}
-      <div class="eyebrow">{t('app.name')}</div>
+      <Brand size="lg" />
       <h1 id="ob-h" tabindex="-1">{t('onb.welcome.title')}</h1>
       <p class="lead">{t('onb.welcome.body')}</p>
     {:else if step === 1}
@@ -78,21 +75,13 @@
           {#each app.accounts as a (a.uuid)}<li><Tile kind="account" id={a.uuid} src={a.headUrl} size={28} radius={4} /><b>{a.name}</b><span class="hint">{a.type === 'microsoft' ? t('accounts.msa') : t('accounts.offline')}</span></li>{/each}
         </ul>
       {/if}
-    {:else if step === 3}
-      <h1 id="ob-h" tabindex="-1">{t('onb.ram.title')}</h1>
-      <p class="lead">{t('onb.ram.body', { total: fmtRam(app.totalRamMb) })}</p>
-      <div class="ram">
-        <input id="ob-ram" type="range" min="1024" max={maxRam} step="512" bind:value={ram} aria-label={t('settings.ram')} aria-valuetext={fmtRam(ram)} />
-        <output class="mono"><b>{fmtRam(ram)}</b></output>
-      </div>
-      <button class="btn ghost" type="button" onclick={() => (ram = recommended)}>{t('onb.ram.recommended', { ram: fmtRam(recommended) })}</button>
     {:else}
+      <Brand />
       <h1 id="ob-h" tabindex="-1">{t('onb.done.title')}</h1>
       <p class="lead">{t('onb.done.body')}</p>
       <dl class="sum">
         <dt>{t('settings.language')}</dt><dd>{t(`settings.language.${cfg?.language ?? 'de'}` as Key)}</dd>
         <dt>{t('accounts.title')}</dt><dd>{app.accounts.length ? app.accounts.map((a) => a.name).join(', ') : t('onb.done.noAccount')}</dd>
-        <dt>{t('settings.ram')}</dt><dd class="mono">{fmtRam(ram)}</dd>
       </dl>
     {/if}
 
@@ -128,8 +117,6 @@
   .row .field { flex: 1; }
   .accs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .accs li { display: flex; align-items: center; gap: 10px; }
-  .ram { display: flex; align-items: center; gap: 16px; }
-  .ram output { color: var(--mango); white-space: nowrap; }
   .sum { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
   dt { color: var(--paper-mute); }
   dd { margin: 0; }

@@ -7,7 +7,7 @@ import {
 import { dictionaries, hasKey, translate } from './i18n';
 import type { CrashCause, CrashReport, ImportPlan } from './types';
 
-const plan: ImportPlan = { kind: 'mrpack', name: 'Pack', mcVersion: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', fileCount: 3, sizeBytes: 1000, blockedFiles: [] };
+const plan: ImportPlan = { kind: 'mrpack', name: 'Pack', mcVersion: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', fileCount: 3, sizeBytes: 1000, blockedFiles: [], ram: null, appliedRamMb: null };
 
 describe('tags and group validation (mirrors the service)', () => {
   it('trims, rejects empty, control characters, long values', () => {

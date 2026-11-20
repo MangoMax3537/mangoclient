@@ -5,7 +5,7 @@ import { listenDropped } from './drop';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
   AppState, BlockedFile, BlockIconsStatus, Config, ConfigPatch, ProfilePatch, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
-  ProviderStatus, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
+  ProviderStatus, RamLimitsView, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
 export const CONSOLE_CAP = 800;
@@ -28,6 +28,8 @@ export const app = $state({
   profiles: [] as ProfileView[],
   accounts: [] as PublicAccount[],
   totalRamMb: 0,
+  defaultRamMb: 4096,
+  ramLimits: { minMb: 1024, maxMb: 8192, totalMb: 16384 } as RamLimitsView,
   rootDir: '',
   error: null as { code: string; message: string } | null,
 });
@@ -294,6 +296,8 @@ function applyAppState(s: AppState): void {
   app.profiles = s.profiles;
   app.accounts = s.accounts;
   app.totalRamMb = s.totalRamMb;
+  app.defaultRamMb = s.defaultRamMb;
+  app.ramLimits = s.ramLimits;
   app.rootDir = s.rootDir;
   for (const id of s.running) if (!isBusy(id)) applyState(id, 'running');
 }
@@ -428,6 +432,11 @@ export const actions = {
     if (app.config) Object.assign(app.config, visible); // optimistic
     const c = await guard(() => currentApi.configSet({ patch }));
     if (c) app.config = c;
+    // the default heap changed: instances that follow it have a new effective value (only the backend knows it)
+    if (c && 'ram' in patch) {
+      const s = await guard(() => currentApi.appState());
+      if (s) for (const p of app.profiles) { const n = s.profiles.find((x) => x.id === p.id); if (n) { p.effectiveRamMb = n.effectiveRamMb; p.ramSource = n.ramSource; } }
+    }
   },
   async selectProfile(id: string) {
     const c = await guard(() => currentApi.profileSelect({ id }));

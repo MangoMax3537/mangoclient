@@ -33,7 +33,7 @@ export const en2 = {
   'logs.truncated': 'Showing the end of a large file.',
 
   'psettings.version': 'Game version and loader', 'psettings.change': 'Change', 'psettings.apply': 'Apply', 'psettings.versionChanged': 'Version changed.',
-  'psettings.changeHint': 'Installed mods may not work with another version or loader.', 'psettings.useDefault': 'Use launcher default ({ram})',
+  'psettings.changeHint': 'Installed mods may not work with another version or loader.',
   'psettings.argsHint': 'Appended after the launcher-wide arguments.', 'psettings.mango': 'MangoConfig', 'psettings.mangoHint': 'In-game settings mod. Launcher default: {state}.',
   'psettings.default': 'Default', 'psettings.on': 'On', 'psettings.off': 'Off', 'psettings.danger': 'Danger zone', 'psettings.deleteTitle': 'Delete this profile',
   'psettings.deleteHint': 'Removes the profile and its worlds, mods and screenshots.', 'psettings.confirmTitle': 'Delete {name}?',
@@ -75,11 +75,10 @@ export const en2 = {
   'update.status.current': 'You are up to date.', 'update.error.no-release': 'No release found.', 'update.error.offline': 'No connection.', 'update.error.other': 'The update check failed.',
   'update.disabled.dev': 'Updates are off in development builds.', 'update.disabled.unsupported': 'This installation type cannot update itself.',
 
-  'onb.progress': 'Step {n} of {total}', 'onb.step.welcome': 'Welcome', 'onb.step.language': 'Language', 'onb.step.account': 'Account', 'onb.step.ram': 'Memory', 'onb.step.done': 'Done',
+  'onb.progress': 'Step {n} of {total}', 'onb.step.welcome': 'Welcome', 'onb.step.language': 'Language', 'onb.step.account': 'Account', 'onb.step.done': 'Done',
   'onb.welcome.title': 'Your worlds, your setups, one launcher.', 'onb.welcome.body': 'A few quick questions and you can play. Everything can be changed later in Settings.',
   'onb.language.title': 'Pick a language', 'onb.account.title': 'Who is playing?',
   'onb.account.body': 'Add an offline name now. Microsoft sign-in is not available in this build yet.',
-  'onb.ram.title': 'How much memory?', 'onb.ram.body': 'Your computer has {total}. More is not always better; modded setups usually need 4 to 8 GB.', 'onb.ram.recommended': 'Use recommended ({ram})',
   'onb.start': 'Get started', 'onb.skip': 'Skip for now', 'onb.done.title': 'Ready to play', 'onb.done.body': 'Here is what we set up.', 'onb.done.noAccount': 'None yet', 'onb.finish': 'Open launcher',
 } as const;
 
@@ -117,7 +116,7 @@ export const de2: Record<keyof typeof en2, string> = {
   'logs.truncated': 'Es wird das Ende einer großen Datei angezeigt.',
 
   'psettings.version': 'Spielversion und Loader', 'psettings.change': 'Ändern', 'psettings.apply': 'Übernehmen', 'psettings.versionChanged': 'Version geändert.',
-  'psettings.changeHint': 'Installierte Mods funktionieren mit einer anderen Version oder einem anderen Loader eventuell nicht.', 'psettings.useDefault': 'Launcher-Standard verwenden ({ram})',
+  'psettings.changeHint': 'Installierte Mods funktionieren mit einer anderen Version oder einem anderen Loader eventuell nicht.',
   'psettings.argsHint': 'Werden nach den launcherweiten Argumenten angehängt.', 'psettings.mango': 'MangoConfig', 'psettings.mangoHint': 'Mod für Einstellungen im Spiel. Launcher-Standard: {state}.',
   'psettings.default': 'Standard', 'psettings.on': 'An', 'psettings.off': 'Aus', 'psettings.danger': 'Gefahrenbereich', 'psettings.deleteTitle': 'Dieses Profil löschen',
   'psettings.deleteHint': 'Entfernt das Profil samt Welten, Mods und Screenshots.', 'psettings.confirmTitle': '{name} löschen?',
@@ -159,10 +158,9 @@ export const de2: Record<keyof typeof en2, string> = {
   'update.status.current': 'Du bist auf dem neuesten Stand.', 'update.error.no-release': 'Kein Release gefunden.', 'update.error.offline': 'Keine Verbindung.', 'update.error.other': 'Die Update-Prüfung ist fehlgeschlagen.',
   'update.disabled.dev': 'In Entwicklungs-Builds sind Updates aus.', 'update.disabled.unsupported': 'Diese Installationsart kann sich nicht selbst aktualisieren.',
 
-  'onb.progress': 'Schritt {n} von {total}', 'onb.step.welcome': 'Willkommen', 'onb.step.language': 'Sprache', 'onb.step.account': 'Konto', 'onb.step.ram': 'Speicher', 'onb.step.done': 'Fertig',
+  'onb.progress': 'Schritt {n} von {total}', 'onb.step.welcome': 'Willkommen', 'onb.step.language': 'Sprache', 'onb.step.account': 'Konto', 'onb.step.done': 'Fertig',
   'onb.welcome.title': 'Deine Welten, deine Setups, ein Launcher.', 'onb.welcome.body': 'Ein paar kurze Fragen, dann kannst du spielen. Alles lässt sich später in den Einstellungen ändern.',
   'onb.language.title': 'Sprache wählen', 'onb.account.title': 'Wer spielt?',
   'onb.account.body': 'Lege jetzt einen Offline-Namen an. Die Microsoft-Anmeldung ist in diesem Build noch nicht verfügbar.',
-  'onb.ram.title': 'Wie viel Arbeitsspeicher?', 'onb.ram.body': 'Dein Computer hat {total}. Mehr ist nicht immer besser; Mod-Setups brauchen meist 4 bis 8 GB.', 'onb.ram.recommended': 'Empfehlung nutzen ({ram})',
   'onb.start': 'Los geht’s', 'onb.skip': 'Vorerst überspringen', 'onb.done.title': 'Bereit zum Spielen', 'onb.done.body': 'Das haben wir eingerichtet.', 'onb.done.noAccount': 'Noch keins', 'onb.finish': 'Launcher öffnen',
 };

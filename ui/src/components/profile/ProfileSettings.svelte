@@ -8,12 +8,13 @@
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import Seg from '../Seg.svelte';
   import InstanceIcon from '../InstanceIcon.svelte';
+  import RamControl from '../RamControl.svelte';
   import GroupTagsEditor from '../GroupTagsEditor.svelte';
   import PanoramaBackground from '../PanoramaBackground.svelte';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
   import type { Key } from '../../lib/i18n';
-  import { fmtDuration, fmtRam, fmtRelative } from '../../lib/format';
+  import { fmtDuration, fmtRelative } from '../../lib/format';
   import { actions, app, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
   import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
 
@@ -29,9 +30,6 @@
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const locked = $derived(isBusy(profile.id));
-  const globalRam = $derived(app.config?.ram ?? 4096);
-  const maxRam = $derived(Math.max(2048, app.totalRamMb || 8192));
-  const ram = $derived(profile.ram ?? globalRam);
   const mc3 = $derived(profile.mangoConfig === null ? 'default' : profile.mangoConfig ? 'on' : 'off');
 
   async function save(patch: Partial<ProfileView>) {
@@ -121,14 +119,9 @@
     </div>
 
     <div class="row col">
-      <div class="head">
-        <label for="ps-ram">{t('new.ram')}</label>
-        <label class="inl"><input type="checkbox" checked={profile.ram === null} onchange={(e) => save({ ram: e.currentTarget.checked ? null : globalRam })} />{t('psettings.useDefault', { ram: fmtRam(globalRam) })}</label>
-      </div>
-      <div class="ramrow">
-        <input id="ps-ram" type="range" min="1024" max={maxRam} step="512" value={ram} disabled={profile.ram === null} aria-valuetext={fmtRam(ram)} onchange={(e) => save({ ram: Number(e.currentTarget.value) })} />
-        <output class="mono"><b>{fmtRam(ram)}</b></output>
-      </div>
+      <div class="txt"><b id="ps-ram-l">{t('new.ram')}</b><div class="hint">{t('ram.hint.instance')}</div></div>
+      <RamControl id="ps-ram" value={profile.effectiveRamMb} source={profile.ramSource} hint={profile.ramHint} limits={app.ramLimits} defaultMb={app.defaultRamMb}
+        onsave={(ram) => save({ ram })} />
     </div>
 
     <div class="row col">
@@ -197,11 +190,6 @@
   .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
   .row.col { flex-direction: column; align-items: stretch; gap: 8px; }
   label { font-weight: 500; }
-  .head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .inl { display: inline-flex; align-items: center; gap: 8px; font-weight: 400; color: var(--paper-dim); font-size: 13.5px; }
-  .inl input { accent-color: var(--mango); width: 16px; height: 16px; }
-  .ramrow { display: flex; align-items: center; gap: 16px; }
-  .ramrow output { white-space: nowrap; color: var(--mango); }
   .danger { border-top-color: rgba(237, 102, 92, 0.4); }
   .danger h2 { padding: 14px 0 6px; color: var(--tomato); }
   .chg { display: grid; gap: 6px; }

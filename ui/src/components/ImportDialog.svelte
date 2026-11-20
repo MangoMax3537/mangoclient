@@ -9,6 +9,7 @@
   import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
   import BlockedPlanNote from './BlockedPlanNote.svelte';
+  import PlanRam from './PlanRam.svelte';
   import { fmtBytes } from '../lib/format';
   import {
     baseName, importErrorKey, importRetryable, KIND_LABEL, nameValid, NAME_MAX,
@@ -63,6 +64,7 @@
         <div><dt>{t('flow.pack.size')}</dt><dd class="mono">{plan.sizeBytes !== null ? fmtBytes(plan.sizeBytes, lang()) : t('import.sizeUnknown')}</dd></div>
       </dl>
 
+      <PlanRam {plan} />
       <BlockedPlanNote files={plan.blockedFiles} id="imp-blocked" />
 
       {#if importing}

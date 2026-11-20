@@ -50,8 +50,8 @@
 {:else if view === 'settings'}
   <div class="pg narrow">
     {@render head(false)}
-    {#each Array(3) as _, i (i)}
-      <div class="ss"><Skeleton variant="bar" lh={30} h={11} w={120} /><ListRowSkeleton count={3} img={0} padding="12px 0" gap={24} bars={[{ w: '36%', h: 14 }, { w: '56%', h: 11 }]} tail={40} announce={false} /></div>
+    {#each [1, 3, 2, 3] as rows, i (i)}
+      <div class="ss"><Skeleton variant="bar" lh={37} h={11} w={120} /><ListRowSkeleton count={rows} img={0} rowHeight={64} padding="0" gap={24} bars={[{ w: '36%', h: 14 }, { w: '56%', h: 11 }]} tail={40} announce={false} /></div>
     {/each}
   </div>
 {:else}
@@ -74,7 +74,7 @@
   .axissk { display: flex; justify-content: space-between; }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-7); }
   .pg { height: 100%; overflow: hidden; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
-  .pg.narrow { max-width: 832px; display: grid; align-content: start; gap: 24px; }
+  .pg.narrow { max-width: 800px; display: grid; align-content: start; gap: 24px; }
   .head { display: grid; gap: 4px; }
   .bar { display: flex; gap: var(--s-3); align-items: center; }
   .page { display: flex; flex-direction: column; height: 100%; padding: 16px 20px 0; gap: 12px; }

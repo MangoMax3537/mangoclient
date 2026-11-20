@@ -6,7 +6,7 @@ import {
   accepts, blockedFilesFor, CF_BLOCKED, catalogFor, compat, hash, idFor, metaOf, onProvider, packMeta, rowOfSlug, sizeOf, slugOf, typeOfSlug, UPDATE_NEW_DEPS, websiteOf,
 } from './mockCatalog';
 import type {
-  ApiEvents, BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, ProjectDetail, ProjectHit,
+  ApiEvents, BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, RamHint, ProjectDetail, ProjectHit,
   ProjectType, ProjectVersion, Provider, Screenshot, ServerEntry, ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
 
@@ -113,6 +113,9 @@ Fabric Mods:
 \tfabric-api: Fabric API 0.119.4+1.21.4
 \tsodium: Sodium 0.6.9
 `;
+
+/** A CurseForge pack's memory wish, as the plan dialog and the instance settings show it. */
+const CF_RAM: RamHint = { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' };
 
 export function createContentApi(ctx: MockCtx): Part2 {
   const { now } = ctx;
@@ -434,6 +437,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
         provider, projectId, versionId: versionId ?? `${hit.slug}-v1`, name: hit.title, mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion,
         fileCount: m.files, sizeBytes: m.bytes, iconUrl: null,
         blockedFiles: provider === 'curseforge' ? blockedFilesFor(hit.slug) : [],
+        ...(provider === 'curseforge' ? { ram: CF_RAM, appliedRamMb: 4096 } : { ram: null, appliedRamMb: null }),
       };
     },
     async modpackInstall({ provider, projectId, name }) {
@@ -448,6 +452,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       }
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
+        ...(provider === 'curseforge' ? { ramSource: 'modpack' as const, ramHint: CF_RAM } : { ramSource: 'user' as const, ramHint: null }), effectiveRamMb: 4096,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
         icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, group: null, tags: [], // the pack logo becomes the image icon
       };

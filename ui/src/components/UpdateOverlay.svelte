@@ -2,6 +2,7 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ArrowCircleUpIcon from 'phosphor-svelte/lib/ArrowCircleUpIcon';
   import Modal from './Modal.svelte';
+  import Brand from './Brand.svelte';
   import { actions, t, updates } from '../lib/stores.svelte';
 
   const u = $derived(updates.status);
@@ -9,6 +10,7 @@
 
 <Modal title={updates.installing ? t('update.installing') : t('update.available', { v: u.version ?? '' })} locked={updates.installing} onclose={() => (updates.overlay = false)}>
   <div class="take" aria-live="polite">
+    <Brand />
     {#if updates.installing}
       <span class="spin"><CircleNotchIcon weight="bold" size={32} aria-hidden="true" /></span>
       <p>{t('update.installingHint')}</p>
