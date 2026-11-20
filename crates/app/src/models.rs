@@ -520,10 +520,44 @@ pub struct InstallPlan {
     pub conflicts: Vec<PlanConflict>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// Where a blocked pack file stands (Part 5 of `docs/ipc.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockedState {
+    /// The user has to fetch it from the CurseForge page.
+    Pending,
+    /// Found on Modrinth by hash: will be, or was, installed from there.
+    MatchedModrinth,
+    /// A matching file turned up in a watched folder; being copied.
+    Found,
+    Installed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockedModrinth {
+    pub project_id: String,
+    pub version_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockedFile {
+    /// Display name (the project name when known, else the file name).
     pub name: String,
+    /// The bare file name the pack expects; the key for `blocked_skip`.
+    pub file_name: String,
+    /// The CurseForge page to fetch it from.
     pub url: String,
+    pub sha1: Option<String>,
+    pub size: Option<u64>,
+    #[serde(rename = "type")]
+    pub kind: ContentType,
+    pub state: BlockedState,
+    pub modrinth: Option<BlockedModrinth>,
+    pub found_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

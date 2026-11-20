@@ -32,6 +32,28 @@ pub struct ProfileView {
     pub play_time_ms: u64,
     pub created: u64,
     pub mod_count: usize,
+    /// Blocked pack files still waiting for the user (pending or found).
+    pub pending_blocked: usize,
+    /// `null` = automatic.
+    pub icon: Option<InstanceIcon>,
+    /// The block the automatic rule picks (gallery ready), else `null`.
+    pub auto_block: Option<String>,
+    pub background: ProfileBackground,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum InstanceIcon {
+    Image,
+    Block { block: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ProfileBackground {
+    Auto,
+    Image { url: String },
+    None,
 }
 
 impl From<&Profile> for ProfileView {
@@ -51,6 +73,22 @@ impl From<&Profile> for ProfileView {
             play_time_ms: p.play_time_ms,
             created: p.created,
             mod_count: p.mods.len(),
+            pending_blocked: 0,
+            icon: if p.cover {
+                Some(InstanceIcon::Image)
+            } else {
+                p.icon_block
+                    .clone()
+                    .map(|block| InstanceIcon::Block { block })
+            },
+            auto_block: None,
+            background: match p.background.as_deref() {
+                Some("none") => ProfileBackground::None,
+                Some("image") => ProfileBackground::Image {
+                    url: crate::image_protocol::cover_url(&format!("{}-bg", p.id)),
+                },
+                _ => ProfileBackground::Auto,
+            },
         }
     }
 }
@@ -133,6 +171,9 @@ pub struct ConfigView {
     pub first_run_done: bool,
     pub telemetry: bool,
     pub sidebar_open: bool,
+    pub blocked_mods_modrinth_fallback: bool,
+    pub blocked_mods_watch_dirs: Vec<String>,
+    pub blocked_mods_check_subfolders: bool,
 }
 
 impl From<&Config> for ConfigView {
@@ -157,6 +198,9 @@ impl From<&Config> for ConfigView {
             first_run_done: c.first_run_done,
             telemetry: c.telemetry,
             sidebar_open: c.sidebar_open,
+            blocked_mods_modrinth_fallback: c.blocked_mods_modrinth_fallback,
+            blocked_mods_watch_dirs: c.blocked_mods_watch_dirs.clone(),
+            blocked_mods_check_subfolders: c.blocked_mods_check_subfolders,
         }
     }
 }

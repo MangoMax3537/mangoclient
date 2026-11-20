@@ -17,6 +17,7 @@ pub const SEARCH_TTL: Duration = Duration::from_secs(5 * 60);
 pub const METADATA_TTL: Duration = Duration::from_secs(15 * 60);
 pub const CATEGORY_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const CACHE_CAP: usize = 250;
+const HASH_BATCH: usize = 200;
 
 type Flight = Arc<OnceCell<std::result::Result<Value, Arc<NetError>>>>;
 
@@ -293,6 +294,26 @@ impl Client {
             METADATA_TTL,
         )
         .await
+    }
+
+    /// Batch lookup by file hash (`POST /version_files`, algorithm sha1).
+    /// Returns the version that owns each hash (keys lowercase); unknown
+    /// hashes are simply absent. Never cached.
+    pub async fn versions_by_sha1(&self, hashes: &[String]) -> Result<HashMap<String, Version>> {
+        let mut out = HashMap::new();
+        let mut unique: Vec<String> = hashes.iter().map(|h| h.to_ascii_lowercase()).collect();
+        unique.sort();
+        unique.dedup();
+        for chunk in unique.chunks(HASH_BATCH) {
+            let url = format!("{}/version_files", self.inner.base);
+            let body = serde_json::json!({"hashes": chunk, "algorithm": "sha1"});
+            let found: HashMap<String, Version> =
+                mango_net::post_json(&url, &body, &self.inner.fetch)
+                    .await
+                    .map_err(|e| Error::Net(Arc::new(e)))?;
+            out.extend(found.into_iter().map(|(h, v)| (h.to_ascii_lowercase(), v)));
+        }
+        Ok(out)
     }
 
     pub async fn categories(&self) -> Result<Value> {

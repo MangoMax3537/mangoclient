@@ -80,6 +80,19 @@ pub struct Config {
     /// Optional CurseForge API key supplied by the user. Never sent to the UI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub curseforge_api_key: Option<Secret>,
+    /// Look blocked CurseForge pack files up on Modrinth by hash.
+    #[serde(default = "default_true")]
+    pub blocked_mods_modrinth_fallback: bool,
+    /// Folders watched for files the user downloads by hand.
+    #[serde(default)]
+    pub blocked_mods_watch_dirs: Vec<String>,
+    /// Look into sub-folders of the watched folders too.
+    #[serde(default)]
+    pub blocked_mods_check_subfolders: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Config {
@@ -106,6 +119,12 @@ impl Config {
             first_run_done: false,
             telemetry: true,
             curseforge_api_key: None,
+            blocked_mods_modrinth_fallback: true,
+            blocked_mods_watch_dirs: crate::paths::default_downloads_dir()
+                .map(|d| d.display().to_string())
+                .into_iter()
+                .collect(),
+            blocked_mods_check_subfolders: false,
         }
     }
 
@@ -238,6 +257,12 @@ pub struct Profile {
     pub color: Option<String>,
     /// Derived from the existence of `covers/<id>.png`.
     pub cover: bool,
+    /// Chosen gallery block (`grass_block`); `None` = automatic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_block: Option<String>,
+    /// `none` or `image`; `None` = automatic (the version's panorama).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
     pub ram: Option<u32>,
     pub java_args: String,
     pub mods: Vec<ModRecord>,
@@ -258,6 +283,8 @@ impl Profile {
             loader_version: String::new(),
             color: None,
             cover: false,
+            icon_block: None,
+            background: None,
             ram: None,
             java_args: String::new(),
             mods: Vec::new(),

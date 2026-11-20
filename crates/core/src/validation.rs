@@ -126,6 +126,30 @@ fn api_key(v: &Value) -> R<Value> {
     }
 }
 
+/// Watch folders: at most 8 absolute paths without NUL, no duplicates.
+/// Whether they exist is checked on patches only (see [`config_patch`]), so a
+/// folder that disappeared never discards the stored setting.
+fn watch_dirs(v: &Value) -> R<Value> {
+    const NAME: &str = "blockedModsWatchDirs";
+    let list = v.as_array().ok_or_else(|| invalid(NAME))?;
+    if list.len() > MAX_WATCH_DIRS {
+        return Err(invalid(NAME));
+    }
+    let mut out: Vec<String> = Vec::new();
+    for item in list {
+        let s = text_str(item, NAME, 4096, false)?;
+        if !std::path::Path::new(s).is_absolute() {
+            return Err(invalid(NAME));
+        }
+        if !out.iter().any(|o| o == s) {
+            out.push(s.to_string());
+        }
+    }
+    Ok(json!(out))
+}
+
+pub const MAX_WATCH_DIRS: usize = 8;
+
 /// Validate a single config key; `None` when the key is unknown.
 pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
     Some(match key {
@@ -144,6 +168,8 @@ pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
         }
         "selectedProfile" | "selectedAccount" => nullable_id(v, key),
         "curseforgeApiKey" => api_key(v),
+        "blockedModsModrinthFallback" | "blockedModsCheckSubfolders" => boolean(v, key),
+        "blockedModsWatchDirs" => watch_dirs(v),
         _ => return None,
     })
 }
@@ -166,7 +192,16 @@ fn filter_patch(
 }
 
 pub fn config_patch(patch: &Value) -> R<Map<String, Value>> {
-    filter_patch(patch, "configuration", config_field)
+    let clean = filter_patch(patch, "configuration", config_field)?;
+    if let Some(Value::Array(dirs)) = clean.get("blockedModsWatchDirs") {
+        // A new setting must point at folders that exist now.
+        for d in dirs.iter().filter_map(Value::as_str) {
+            if std::fs::canonicalize(d).is_err() {
+                return Err(invalid("blockedModsWatchDirs"));
+            }
+        }
+    }
+    Ok(clean)
 }
 
 const MOD_STRING_KEYS: [&str; 8] = [
@@ -323,6 +358,23 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
             _ => Err(invalid("color")),
         },
         "cover" => boolean(v, "cover"),
+        "iconBlock" => match v {
+            Value::Null => Ok(Value::Null),
+            Value::String(s)
+                if !s.is_empty()
+                    && s.len() <= 32
+                    && s.bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') =>
+            {
+                Ok(v.clone())
+            }
+            _ => Err(invalid("iconBlock")),
+        },
+        "background" => match v {
+            Value::Null => Ok(Value::Null),
+            Value::String(s) if s == "none" || s == "image" => Ok(v.clone()),
+            _ => Err(invalid("background")),
+        },
         "ram" => match v {
             Value::Null => Ok(Value::Null),
             _ => integer(v, "profile ram", 1024, 131072),
@@ -441,6 +493,51 @@ mod tests {
         assert!(profile_patch(&json!({"session": {"pid": 0}})).is_err());
         assert!(profile_patch(&json!({"session": {"pid": 5}})).is_ok());
         assert!(profile_patch(&json!({"session": null})).is_ok());
+    }
+
+    #[test]
+    fn blocked_mods_settings_are_validated() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().display().to_string();
+        let ok = config_patch(&json!({
+            "blockedModsWatchDirs": [dir, dir],
+            "blockedModsModrinthFallback": false,
+            "blockedModsCheckSubfolders": true
+        }))
+        .unwrap();
+        assert_eq!(ok["blockedModsWatchDirs"], json!([dir]), "deduplicated");
+        let nine: Vec<String> = (0..9).map(|_| dir.clone()).collect();
+        let eight: Vec<String> = (0..8).map(|i| format!("{dir}/{i}")).collect();
+        for bad in [
+            json!("x"),
+            json!(["relative/dir"]),
+            json!([format!("{dir}\0")]),
+            json!([5]),
+            json!([format!("{dir}/does-not-exist")]),
+            json!(eight),
+        ] {
+            assert!(
+                config_patch(&json!({"blockedModsWatchDirs": bad})).is_err(),
+                "{bad}"
+            );
+        }
+        // Nine distinct paths are too many even before existence is checked.
+        let distinct: Vec<String> = (0..9).map(|i| format!("{dir}/{i}")).collect();
+        assert!(config_field("blockedModsWatchDirs", &json!(distinct))
+            .unwrap()
+            .is_err());
+        assert!(config_field("blockedModsWatchDirs", &json!(nine))
+            .unwrap()
+            .is_err());
+        assert!(config_patch(&json!({"blockedModsCheckSubfolders": "yes"})).is_err());
+        // A stored folder that vanished is still loaded.
+        let raw = json!({"blockedModsWatchDirs": ["/gone/for/good"]});
+        let c = crate::Config::from_value(&raw, 8192);
+        assert_eq!(
+            c.blocked_mods_watch_dirs,
+            vec!["/gone/for/good".to_string()]
+        );
+        assert!(c.blocked_mods_modrinth_fallback);
     }
 
     #[test]

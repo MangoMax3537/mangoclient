@@ -3,13 +3,14 @@
 //! Browsing and planning are provider-agnostic (see `providers.rs`);
 //! persistence goes through the store exactly like the legacy Modrinth path.
 
+use crate::blocked::BlockedEntry;
 use crate::content::{is_curseforge, InstallReporter, PROJECT_TYPES};
 use crate::error::{AppError, Res};
 use crate::events::{Event, LaunchLogEvent, LogLevelName};
 use crate::models::{
-    BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget,
-    ModpackPlan, PlanConflict, PlanRole, ProjectDetail, ProjectVersion, Provider, ProviderStatus,
-    SearchParams, SearchResult, StatusReason, TargetReason, TargetState, UpdateInfo,
+    ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, ModpackPlan,
+    PlanConflict, PlanRole, ProjectDetail, ProjectVersion, Provider, ProviderStatus, SearchParams,
+    SearchResult, StatusReason, TargetReason, TargetState, UpdateInfo,
 };
 use crate::providers::{
     cf_id, check_sort, fits, loader_need, pick_best, pick_latest, CurseSource, InstalledIndex,
@@ -69,7 +70,7 @@ fn distribution_blocked(title: &str, url: Option<&str>) -> AppError {
 }
 
 /// Filenames from an API must be one bare basename.
-fn safe_name(name: &str) -> Res<&str> {
+pub(crate) fn safe_name(name: &str) -> Res<&str> {
     let bare = !name.is_empty()
         && !name.contains(['/', '\\', '\0'])
         && name != "."
@@ -202,7 +203,7 @@ impl AppService {
         })
     }
 
-    fn warn(&self, profile_id: &str, line: String) {
+    pub(crate) fn warn(&self, profile_id: &str, line: String) {
         self.inner.emit(Event::LaunchLog(LaunchLogEvent {
             profile_id: profile_id.to_string(),
             line,
@@ -1144,6 +1145,7 @@ impl AppService {
                 return Err(e);
             }
         };
+        let blocked = self.blocked_entries(&resolved).await;
         let plan = ModpackPlan {
             provider: Provider::Curseforge,
             project_id: project.id.to_string(),
@@ -1160,19 +1162,13 @@ impl AppService {
                 .as_ref()
                 .and_then(|l| l.thumbnail_url.as_deref().or(l.url.as_deref()))
                 .and_then(crate::content::public_icon),
-            blocked_files: resolved
-                .blocked()
-                .into_iter()
-                .map(|b| BlockedFile {
-                    name: b.name,
-                    url: b.url,
-                })
-                .collect(),
+            blocked_files: blocked.iter().map(|b| b.file.clone()).collect(),
         };
         Ok(CursePack {
             plan,
             zip,
             resolved,
+            blocked,
         })
     }
 
@@ -1220,7 +1216,16 @@ impl AppService {
             .finish_curse_pack(&created, &project_id, version_id.as_deref())
             .await
         {
-            Ok(view) => Ok(view),
+            Ok(view) => {
+                let logo = project
+                    .logo
+                    .as_ref()
+                    .and_then(|l| l.url.as_deref().or(l.thumbnail_url.as_deref()));
+                self.apply_pack_logo(&created.id, logo).await;
+                Ok(self
+                    .profile(&created.id)
+                    .map_or(view, |p| crate::blocked::view_of(&self.inner.paths, &p)))
+            }
             Err(e) => {
                 // A half-installed pack is worse than none.
                 let _ = self.inner.with_store(|s| s.delete_profile(&created.id));
@@ -1241,10 +1246,10 @@ impl AppService {
             let r = reporter.clone();
             Arc::new(move |done, total| r.emit_throttled(done, total.max(done), "modpack"))
         };
-        let pack = self
+        let mut pack = self
             .curse_pack_prepare(project_id, version_id, Some(zip_progress))
             .await?;
-        let result = self.install_curse_pack(profile, &reporter, &pack).await;
+        let result = self.install_curse_pack(profile, &reporter, &mut pack).await;
         let _ = std::fs::remove_file(&pack.zip);
         result
     }
@@ -1253,7 +1258,7 @@ impl AppService {
         &self,
         profile: &Profile,
         reporter: &InstallReporter,
-        pack: &CursePack,
+        pack: &mut CursePack,
     ) -> Res<ProfileView> {
         let m = &pack.resolved.manifest;
         let mut patch = json!({"loader": m.loader, "loaderVersion": m.loader_version});
@@ -1263,12 +1268,6 @@ impl AppService {
             .with_store(|s| s.update_profile(&profile.id, &patch).map(|p| p.cloned()))?
             .ok_or_else(AppError::profile_not_found)?;
 
-        for b in pack.resolved.blocked() {
-            self.warn(
-                &profile.id,
-                format!("Skipped {}: get it at {}", b.name, b.url),
-            );
-        }
         for f in &pack.resolved.missing {
             self.warn(
                 &profile.id,
@@ -1287,15 +1286,42 @@ impl AppService {
         };
         cf::install_resolved(&pack.resolved, &pack.zip, &game_dir, Some(progress)).await?;
 
-        // The pack's jars become ordinary (local) content records.
+        // Blocked files Modrinth also hosts come from there; the rest wait
+        // for the user (see `blocked.rs`).
+        let modrinth_records = {
+            let r = reporter.clone();
+            let report = move |done: u64, total: u64, label: &str| {
+                r.emit_throttled(done, total.max(done), label)
+            };
+            self.install_modrinth_matches(&profile.id, &mut pack.blocked, &report)
+                .await
+        };
+        for b in pack
+            .blocked
+            .iter()
+            .filter(|b| b.file.state == crate::models::BlockedState::Pending)
+        {
+            self.warn(
+                &profile.id,
+                format!("Skipped {}: get it at {}", b.file.file_name, b.file.url),
+            );
+        }
+        let files: Vec<_> = pack.blocked.iter().map(|b| b.file.clone()).collect();
+        self.store_blocked(&profile.id, &files)?;
+
+        // The pack's jars become ordinary (local) content records; the ones
+        // fetched from Modrinth keep their own.
+        let mut snapshot = updated;
+        snapshot.mods.extend(modrinth_records);
         let paths = self.inner.paths.clone();
-        let synced =
-            tokio::task::spawn_blocking(move || mango_content::sync_profile_mods(&paths, &updated))
-                .await??;
+        let synced = tokio::task::spawn_blocking(move || {
+            mango_content::sync_profile_mods(&paths, &snapshot)
+        })
+        .await??;
         self.save_mods(&profile.id, &synced.mods)?;
         reporter.emit(1, 1, "done");
         let fresh = self.profile(&profile.id)?;
-        Ok(ProfileView::from(&fresh))
+        Ok(crate::blocked::view_of(&self.inner.paths, &fresh))
     }
 }
 
@@ -1303,4 +1329,5 @@ struct CursePack {
     plan: ModpackPlan,
     zip: PathBuf,
     resolved: cf::ResolvedPack,
+    blocked: Vec<BlockedEntry>,
 }

@@ -924,3 +924,108 @@ fn loader_detection_follows_dependency_priority() {
         (Loader::Vanilla, String::new())
     );
 }
+
+/// A server that reads the whole request (head and body) and records
+/// `(request line, body)`.
+type Seen = Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
+
+async fn post_server(
+    status: u16,
+    answer: Value,
+) -> (Client, Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let seen: Seen = Arc::default();
+    let log = seen.clone();
+    let answer = serde_json::to_vec(&answer).unwrap();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut sock, _)) = listener.accept().await else {
+                return;
+            };
+            let (log, answer) = (log.clone(), answer.clone());
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 4096];
+                let (head_end, len) = loop {
+                    if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&buf[..i]).to_ascii_lowercase();
+                        let len = head
+                            .lines()
+                            .find_map(|l| l.strip_prefix("content-length:")?.trim().parse().ok())
+                            .unwrap_or(0usize);
+                        break (i + 4, len);
+                    }
+                    match sock.read(&mut tmp).await {
+                        Ok(0) | Err(_) => return,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                    }
+                };
+                while buf.len() < head_end + len {
+                    match sock.read(&mut tmp).await {
+                        Ok(0) | Err(_) => return,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                    }
+                }
+                let line = String::from_utf8_lossy(&buf)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                log.lock()
+                    .unwrap()
+                    .push((line, buf[head_end..head_end + len].to_vec()));
+                let mut out = format!(
+                    "HTTP/1.1 {status} X\r\nConnection: close\r\nContent-Length: {}\r\n\r\n",
+                    answer.len()
+                )
+                .into_bytes();
+                out.extend_from_slice(&answer);
+                let _ = sock.write_all(&out).await;
+            });
+        }
+    });
+    let client = Client::with_options(
+        base,
+        FetchOptions {
+            retries: 0,
+            ..FetchOptions::default()
+        },
+    );
+    (client, seen)
+}
+
+#[tokio::test]
+async fn versions_by_sha1_posts_the_batch_and_maps_hashes_to_versions() {
+    let sha = "ab".repeat(20);
+    let (client, seen) = post_server(
+        200,
+        json!({
+            sha.to_uppercase(): {"id": "v1", "project_id": "p1", "loaders": ["fabric"],
+                "files": [{"url": "u", "filename": "a.jar", "primary": true, "hashes": {"sha1": sha}}]}
+        }),
+    )
+    .await;
+    let other = "cd".repeat(20);
+    let got = client
+        .versions_by_sha1(&[sha.to_uppercase(), sha.clone(), other.clone()])
+        .await
+        .unwrap();
+    assert_eq!(got.len(), 1, "unknown hashes are absent");
+    assert_eq!(got[&sha].id, "v1");
+    assert_eq!(got[&sha].loaders, vec!["fabric".to_string()]);
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "one request for the whole batch");
+    assert!(seen[0].0.starts_with("POST /version_files "));
+    let body: Value = serde_json::from_slice(&seen[0].1).unwrap();
+    assert_eq!(body, json!({"hashes": [sha, other], "algorithm": "sha1"}));
+}
+
+#[tokio::test]
+async fn versions_by_sha1_fails_on_http_errors_and_skips_empty_input() {
+    let (client, seen) = post_server(500, json!({})).await;
+    assert!(client.versions_by_sha1(&["ab".repeat(20)]).await.is_err());
+    assert!(client.versions_by_sha1(&[]).await.unwrap().is_empty());
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}

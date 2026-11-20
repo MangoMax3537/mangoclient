@@ -31,7 +31,7 @@ fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
 }
 
 /// A bare file name: no separators, no `.`/`..`, no NUL.
-fn bare_name(name: &str) -> bool {
+pub(crate) fn bare_name(name: &str) -> bool {
     !name.is_empty()
         && name != "."
         && name != ".."
@@ -41,13 +41,13 @@ fn bare_name(name: &str) -> bool {
 
 // ---- screenshots ----
 
-fn is_screenshot(name: &str) -> bool {
+pub(crate) fn is_screenshot(name: &str) -> bool {
     let l = name.to_ascii_lowercase();
     l.ends_with(".png") || l.ends_with(".jpg") || l.ends_with(".jpeg")
 }
 
 impl AppService {
-    fn screenshot_dir(&self, profile_id: &str) -> Res<PathBuf> {
+    pub(crate) fn screenshot_dir(&self, profile_id: &str) -> Res<PathBuf> {
         self.profile(profile_id)?;
         Ok(self
             .inner

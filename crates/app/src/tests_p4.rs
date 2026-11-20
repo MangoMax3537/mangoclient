@@ -10,10 +10,10 @@ use serde_json::{json, Value};
 use sha1::{Digest, Sha1};
 use std::sync::{Arc, Mutex};
 
-const KEY: &str = "$2a$10$abcdefghijklmnopqrstuv.wxyz0123456789ABCDEFGHIJKLMNO";
+pub(crate) const KEY: &str = "$2a$10$abcdefghijklmnopqrstuv.wxyz0123456789ABCDEFGHIJKLMNO";
 
 #[derive(Default)]
-struct Sink(Mutex<Vec<Event>>);
+pub(crate) struct Sink(Mutex<Vec<Event>>);
 
 impl EventSink for Sink {
     fn emit(&self, event: Event) {
@@ -22,10 +22,10 @@ impl EventSink for Sink {
 }
 
 impl Sink {
-    fn events(&self) -> Vec<Event> {
+    pub(crate) fn events(&self) -> Vec<Event> {
         self.0.lock().unwrap().clone()
     }
-    fn warnings(&self) -> Vec<String> {
+    pub(crate) fn warnings(&self) -> Vec<String> {
         self.events()
             .into_iter()
             .filter_map(|e| match e {
@@ -54,6 +54,7 @@ fn fx(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
             ..mango_net::FetchOptions::default()
         },
         partners: Vec::new(),
+        icon_hosts: Vec::new(),
         modrinth_api: modrinth.to_string(),
         curseforge_api: curse.to_string(),
         curseforge_key: key.map(Secret::new),
@@ -89,11 +90,11 @@ impl Fx {
 
 // ---------------------------------------------------------------- CurseForge mock
 
-fn cf_bytes(name: &str) -> Vec<u8> {
+pub(crate) fn cf_bytes(name: &str) -> Vec<u8> {
     format!("cf:{name}").into_bytes()
 }
 
-fn cf_project(id: u64, slug: &str, class: u32, allow: Option<bool>) -> Value {
+pub(crate) fn cf_project(id: u64, slug: &str, class: u32, allow: Option<bool>) -> Value {
     json!({
         "id": id, "name": format!("P{id}"), "slug": slug, "classId": class,
         "summary": "sum", "downloadCount": 99, "thumbsUpCount": 7,
@@ -106,18 +107,20 @@ fn cf_project(id: u64, slug: &str, class: u32, allow: Option<bool>) -> Value {
     })
 }
 
-struct CfFile {
-    id: u64,
-    mod_id: u64,
-    name: &'static str,
-    versions: Vec<&'static str>,
-    release: u32,
-    date: &'static str,
-    deps: Vec<(u64, u32)>,
+pub(crate) struct CfFile {
+    pub(crate) id: u64,
+    pub(crate) mod_id: u64,
+    pub(crate) name: &'static str,
+    pub(crate) versions: Vec<&'static str>,
+    pub(crate) release: u32,
+    pub(crate) date: &'static str,
+    pub(crate) deps: Vec<(u64, u32)>,
     /// `false` = null downloadUrl.
-    url: bool,
+    pub(crate) url: bool,
     /// File content; defaults to `cf:<name>`.
-    body: Option<Vec<u8>>,
+    pub(crate) body: Option<Vec<u8>>,
+    /// `false` = the API lists no hashes.
+    pub(crate) hash: bool,
 }
 
 impl CfFile {
@@ -126,7 +129,12 @@ impl CfFile {
     }
 }
 
-fn cf_file(id: u64, mod_id: u64, name: &'static str, versions: &[&'static str]) -> CfFile {
+pub(crate) fn cf_file(
+    id: u64,
+    mod_id: u64,
+    name: &'static str,
+    versions: &[&'static str],
+) -> CfFile {
     CfFile {
         id,
         mod_id,
@@ -137,6 +145,7 @@ fn cf_file(id: u64, mod_id: u64, name: &'static str, versions: &[&'static str]) 
         deps: Vec::new(),
         url: true,
         body: None,
+        hash: true,
     }
 }
 
@@ -148,7 +157,7 @@ fn cf_file_json(f: &CfFile, base: &str) -> Value {
         "releaseType": f.release, "fileDate": f.date, "fileLength": bytes.len(),
         "downloadUrl": if f.url { json!(format!("{base}/cdn/{}", f.name)) } else { Value::Null },
         "gameVersions": f.versions,
-        "hashes": [{"value": hex::encode(Sha1::digest(&bytes)), "algo": 1}],
+        "hashes": if f.hash { json!([{"value": hex::encode(Sha1::digest(&bytes)), "algo": 1}]) } else { json!([]) },
         "dependencies": f.deps.iter().map(|(m, r)| json!({"modId": m, "relationType": r})).collect::<Vec<_>>(),
     })
 }
@@ -162,7 +171,7 @@ fn qs(path: &str, key: &str) -> Option<String> {
 
 /// A CurseForge API + CDN over `projects` and `files`. Extra routes can be
 /// added with `extra` (checked first).
-fn cf_server(
+pub(crate) fn cf_server(
     projects: Vec<Value>,
     files: Vec<CfFile>,
     extra: impl Fn(&str, &Req) -> Option<(u16, Vec<u8>)> + Send + Sync + 'static,
@@ -253,7 +262,7 @@ fn cf_server(
 /// 100 Alpha (fabric 1.21.1) requires 200 Lib, optional 300 Opt, incompatible 400 Bad;
 /// 500 is blocked by its author; 600 has no download url; 700 is a shader pack;
 /// 800 is forge-only 1.20.1; 900 and 901 require each other.
-fn cf_world() -> (Vec<Value>, Vec<CfFile>) {
+pub(crate) fn cf_world() -> (Vec<Value>, Vec<CfFile>) {
     let projects = vec![
         cf_project(100, "alpha", 6, Some(true)),
         cf_project(200, "lib", 6, None),
@@ -1558,7 +1567,7 @@ async fn both_providers_live_side_by_side_in_one_profile() {
 
 // ---------------------------------------------------------------- modpacks
 
-fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+pub(crate) fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
     use std::io::Write;
     let mut buf = std::io::Cursor::new(Vec::new());
     {
@@ -1617,7 +1626,13 @@ async fn curseforge_modpack_plan_and_install() {
             "mcVersion": "1.21.1", "loader": "fabric", "loaderVersion": "0.16.9",
             "fileCount": 2, "sizeBytes": alpha,
             "iconUrl": plan.icon_url,
-            "blockedFiles": [{"name": "secret-1.jar", "url": "https://www.curseforge.com/minecraft/mc-mods/secret"}]
+            "blockedFiles": [{
+                "name": "P500", "fileName": "secret-1.jar",
+                "url": "https://www.curseforge.com/minecraft/mc-mods/secret",
+                "sha1": hex::encode(Sha1::digest(cf_bytes("secret-1.jar"))),
+                "size": cf_bytes("secret-1.jar").len(), "type": "mod", "state": "pending",
+                "modrinth": null, "foundPath": null
+            }]
         })
     );
     assert!(plan.icon_url.is_some());

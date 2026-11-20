@@ -63,6 +63,11 @@ pub struct ServiceOptions {
     pub api_base: Option<String>,
     /// How often the `mods/` watcher looks at the selected/running profiles.
     pub watch_interval: Duration,
+    /// How often a blocked-files watcher looks at the watched folders.
+    pub blocked_poll_interval: Duration,
+    /// Watch folder used when the config lists none. `None` = the OS
+    /// Downloads folder.
+    pub downloads_dir: Option<PathBuf>,
     /// Hosts remote images (Modrinth icons, gallery) may be fetched from.
     pub icon_hosts: Vec<String>,
     /// Allow plain http for remote images (tests only).
@@ -102,6 +107,8 @@ impl Default for ServiceOptions {
             auto_update_check: true,
             api_base: None,
             watch_interval: Duration::from_secs(2),
+            blocked_poll_interval: Duration::from_secs(1),
+            downloads_dir: None,
             icon_hosts: vec![
                 "cdn.modrinth.com".to_string(),
                 "media.forgecdn.net".to_string(),
@@ -147,6 +154,24 @@ pub(crate) struct Inner {
     /// Serializes token refreshes so a rotated refresh token is never lost.
     pub refresh_gate: tokio::sync::Mutex<()>,
     pub signing_in: AtomicBool,
+    /// Running blocked-files watchers by profile id.
+    pub watchers: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
+    /// Serializes read-modify-write cycles of the blocked-files sidecars.
+    pub blocked_gate: Mutex<()>,
+    /// State of the block-gallery job.
+    pub blocks_run: Mutex<crate::block_icons::BlocksRun>,
+    /// Profiles with a panorama extraction in flight.
+    pub pano_busy: Mutex<HashSet<String>>,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        // A watcher must not outlive the service it reports to.
+        let watchers = self.watchers.get_mut().unwrap_or_else(|e| e.into_inner());
+        for (_, handle) in watchers.drain() {
+            handle.abort();
+        }
+    }
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -229,6 +254,10 @@ impl AppService {
                 sessions: Mutex::new(HashMap::new()),
                 refresh_gate: tokio::sync::Mutex::new(()),
                 signing_in: AtomicBool::new(false),
+                watchers: Mutex::new(HashMap::new()),
+                blocked_gate: Mutex::new(()),
+                blocks_run: Mutex::new(crate::block_icons::BlocksRun::default()),
+                pano_busy: Mutex::new(HashSet::new()),
             }),
         };
         // Migrates legacy plaintext tokens into envelopes and scrubs them.
@@ -246,7 +275,10 @@ impl AppService {
         let (config, profiles, records) = inner.with_store(|s| {
             (
                 ConfigView::from(&s.config),
-                s.profiles.iter().map(ProfileView::from).collect(),
+                s.profiles
+                    .iter()
+                    .map(|p| crate::blocked::view_of(&s.paths, p))
+                    .collect(),
                 s.accounts.clone(),
             )
         });
@@ -289,7 +321,7 @@ impl AppService {
             data["loaderVersion"] = Value::String(lv);
         }
         let p = self.inner.with_store(|s| s.add_profile(&data))?;
-        Ok(ProfileView::from(&p))
+        Ok(crate::blocked::view_of(self.paths(), &p))
     }
 
     /// Only the user-editable fields of `ProfileView` are applied; derived
@@ -319,9 +351,11 @@ impl AppService {
             clean.insert("loaderVersion".into(), v);
         }
         self.inner.with_store(|s| {
-            s.update_profile(&id, &Value::Object(clean))?
-                .map(ProfileView::from)
-                .ok_or_else(AppError::profile_not_found)
+            let p = s
+                .update_profile(&id, &Value::Object(clean))?
+                .cloned()
+                .ok_or_else(AppError::profile_not_found)?;
+            Ok(crate::blocked::view_of(&s.paths, &p))
         })
     }
 
@@ -402,9 +436,11 @@ impl AppService {
             let mut patch = json!({"mods": rebased});
             // `cover` is derived from the copied file.
             patch["cover"] = json!(s.paths.cover_file(&created.id)?.is_file());
-            s.update_profile(&created.id, &patch)?
-                .map(ProfileView::from)
-                .ok_or_else(AppError::profile_not_found)
+            let p = s
+                .update_profile(&created.id, &patch)?
+                .cloned()
+                .ok_or_else(AppError::profile_not_found)?;
+            Ok(crate::blocked::view_of(&s.paths, &p))
         })
     }
 

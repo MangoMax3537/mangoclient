@@ -244,6 +244,7 @@ impl Store {
         self.save_accounts()?;
         let _ = std::fs::remove_dir_all(instance);
         let _ = std::fs::remove_file(cover);
+        let _ = std::fs::remove_file(self.paths.background_file(id)?);
         Ok(())
     }
 

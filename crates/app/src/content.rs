@@ -425,7 +425,14 @@ impl AppService {
             .finish_modpack(&created, &project.id, &version.id)
             .await
         {
-            Ok(view) => Ok(view),
+            Ok(view) => {
+                // The pack's logo becomes the instance icon (best effort).
+                self.apply_pack_logo(&created.id, project.icon_url.as_deref())
+                    .await;
+                Ok(self
+                    .profile(&created.id)
+                    .map_or(view, |p| crate::blocked::view_of(&self.inner.paths, &p)))
+            }
             Err(e) => {
                 // A half-installed pack is worse than none.
                 let _ = self.inner.with_store(|s| s.delete_profile(&created.id));
@@ -481,7 +488,7 @@ impl AppService {
         self.save_mods(&profile.id, &synced.mods)?;
         reporter.emit(1, 1, "done");
         let fresh = self.profile(&profile.id)?;
-        Ok(crate::types::ProfileView::from(&fresh))
+        Ok(crate::blocked::view_of(&self.inner.paths, &fresh))
     }
 }
 

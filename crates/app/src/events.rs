@@ -1,4 +1,5 @@
-use crate::models::{ServerStatus, UpdateStatus};
+use crate::block_icons::BlockIconsStatus;
+use crate::models::{BlockedFile, ServerStatus, UpdateStatus};
 use crate::types::LaunchState;
 use serde::Serialize;
 use serde_json::Value;
@@ -71,6 +72,19 @@ pub struct AccountsChangedEvent {
     pub uuid: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockedChangedEvent {
+    pub profile_id: String,
+    pub files: Vec<BlockedFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanoramaReadyEvent {
+    pub profile_id: String,
+}
+
 /// Rust -> UI events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -82,6 +96,9 @@ pub enum Event {
     UpdateStatus(UpdateStatus),
     ContentChanged(ContentChangedEvent),
     AccountsChanged(AccountsChangedEvent),
+    BlockedChanged(BlockedChangedEvent),
+    BlocksStatus(BlockIconsStatus),
+    PanoramaReady(PanoramaReadyEvent),
 }
 
 impl Event {
@@ -96,6 +113,9 @@ impl Event {
             Event::UpdateStatus(_) => "update:status",
             Event::ContentChanged(_) => "content:changed",
             Event::AccountsChanged(_) => "accounts:changed",
+            Event::BlockedChanged(_) => "blocked:changed",
+            Event::BlocksStatus(_) => "blocks:status",
+            Event::PanoramaReady(_) => "panorama:ready",
         }
     }
 
@@ -110,6 +130,9 @@ impl Event {
             Event::UpdateStatus(e) => serde_json::to_value(e),
             Event::ContentChanged(e) => serde_json::to_value(e),
             Event::AccountsChanged(e) => serde_json::to_value(e),
+            Event::BlockedChanged(e) => serde_json::to_value(e),
+            Event::BlocksStatus(e) => serde_json::to_value(e),
+            Event::PanoramaReady(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

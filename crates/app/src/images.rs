@@ -24,9 +24,10 @@ impl AppService {
         }
     }
 
-    async fn fetch_remote_image(&self, remote: &RemoteImage) -> Res<()> {
+    /// Only https (http in tests) and the allow-listed CDN hosts.
+    pub(crate) fn check_icon_host(&self, raw: &str) -> Res<()> {
         let opts = &self.inner.opts;
-        let url = url::Url::parse(&remote.url).map_err(|_| AppError::validation("bad url"))?;
+        let url = url::Url::parse(raw).map_err(|_| AppError::validation("bad url"))?;
         let scheme_ok = url.scheme() == "https" || (opts.icon_allow_http && url.scheme() == "http");
         let host_ok = url
             .host_str()
@@ -34,6 +35,12 @@ impl AppService {
         if !scheme_ok || !host_ok {
             return Err(AppError::new("forbidden_host", "Image host is not allowed"));
         }
+        Ok(())
+    }
+
+    async fn fetch_remote_image(&self, remote: &RemoteImage) -> Res<()> {
+        let opts = &self.inner.opts;
+        self.check_icon_host(&remote.url)?;
         let bytes = mango_net::get_bytes(&remote.url, &opts.fetch).await?;
         if bytes.len() > MAX_REMOTE_IMAGE {
             return Err(AppError::new("image_too_large", "Image is too large"));

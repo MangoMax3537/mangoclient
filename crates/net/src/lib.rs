@@ -19,5 +19,5 @@ pub use download::{
 };
 pub use error::NetError;
 pub use hash::{hash_file, HashAlgo};
-pub use http::{fetch_with_retry, get_bytes, get_json, FetchOptions, UA};
+pub use http::{fetch_with_retry, get_bytes, get_json, post_json, FetchOptions, UA};
 pub use pool::pool;

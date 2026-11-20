@@ -5,10 +5,14 @@
 
 mod accounts;
 mod background;
+mod backgrounds;
+mod block_icons;
+mod blocked;
 mod content;
 mod error;
 mod events;
 mod host;
+mod icon_images;
 pub mod image_protocol;
 mod images;
 mod install;
@@ -28,12 +32,19 @@ mod tests_p2;
 mod tests_p3;
 #[cfg(test)]
 mod tests_p4;
+#[cfg(test)]
+mod tests_p5;
+#[cfg(test)]
+mod tests_p6;
 
 pub use accounts::LaunchCredentials;
+pub use backgrounds::{PanoramaSet, PanoramaSource};
+pub use block_icons::{BlockIcon, BlockIconsStatus, BlocksState};
 pub use error::{AppError, Res};
 pub use events::{
-    AccountsChangedEvent, ContentChangedEvent, Event, EventSink, InstallProgressEvent,
-    LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName, ProgressPhase,
+    AccountsChangedEvent, BlockedChangedEvent, ContentChangedEvent, Event, EventSink,
+    InstallProgressEvent, LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName,
+    PanoramaReadyEvent, ProgressPhase,
 };
 pub use host::{
     is_login_redirect, login_navigation_allowed, CannedLoginWindow, ClipboardImage, ExternalOpener,
@@ -41,15 +52,15 @@ pub use host::{
     SystemOpener,
 };
 pub use models::{
-    BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry,
-    LogKind, LogText, LogUpload, ModpackPlan, PlanConflict, PlanRole, ProjectDetail, ProjectHit,
-    ProjectVersion, Provider, ProviderStatus, Screenshot, ScreenshotAction, SearchParams,
-    SearchResult, ServerEntry, ServerPlayers, ServerStatus, StatsDay, StatsProfile, StatsSummary,
-    StatusReason, StorageKey, StorageUsage, TargetReason, TargetState, ToggleResult,
-    UninstallResult, UpdateInfo, UpdateStatus,
+    BlockedFile, BlockedModrinth, BlockedState, ContentItem, ContentType, InstallPlan,
+    InstallPlanItem, InstallTarget, LogEntry, LogKind, LogText, LogUpload, ModpackPlan,
+    PlanConflict, PlanRole, ProjectDetail, ProjectHit, ProjectVersion, Provider, ProviderStatus,
+    Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerPlayers,
+    ServerStatus, StatsDay, StatsProfile, StatsSummary, StatusReason, StorageKey, StorageUsage,
+    TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
 pub use service::{AppService, ServiceOptions};
 pub use types::{
-    AppState, ConfigView, Latest, LaunchResult, LaunchState, LoaderVersion, ProfileView,
-    PublicAccount, VersionEntry, VersionManifest,
+    AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
+    ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,
 };

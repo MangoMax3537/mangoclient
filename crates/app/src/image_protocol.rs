@@ -8,6 +8,8 @@
 //! | `cover/<uuid>` | `covers/<uuid>.png` |
 //! | `f/<base64url abs path>` | an image under `covers/`, `cache/mod-icons/`, `cache/server-icons/` or a profile's `screenshots/` |
 //! | `head/<uuid>` | the 8x8 face (+ hat) of the cached skin, 64x64 PNG |
+//! | `block/<id>/<top\|left\|right>` | a face of the block gallery, `cache/block-icons/` |
+//! | `panorama/<version>/<0..5>` | a title-screen panorama face, `cache/panoramas/` |
 //! | `icon/<base64url https url>` | a remote Modrinth image once cached under `cache/mod-icons/` |
 //!
 //! Only `png|jpg|jpeg|webp|gif` files are ever served, and only when their
@@ -139,7 +141,17 @@ fn split_url(url: &str) -> Option<(&str, &str)> {
     }
     let rest = rest.trim_end_matches('/');
     let (kind, arg) = rest.split_once('/')?;
-    (!kind.is_empty() && !arg.is_empty() && !arg.contains('/')).then_some((kind, arg))
+    // `block/<id>/<face>` and `panorama/<version>/<n>` carry two segments.
+    let segments = if matches!(kind, "block" | "panorama") {
+        2
+    } else {
+        1
+    };
+    (!kind.is_empty()
+        && !arg.is_empty()
+        && arg.split('/').count() == segments
+        && arg.split('/').all(|s| !s.is_empty()))
+    .then_some((kind, arg))
 }
 
 /// Resolve a `mangoimg://` URL. Never touches the network and never writes.
@@ -147,8 +159,43 @@ pub fn resolve(paths: &Paths, url: &str) -> Result<Image, ImageError> {
     let (kind, arg) = split_url(url).ok_or(ImageError::BadUrl)?;
     match kind {
         "cover" => {
-            let file = paths.cover_file(arg).map_err(|_| ImageError::BadUrl)?;
+            // `<uuid>-bg` is the instance background.
+            let file = match arg.strip_suffix("-bg") {
+                Some(id) => paths.background_file(id),
+                None => paths.cover_file(arg),
+            }
+            .map_err(|_| ImageError::BadUrl)?;
             approve(&file, &[paths.covers()])
+        }
+        "block" => {
+            let (id, face) = arg.split_once('/').ok_or(ImageError::BadUrl)?;
+            let valid_id = !id.is_empty()
+                && id.len() <= 32
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+            if !valid_id || !matches!(face, "top" | "left" | "right") {
+                return Err(ImageError::BadUrl);
+            }
+            let root = crate::block_icons::blocks_root(paths);
+            let current = std::fs::read(root.join("current.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                .and_then(|v| v.get("mcVersion")?.as_str().map(str::to_string))
+                .filter(|v| crate::block_icons::safe_version_dir(v))
+                .ok_or(ImageError::NotFound)?;
+            let file = root.join(current).join(id).join(format!("{face}.png"));
+            approve(&file, &[root])
+        }
+        "panorama" => {
+            let (version, n) = arg.split_once('/').ok_or(ImageError::BadUrl)?;
+            if !crate::block_icons::safe_version_dir(version)
+                || !matches!(n, "0" | "1" | "2" | "3" | "4" | "5")
+            {
+                return Err(ImageError::BadUrl);
+            }
+            let root = crate::backgrounds::panoramas_root(paths);
+            approve(&root.join(version).join(format!("{n}.png")), &[root])
         }
         "f" => {
             let raw = URL_SAFE_NO_PAD

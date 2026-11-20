@@ -14,6 +14,6 @@ pub use model::{
     Account, AccountType, Config, Loader, ModDependency, ModRecord, ModType, Profile, Secret,
     Session,
 };
-pub use paths::{validate_profile_id, Paths};
+pub use paths::{default_downloads_dir, downloads_dir_in, validate_profile_id, Paths};
 pub use store::Store;
 pub use validation::{config_patch, profile_patch, validate_mods, ValidationError};

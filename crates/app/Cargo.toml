@@ -32,13 +32,14 @@ base64 = "0.22"
 async-trait = "0.1"
 zeroize = "1"
 png = "0.18"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+zip.workspace = true
 url = "2"
 semver = "1.0.23"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-zip.workspace = true
 sha2.workspace = true
 
 [lints]

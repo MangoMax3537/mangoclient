@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use mango_app::image_protocol::Image;
 use mango_app::{
-    AppError, AppService, AppState, ClipboardImage, ConfigView, ContentItem, ContentType, Event,
+    AppError, AppService, AppState, BlockIconsStatus, BlockedFile, ClipboardImage, ConfigView, ContentItem, ContentType, Event,
     EventSink, Host, InstallPlan, InstallTarget, LaunchResult, LoaderVersion, LogEntry, LogText,
-    LogUpload, LoginOutcome, LoginWindow, ModpackPlan, ProfileView, ProjectDetail, ProjectVersion,
+    LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion,
     Provider, ProviderStatus, PublicAccount, Screenshot, ScreenshotAction, SearchParams,
     SearchResult, ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey,
     StorageUsage, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 /// Emits the service events (`accounts:changed`, `launch:*`, `install:progress`, `servers:pinged`,
-/// `update:status`, `content:changed`).
+/// `update:status`, `content:changed`, `blocked:changed`, `blocks:status`, `panorama:ready`).
 struct TauriSink(AppHandle);
 
 impl EventSink for TauriSink {
@@ -322,6 +322,88 @@ async fn modpack_install(
         .await
 }
 
+// ---- blocked CurseForge files (Part 5) ----
+
+#[tauri::command]
+fn blocked_files(svc: Svc<'_>, profile_id: String) -> Res<Vec<BlockedFile>> {
+    svc.blocked_files(profile_id)
+}
+
+#[tauri::command]
+async fn blocked_watch_start(svc: Svc<'_>, profile_id: String) -> Res<Vec<String>> {
+    svc.blocked_watch_start(profile_id).await
+}
+
+#[tauri::command]
+fn blocked_watch_stop(svc: Svc<'_>, profile_id: String) -> Res<()> {
+    svc.blocked_watch_stop(profile_id)
+}
+
+#[tauri::command]
+fn blocked_skip(svc: Svc<'_>, profile_id: String, file_name: String) -> Res<Vec<BlockedFile>> {
+    svc.blocked_skip(profile_id, file_name)
+}
+
+#[tauri::command]
+fn blocked_open_folder(svc: Svc<'_>) -> Res<String> {
+    svc.blocked_open_folder()
+}
+
+// ---- instance icons and backgrounds (Parts 6 and 7) ----
+
+#[tauri::command]
+fn block_icons_status(svc: Svc<'_>) -> Res<BlockIconsStatus> {
+    Ok(svc.block_icons_status())
+}
+
+#[tauri::command]
+async fn block_icons_prepare(svc: Svc<'_>, force: Option<bool>) -> Res<BlockIconsStatus> {
+    svc.block_icons_prepare(force.unwrap_or(false)).await
+}
+
+#[tauri::command]
+fn profile_icon_set_block(svc: Svc<'_>, id: String, block: String) -> Res<ProfileView> {
+    svc.profile_icon_set_block(id, block)
+}
+
+#[tauri::command]
+async fn profile_icon_set_image(svc: Svc<'_>, id: String, file_path: String) -> Res<ProfileView> {
+    svc.profile_icon_set_image(id, file_path).await
+}
+
+#[tauri::command]
+fn profile_icon_clear(svc: Svc<'_>, id: String) -> Res<ProfileView> {
+    svc.profile_icon_clear(id)
+}
+
+#[tauri::command]
+async fn panorama_for_profile(svc: Svc<'_>, id: String) -> Res<Option<PanoramaSet>> {
+    svc.panorama_for_profile(id).await
+}
+
+#[tauri::command]
+async fn profile_background_set_screenshot(
+    svc: Svc<'_>,
+    id: String,
+    name: String,
+) -> Res<ProfileView> {
+    svc.profile_background_set_screenshot(id, name).await
+}
+
+#[tauri::command]
+async fn profile_background_set_image(
+    svc: Svc<'_>,
+    id: String,
+    file_path: String,
+) -> Res<ProfileView> {
+    svc.profile_background_set_image(id, file_path).await
+}
+
+#[tauri::command]
+fn profile_background_clear(svc: Svc<'_>, id: String, none: Option<bool>) -> Res<ProfileView> {
+    svc.profile_background_clear(id, none.unwrap_or(false))
+}
+
 // ---- servers, media, logs, stats, storage ----
 
 #[tauri::command]
@@ -612,6 +694,20 @@ pub fn run() {
             install_apply,
             modpack_plan,
             modpack_install,
+            blocked_files,
+            blocked_watch_start,
+            blocked_watch_stop,
+            blocked_skip,
+            blocked_open_folder,
+            block_icons_status,
+            block_icons_prepare,
+            profile_icon_set_block,
+            profile_icon_set_image,
+            profile_icon_clear,
+            panorama_for_profile,
+            profile_background_set_screenshot,
+            profile_background_set_image,
+            profile_background_clear,
             servers_list,
             servers_ping_all,
             servers_ping,
