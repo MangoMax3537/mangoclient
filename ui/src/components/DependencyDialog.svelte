@@ -9,6 +9,9 @@
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
+  import LoadError from './LoadError.svelte';
+  import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
   import { fileCount, includeFor, planBytes, planGroups, requestedBlocked, type RunStep } from '../lib/install';
   import { fmtBytes } from '../lib/format';
   import { actions, app, errorText, getApi, lang, t, tp, type FlowProject } from '../lib/stores.svelte';
@@ -26,22 +29,29 @@
   }
   let { project, versionId, profileIds, update = false, onconfirm, onback, onclose }: Props = $props();
 
-  let plans = $state<Record<string, InstallPlan | 'error'>>({});
-  let errors = $state<Record<string, string>>({});
+  type Loaded = { plans: Record<string, InstallPlan | 'error'>; errors: Record<string, string> };
+  const pl = createLoadState<Loaded>({ isEmpty: () => false });
+  const plans = $derived(pl.data?.plans ?? {});
+  const errors = $derived(pl.data?.errors ?? {});
   /** Optional ids the user ticked, per profile. Nothing is ticked by default. */
   let chosen = $state<Record<string, string[]>>({});
-  let loading = $state(true);
+  const loading = $derived(pl.phase === 'loading' || pl.phase === 'idle');
 
-  async function load() {
-    loading = true; plans = {}; errors = {}; chosen = {};
-    await Promise.all(profileIds.map(async (profileId) => {
-      try {
-        plans[profileId] = await getApi().installPlan({ provider: project.provider, projectId: project.projectId, profileId, ...(versionId ? { versionId } : {}) });
-      } catch (e) { plans[profileId] = 'error'; errors[profileId] = errorText(e); }
-    }));
-    loading = false;
-  }
-  $effect(() => { void profileIds.join(','); void project.projectId; void versionId; untrack(() => void load()); });
+  $effect(() => {
+    void profileIds.join(','); void project.projectId; void versionId;
+    const ids = [...profileIds];
+    untrack(() => { chosen = {}; });
+    pl.run(async () => {
+      const out: Loaded = { plans: {}, errors: {} };
+      await Promise.all(ids.map(async (profileId) => {
+        try {
+          out.plans[profileId] = await getApi().installPlan({ provider: project.provider, projectId: project.projectId, profileId, ...(versionId ? { versionId } : {}) });
+        } catch (e) { out.plans[profileId] = 'error'; out.errors[profileId] = errorText(e); }
+      }));
+      return out;
+    });
+    return () => pl.cancel();
+  });
 
   const ready = $derived(profileIds.filter((id) => plans[id] && plans[id] !== 'error') as string[]);
   const usable = $derived(ready.filter((id) => !requestedBlocked(plans[id] as InstallPlan)));
@@ -66,8 +76,10 @@
 </script>
 
 <Modal title={update ? t('flow.dep.titleUpdate', { name: project.title }) : t('flow.dep.title', { name: project.title })} {onclose} size="lg" onenter={confirm}>
-  {#if loading}
-    <ul class="skl" aria-busy="true" aria-label={t('common.loading')}>{#each Array(3) as _, i (i)}<li><span class="img skel notch" style:--n="8px"></span><span class="ln skel"></span></li>{/each}</ul>
+  {#if pl.phase === 'error'}
+    <LoadError error={pl.error} onretry={() => pl.retry()} />
+  {:else if loading && pl.showSkeleton}
+    <DialogBodySkeleton rows={3} img={36} />
   {/if}
 
   {#each profileIds as pid (pid)}
@@ -161,10 +173,6 @@
 </Modal>
 
 <style>
-  .skl { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  .skl li { display: flex; gap: 12px; align-items: center; }
-  .skl .img { width: 36px; height: 36px; }
-  .skl .ln { height: 14px; width: 50%; }
   .inst + .inst { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
   .who { display: flex; align-items: center; gap: 8px; font-size: var(--fs-lg); margin-bottom: 8px; }
   .who .hint { margin-left: auto; }

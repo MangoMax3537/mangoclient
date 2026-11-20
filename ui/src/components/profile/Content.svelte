@@ -14,6 +14,9 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import type { Key } from '../../lib/i18n';
   import { providerLabel } from '../../lib/install';
+  import { createLoadState } from '../../lib/loadState.svelte';
+  import LoadError from '../LoadError.svelte';
+  import ListRowSkeleton from '../skeleton/ListRowSkeleton.svelte';
   import { app, contentRev, errorText, getApi, installs, nav, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
   import type { ContentItem, ContentType, ProfileView, UpdateInfo } from '../../lib/types';
 
@@ -31,7 +34,6 @@
   let blocked = $state<{ item: ContentItem; dependents: string[] } | null>(null);
   let confirmOff = $state<ContentItem | null>(null);
   let working = $state(false);
-  let loadError = $state('');
 
   const title = (id: string) => items?.find((i) => i.projectId === id)?.title ?? id;
   const counts = $derived.by(() => {
@@ -52,17 +54,18 @@
   });
   const updatable = $derived((items ?? []).filter((i) => i.updateAvailable));
 
-  async function load() {
+  const listLoad = createLoadState<ContentItem[]>({ isEmpty: () => false });
+  $effect(() => {
     const id = profile.id;
-    loadError = '';
-    try {
+    void contentRev[id];
+    listLoad.run(async () => {
       const l = await getApi().contentList({ profileId: id });
-      if (id !== profile.id) return;
-      items = l;
       getApi().contentCheckUpdates({ profileId: id }).then((u) => { if (id === profile.id) updateInfos = u; }, () => {});
-    } catch (e) { loadError = errorText(e); items = []; }
-  }
-  $effect(() => { void profile.id; void contentRev[profile.id]; load(); });
+      return l;
+    }, { silent: untrack(() => items !== null) });
+    return () => listLoad.cancel();
+  });
+  $effect(() => { if (listLoad.data) items = listLoad.data; });
 
   async function toggle(it: ContentItem, enabled: boolean) {
     pending[it.projectId] = true;
@@ -131,9 +134,8 @@
   {/if}
 
   {#if items === null}
-    <ul class="skel" aria-label={t('common.loading')}>{#each Array(8) as _, i (i)}<li><span class="img"></span><span class="bar1"></span></li>{/each}</ul>
-  {:else if loadError}
-    <p class="err">{loadError}</p>
+    {#if listLoad.phase === 'error'}<LoadError error={listLoad.error} onretry={() => listLoad.retry()} />
+    {:else if listLoad.showSkeleton}<div class="list"><ListRowSkeleton count={8} rowHeight={62} img={40} tail={34} /></div>{/if}
   {:else if items.length === 0}
     <EmptyState title={t('content.emptyTitle')} hint={t('content.empty')}>
       <button class="btn accent" type="button" onclick={() => openDiscover(profile.id, browseType)}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('content.add')}</button>
@@ -221,10 +223,4 @@
   .upd { height: 28px; padding: 0 10px; border-color: var(--mango); color: var(--mango); font-size: 13px; }
   .ic { width: 34px; height: 34px; padding: 0; justify-content: center; }
   .ic:hover:not(:disabled) { color: var(--tomato); }
-  .skel { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-  .skel li { display: flex; gap: 12px; align-items: center; height: 62px; }
-  .skel .img, .skel .bar1 { background: var(--ink-2); border-radius: var(--r-m); animation: sh 1.4s ease-in-out infinite; }
-  .skel .img { width: 40px; height: 40px; }
-  .skel .bar1 { width: 260px; height: 14px; }
-  @keyframes sh { 50% { opacity: 0.5; } }
 </style>

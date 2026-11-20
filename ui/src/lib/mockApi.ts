@@ -2,6 +2,7 @@ import type {
   Api, Unlisten,
 } from './api';
 import { createContentApi } from './mockContent';
+import { mockDevFromSearch, withDevControls, type MockDevOptions } from './mockDev';
 import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
 import { createBlockedMock, type BlockedDev } from './mockBlocked';
 import { createWorldsMock } from './mockWorlds';
@@ -44,6 +45,8 @@ export interface MockOptions {
   exportError?: string;
   /** Part 9: simulate `files:dropped` shortly after the app listens (`?mockDrop=mrpack|curseforge|prism|bad`). */
   drop?: string;
+  /** Latency / slow / fail controls (`?mockLatency`, `?mockDelay`, `?mockSlow`, `?mockFail`). Absent = no wrapping (unit tests). */
+  dev?: MockDevOptions;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -73,6 +76,7 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     importError: q.get('mockImportError') || undefined,
     exportError: q.get('mockExportError') || undefined,
     drop: q.has('mockDrop') ? q.get('mockDrop') || 'mrpack' : undefined,
+    dev: mockDevFromSearch(search),
   };
 }
 
@@ -382,5 +386,5 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       return () => { set.delete(cb); };
     },
   };
-  return api;
+  return opts.dev ? withDevControls(api, opts.dev) : api;
 }

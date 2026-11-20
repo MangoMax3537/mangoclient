@@ -5,6 +5,9 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import SealCheckIcon from 'phosphor-svelte/lib/SealCheckIcon';
   import Tile from './Tile.svelte';
+  import ServerCardSkeleton from './skeleton/ServerCardSkeleton.svelte';
+  import { BusyGate, LOAD_TIMEOUT_MS } from '../lib/loadState.svelte';
+  import LoadError from './LoadError.svelte';
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
   import { stripMotd } from '../lib/format';
@@ -17,6 +20,19 @@
     [...servers.list].sort((a, b) => Number(b.partner) - Number(a.partner) || Number(b.starred) - Number(a.starred)),
   );
   $effect(() => { actions.loadServers(); });
+  const gate = new BusyGate();
+  $effect(() => { gate.update(!servers.loaded); return () => gate.destroy(); });
+  // statuses arrive one by one: the card shell (icon, name, address) stays, only the status area is a skeleton while the ping is pending
+  const pingGate = new BusyGate();
+  const pendingAny = $derived(servers.loaded && sorted.some((s) => !servers.status[s.id]));
+  let pingLate = $state(false);
+  $effect(() => {
+    pingGate.update(pendingAny);
+    pingLate = false;
+    if (!pendingAny) return () => pingGate.destroy();
+    const h = setTimeout(() => { pingLate = true; }, LOAD_TIMEOUT_MS); // a ping that never answers ends in a message with Retry, not an endless skeleton
+    return () => { clearTimeout(h); pingGate.destroy(); };
+  });
   $effect(() => { if (!profileId && selectedProfile()) profileId = selectedProfile()?.id ?? ''; });
 
   function join(s: ServerEntry) {
@@ -41,9 +57,10 @@
   </header>
 
   {#if !app.accounts.length}<NoAccountHint />{/if}
+  {#if pingLate}<LoadError compact error={{ code: 'net.timeout', message: '', needsRelogin: false }} onretry={() => actions.pingServers()} />{/if}
 
   {#if !servers.loaded}
-    <ul class="grid">{#each Array(6) as _, i (i)}<li class="card sk"><span class="img"></span><span class="b"></span></li>{/each}</ul>
+    {#if gate.show}<ServerCardSkeleton count={6} />{/if}
   {:else if sorted.length === 0}
     <EmptyState title={t('servers.emptyTitle')} hint={t('servers.empty')}>
       <button class="btn" type="button" onclick={() => actions.loadServers(true)}><ArrowsClockwiseIcon weight="bold" size={16} aria-hidden="true" />{t('servers.refresh')}</button>
@@ -61,15 +78,24 @@
               {#if s.partner}<span class="tag"><SealCheckIcon weight="bold" size={12} aria-hidden="true" />{t('servers.partner')}</span>{/if}
             </div>
             <div class="addr mono">{s.address}</div>
-            <div class="motd">{#if !st}<span class="hint">{t('servers.pinging')}</span>{:else if st.online}{stripMotd(st.motd) || ' '}{:else}&nbsp;{/if}</div>
-            <div class="stat mono">
-              <span class="dot" class:on={st?.online} class:unk={!st} aria-hidden="true"></span>
-              {#if st?.online}
-                <span>{st.ping} ms</span>
-                {#if st.players}<span><UsersIcon weight="bold" size={13} aria-hidden="true" /> {st.players.online}/{st.players.max}</span>{/if}
-                {#if st.version}<span class="ver">{st.version}</span>{/if}
-              {:else if st}<span>{t('servers.offline')}</span>{:else}<span>&hellip;</span>{/if}
-            </div>
+            {#if !st && pingLate}
+              <div class="motd"><span class="hint">{t('load.timeout')}</span></div>
+              <div class="stat mono"><span class="dot unk" aria-hidden="true"></span><span>&hellip;</span></div>
+            {:else if !st && pingGate.show}
+              <ServerCardSkeleton status />
+            {:else if !st}
+              <div class="motd">&nbsp;</div><div class="stat mono"><span>&nbsp;</span></div>
+            {:else}
+              <div class="motd">{#if !st}<span class="hint">{t('servers.pinging')}</span>{:else if st.online}{stripMotd(st.motd) || ' '}{:else}&nbsp;{/if}</div>
+              <div class="stat mono">
+                <span class="dot" class:on={st?.online} class:unk={!st} aria-hidden="true"></span>
+                {#if st?.online}
+                  <span>{st.ping} ms</span>
+                  {#if st.players}<span><UsersIcon weight="bold" size={13} aria-hidden="true" /> {st.players.online}/{st.players.max}</span>{/if}
+                  {#if st.version}<span class="ver">{st.version}</span>{/if}
+                {:else if st}<span>{t('servers.offline')}</span>{:else}<span>&hellip;</span>{/if}
+              </div>
+            {/if}
           </div>
           <button class="btn accent join" type="button" disabled={!prof || (prof ? isBusy(prof.id) : true) || !app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : prof && isBusy(prof.id) ? t('servers.busy') : ''} onclick={() => join(s)}>
             <PlayIcon weight="bold" size={14} aria-hidden="true" />{t('servers.join')}
@@ -104,8 +130,5 @@
   .dot.unk { background: var(--paper-mute); }
   .ic { display: inline-flex; }
   .spin { animation: spin 1s linear infinite; }
-  .sk .img { width: 64px; height: 64px; border-radius: 8px; background: var(--ink-3); animation: sh 1.4s ease-in-out infinite; }
-  .sk .b { height: 14px; width: 200px; background: var(--ink-3); border-radius: 4px; animation: sh 1.4s ease-in-out infinite; }
-  @keyframes sh { 50% { opacity: 0.5; } }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

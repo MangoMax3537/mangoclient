@@ -7,6 +7,9 @@
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
+  import LoadError from './LoadError.svelte';
+  import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
   import { allBlocked, nextIndex, preselect, REASON_KEY, selectAll, selectionSummary, targetRows, toggleSelection, type TargetRow } from '../lib/install';
   import { actions, app, errorText, getApi, nav, prefs, selectedProfile, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { InstallTarget } from '../lib/types';
@@ -20,8 +23,8 @@
   }
   let { project, versionId, onnext, oncreate, onclose }: Props = $props();
 
-  let targets = $state<InstallTarget[] | null>(null);
-  let error = $state('');
+  const tl = createLoadState<InstallTarget[]>({ isEmpty: () => false });
+  const targets = $derived(tl.data);
   let selected = $state<string[]>([]);
   let focusIdx = $state(0);
   let listEl: HTMLUListElement | undefined = $state();
@@ -30,17 +33,20 @@
   const sum = $derived(selectionSummary(rows, selected));
   const blocked = $derived(allBlocked(rows));
 
-  async function load() {
-    targets = null; error = '';
-    try {
-      const l = await getApi().installTargets({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) });
-      targets = l;
+  $effect(() => {
+    void project.projectId; void versionId;
+    tl.run(() => getApi().installTargets({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
+    return () => tl.cancel();
+  });
+  $effect(() => {
+    const l = tl.data;
+    if (!l) return;
+    untrack(() => {
       const open = nav.view === 'profile' ? nav.profileId : null;
       selected = preselect(targetRows(l, app.profiles), [open, prefs.lastInstallProfile, selectedProfile()?.id]);
       focusIdx = Math.max(0, targetRows(l, app.profiles).findIndex((r) => selected.includes(r.profile.id)));
-    } catch (e) { error = errorText(e); }
-  }
-  $effect(() => { void project.projectId; void versionId; untrack(() => void load()); });
+    });
+  });
 
   function reasonText(r: TargetRow): string {
     if (r.target.state === 'installed') return t('picker.installedV', { v: r.target.installedVersion ?? '?' });
@@ -75,10 +81,10 @@
     <p class="hint">{t('picker.hint')}</p>
   </div>
 
-  {#if error}
-    <p class="err" role="alert">{error} <button class="btn small" type="button" onclick={load}>{t('common.retry')}</button></p>
+  {#if tl.phase === 'error'}
+    <LoadError error={tl.error} onretry={() => tl.retry()} />
   {:else if targets === null}
-    <ul class="list" aria-busy="true" aria-label={t('common.loading')}>{#each Array(4) as _, i (i)}<li class="row sk"><span class="img notch skel" style:--n="8px"></span><span class="line skel"></span></li>{/each}</ul>
+    {#if tl.showSkeleton}<DialogBodySkeleton rows={Math.max(1, Math.min(8, app.profiles.length))} />{/if}
   {:else if rows.length === 0}
     <p class="hint">{t('picker.none')}</p>
   {:else}
@@ -148,9 +154,6 @@
   .dep { font-size: var(--fs-xs); color: var(--paper-dim); }
   .note { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 10px 8px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
   .note span { flex: 1; }
-  .sk { cursor: default; }
-  .sk .img { width: 44px; height: 44px; }
-  .sk .line { height: 14px; width: 55%; }
   .count { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--paper-dim); }
   .create { margin-right: auto; }
 </style>

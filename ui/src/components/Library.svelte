@@ -18,6 +18,7 @@
   import { tip } from '../lib/tooltip';
   import { fmtDuration, fmtRelative } from '../lib/format';
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
+  import { writeLibraryLayout } from '../lib/layoutHint';
   import { pickAndImport } from '../lib/portability.svelte';
   import { app, lang, openBackgroundPicker, openIconPicker, openProfile, nav, t, tp } from '../lib/stores.svelte';
   import type { ProfileView } from '../lib/types';
@@ -43,6 +44,7 @@
   const sections = $derived(groupSections(items));
   /** Headers only when at least one instance has a group. */
   const grouped = $derived(sections.some((x) => x.group !== null));
+  $effect(() => { writeLibraryLayout({ tags: app.profiles.some((p) => p.tags.length > 0), grouped }); });
   const filtering = $derived(!!query.trim() || !!tag);
   const isCollapsed = (key: string) => !filtering && !!collapsed[key];
   function toggle(key: string) {

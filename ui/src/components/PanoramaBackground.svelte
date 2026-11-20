@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imgWatch } from '../lib/imgLoad';
   // Hero background: a curated wallpaper / custom image (ken-burns), the Minecraft panorama as a slowly rotating CSS 3D cube (explicit choice), or the surface.
   import { brandIcon } from '../lib/fallbackImage';
   import { PANORAMA_SECONDS, backgroundStyle, panoramaAngle, panoramaDelay, resolveBackground } from '../lib/instanceIcon';
@@ -33,6 +34,14 @@
     return { dim: dim ?? d.dim, blur: blur ?? d.blur };
   });
   const angle = $derived(panoramaAngle(profileId));
+  // The hero stays a plain grey (pulsing) box until its image(s) have loaded, then the art fades in (opacity only).
+  const artKey = $derived(res.kind === 'image' ? res.url : res.kind === 'panorama' ? res.set.faces.join('|') : '');
+  let artLoaded = $state(false);
+  let faces = $state(0);
+  let seenKey = '';
+  $effect.pre(() => { if (artKey !== seenKey) { seenKey = artKey; artLoaded = false; faces = 0; } });
+  const waiting = $derived((res.kind === 'image' && !artLoaded) || (res.kind === 'panorama' && faces < 6));
+  const seen = { onload: () => { faces += 1; }, onerror: () => { faces += 1; } };
   // face order = panorama_0..5: front, right, back, left, up, down
   const FACE_CLASS = ['front', 'right', 'back', 'left', 'up', 'down'] as const;
 </script>
@@ -41,25 +50,29 @@
 
 <div class="stage" style:--sc={look.dim} style:--blur="{look.blur}px" style:--tint={tint ?? 'var(--accent-fill)'} aria-hidden="true">
   {#if res.kind === 'panorama'}
-    <div class="scene">
+    <div class="scene" class:ready={!waiting}>
       <div class="cube" class:paused={hidden} style:--a0="{angle}deg" style:--d="{panoramaDelay(angle)}" style:--dur="{PANORAMA_SECONDS}s">
         {#each res.set.faces as src, i (i)}
-          <img class="face {FACE_CLASS[i]}" {src} alt="" draggable="false" decoding="async" />
+          <img class="face {FACE_CLASS[i]}" {src} alt="" draggable="false" decoding="async" use:imgWatch={{ ...seen, src }} />
         {/each}
       </div>
     </div>
   {:else if res.kind === 'image'}
-    <img class="art" src={res.url} alt="" draggable="false" onerror={() => (imgFailed = true)} />
+    <img class="art" class:ready={artLoaded} src={res.url} alt="" draggable="false" decoding="async" use:imgWatch={{ src: res.url, onload: () => { artLoaded = true; }, onerror: () => { imgFailed = true; } }} />
   {:else}
     <div class="surface" class:glow={res.kind === 'watermark'}></div>
     {#if res.kind === 'watermark'}<img class="mark px" src={brandIcon(512)} alt="" draggable="false" />{/if}
   {/if}
+  {#if waiting}<div class="wait skel"></div>{/if}
   <div class="scrim" class:plain={res.kind === 'plain' || res.kind === 'watermark'}></div>
   <div class="bar"></div>
 </div>
 
 <style>
   .stage { position: absolute; inset: 0; overflow: hidden; background: var(--hero-bg); container-type: size; }
+  .wait { position: absolute; inset: 0; }
+  .art, .scene { opacity: 0; transition: opacity var(--dur-slow) var(--ease); }
+  .art.ready, .scene.ready { opacity: 1; }
   .art { position: absolute; inset: calc(var(--blur) * -2); width: calc(100% + var(--blur) * 4); height: calc(100% + var(--blur) * 4); object-fit: cover; filter: blur(var(--blur)); transform-origin: 70% 40%; animation: kb 36s ease-out infinite alternate; }
   .surface { position: absolute; inset: 0; background: var(--hero-bg); }
   .surface.glow { background: radial-gradient(90% 120% at 82% 38%, color-mix(in srgb, var(--tint) 20%, transparent), transparent 62%), var(--hero-bg); }

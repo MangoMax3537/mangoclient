@@ -52,3 +52,9 @@ export const tabs = {
   logs: memo(() => import('../components/profile/Logs.svelte')),
   settings: memo(() => import('../components/profile/ProfileSettings.svelte')),
 } satisfies Record<string, Loader>;
+
+/** Skeleton layouts: only needed once a load takes longer than ~150 ms, so they stay out of the entry bundle. */
+export const skeletons = {
+  view: memo(() => import('../components/ViewSkeleton.svelte')),
+  profileTab: memo(() => import('../components/skeleton/ProfileTabSkeleton.svelte')),
+} satisfies Record<string, Loader>;

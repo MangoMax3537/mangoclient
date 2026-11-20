@@ -9,22 +9,28 @@
   import Modal from '../Modal.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import Worlds from './Worlds.svelte';
+  import Img from '../Img.svelte';
+  import LoadError from '../LoadError.svelte';
+  import ScreenshotGridSkeleton from '../skeleton/ScreenshotGridSkeleton.svelte';
+  import { createLoadState } from '../../lib/loadState.svelte';
+  import { fallbackImage } from '../../lib/fallbackImage';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
   import { actions, app, errorText, getApi, isBusy, lang, t, toast, tp } from '../../lib/stores.svelte';
   import type { ProfileView, Screenshot } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
   let shots = $state<Screenshot[] | null>(null);
+  const shotsLoad = createLoadState<Screenshot[]>({ isEmpty: () => false });
   let open = $state<number | null>(null);
   let confirmDel = $state(false);
 
   $effect(() => {
     const id = profile.id;
-    let dead = false;
-    shots = null; open = null;
-    getApi().screenshotsList({ profileId: id }).then((l) => { if (!dead) shots = l; }, (e) => { if (!dead) { shots = []; toast(errorText(e), 'error'); } });
-    return () => { dead = true; };
+    open = null; shots = null;
+    shotsLoad.run(() => getApi().screenshotsList({ profileId: id }));
+    return () => shotsLoad.cancel();
   });
+  $effect(() => { if (shotsLoad.data) shots = shotsLoad.data; });
 
   const cur = $derived(shots && open !== null ? shots[open] ?? null : null);
   function step(d: number) {
@@ -63,7 +69,8 @@
     {#if shots}<span class="hint mono">{tp('media.count', shots.length)}</span>{/if}
   </header>
   {#if shots === null}
-    <ul class="grid">{#each Array(8) as _, i (i)}<li class="sk"></li>{/each}</ul>
+    {#if shotsLoad.phase === 'error'}<LoadError error={shotsLoad.error} onretry={() => shotsLoad.retry()} />
+    {:else if shotsLoad.showSkeleton}<ScreenshotGridSkeleton count={8} />{/if}
   {:else if shots.length === 0}
     <EmptyState title={t('media.emptyTitle')} hint={t('media.empty')}>
       <button class="btn accent" type="button" disabled={!app.accounts.length || isBusy(profile.id)} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
@@ -73,7 +80,7 @@
       {#each shots as s, i (s.name)}
         <li>
           <button type="button" onclick={() => (open = i)} aria-label={t('media.open', { name: s.name })}>
-            <img src={s.url} alt="" loading="lazy" decoding="async" draggable="false" />
+            <Img src={s.url} lazy fallback={fallbackImage('world', s.name, 420)} />
             <span class="cap mono">{fmtDateTime(s.taken, lang())}</span>
           </button>
         </li>
@@ -87,7 +94,7 @@
     <div class="lb">
       <button class="nav" type="button" aria-label={t('media.prev')} onclick={() => step(-1)}><CaretLeftIcon weight="bold" size={24} aria-hidden="true" /></button>
       <figure>
-        <img src={cur.url} alt={cur.name} draggable="false" />
+        <div class="shot"><Img src={cur.url} alt={cur.name} fit="contain" fallback={fallbackImage('world', cur.name, 512)} /></div>
         <figcaption class="mono">{open !== null ? open + 1 : 0} / {shots?.length} &middot; {fmtDateTime(cur.taken, lang())} &middot; {fmtBytes(cur.size, lang())}</figcaption>
       </figure>
       <button class="nav" type="button" aria-label={t('media.next')} onclick={() => step(1)}><CaretRightIcon weight="bold" size={24} aria-hidden="true" /></button>
@@ -107,16 +114,14 @@
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
   .grid button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); background: var(--ink-2); }
-  .grid img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 200ms var(--ease); }
-  .grid button:hover img { transform: scale(1.04); }
+  .grid button :global(.im) { transition: transform 200ms var(--ease); }
+  .grid button:hover :global(.im) { transform: scale(1.04); }
   .grid button:hover { border-color: var(--mango); }
   .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 12px; color: var(--paper); background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), transparent); text-align: left; }
-  .sk { aspect-ratio: 16 / 9; background: var(--ink-2); border-radius: var(--r-m); animation: sh 1.4s ease-in-out infinite; }
-  @keyframes sh { 50% { opacity: 0.5; } }
   .lb { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
   .nav { height: 56px; border-radius: var(--r-m); display: grid; place-items: center; color: var(--paper-dim); }
   .nav:hover { background: var(--ink-3); color: var(--paper); }
   figure { margin: 0; display: grid; gap: 8px; justify-items: center; }
-  figure img { width: 100%; max-height: calc(100vh - 300px); object-fit: contain; border-radius: var(--r-s); background: #000; }
+  .shot { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 300px); border-radius: var(--r-s); background: var(--ink-1); overflow: hidden; }
   figcaption { font-size: 12.5px; color: var(--paper-mute); }
 </style>

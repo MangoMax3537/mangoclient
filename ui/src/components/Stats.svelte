@@ -1,21 +1,26 @@
 <script lang="ts">
   import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import StatTileSkeleton from './skeleton/StatTileSkeleton.svelte';
+  import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
+  import LoadError from './LoadError.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
   import { fmtDuration } from '../lib/format';
   import { app, errorText, getApi, lang, t, toast } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
 
   const RANGES = ['14', '30', '90'];
   let range = $state('30');
-  let data = $state<StatsSummary | null>(null);
+  const load = createLoadState<StatsSummary>({ isEmpty: () => false });
+  const data = $derived(load.data);
   let hover = $state<number | null>(null);
 
   $effect(() => {
     const d = Number(range);
-    let dead = false;
-    data = null;
-    getApi().statsSummary({ days: d }).then((s) => { if (!dead) data = s; }, (e) => { if (!dead) { toast(errorText(e), 'error'); data = { days: [], perProfile: [], totalMs: 0, sessions: 0, longestMs: 0 }; } });
-    return () => { dead = true; };
+    hover = null;
+    load.run(() => getApi().statsSummary({ days: d }));
+    return () => load.cancel();
   });
 
   const max = $derived(Math.max(1, ...(data?.days ?? []).map((d) => d.ms)));
@@ -34,18 +39,30 @@
     <Seg label={t('stats.range')} idPrefix="sr" value={range} onchange={(v) => (range = v)} options={RANGES.map((r) => ({ value: r, label: t('stats.days', { n: r }) }))} />
   </header>
 
-  <dl class="tiles" aria-busy={!data}>
-    <div><dt>{t('stats.total')}</dt><dd class="big mono">{data ? fmtDuration(data.totalMs) : '–'}</dd></div>
-    <div><dt>{t('stats.sessions')}</dt><dd class="mono">{data ? data.sessions : '–'}</dd></div>
-    <div><dt>{t('stats.longest')}</dt><dd class="mono">{data ? fmtDuration(data.longestMs) : '–'}</dd></div>
-    <div><dt>{t('stats.avg')}</dt><dd class="mono">{data ? fmtDuration(avg) : '–'}</dd></div>
-    <div><dt>{t('stats.activeDays')}</dt><dd class="mono">{data ? `${activeDays} / ${data.days.length}` : '–'}</dd></div>
-  </dl>
+  {#if data}
+    <dl class="tiles">
+      <div><dt>{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
+      <div><dt>{t('stats.sessions')}</dt><dd class="mono">{data.sessions}</dd></div>
+      <div><dt>{t('stats.longest')}</dt><dd class="mono">{fmtDuration(data.longestMs)}</dd></div>
+      <div><dt>{t('stats.avg')}</dt><dd class="mono">{fmtDuration(avg)}</dd></div>
+      <div><dt>{t('stats.activeDays')}</dt><dd class="mono">{`${activeDays} / ${data.days.length}`}</dd></div>
+    </dl>
+  {:else if load.phase === 'error'}
+    <LoadError error={load.error} onretry={() => load.retry()} />
+  {:else if load.showSkeleton}
+    <StatTileSkeleton count={5} />
+  {/if}
 
   <section aria-labelledby="st-daily">
     <h2 id="st-daily" class="eyebrow">{t('stats.daily')}</h2>
     {#if !data}
-      <div class="chart sk"></div>
+      {#if load.showSkeleton}
+        <div class="chart" aria-busy="true">
+          <span class="sr-only" role="status">{t('skel.loading')}</span>
+          <div class="axis mono" aria-hidden="true"></div>
+          <div class="bars" aria-hidden="true">{#each Array(Number(range)) as _, i (i)}<div class="col"><Skeleton variant="box" w="100%" h="{20 + ((i * 37) % 70)}%" radius={2} /></div>{/each}</div>
+        </div>
+      {/if}
     {:else}
       <div class="chart" role="img" aria-label={summary}>
         <div class="axis mono" aria-hidden="true"><span>{ticks[0]} h</span><span>{ticks[1]} h</span><span>0</span></div>
@@ -64,7 +81,9 @@
 
   <section aria-labelledby="st-prof">
     <h2 id="st-prof" class="eyebrow">{t('stats.perProfile')}</h2>
-    {#if data}
+    {#if !data}
+      {#if load.showSkeleton}<ListRowSkeleton count={4} img={36} padding="8px 0" gap={14} bars={[{ w: '38%', h: 13 }, { w: '22%', h: 10 }]} tail={100} announce={false} />{/if}
+    {:else}
       <ul class="pp">
         {#each data.perProfile as p (p.profileId)}
           {@const prof = app.profiles.find((x) => x.id === p.profileId)}
@@ -93,7 +112,6 @@
   .big { color: var(--mango); font-size: 22px; }
   h2 { margin-bottom: 8px; }
   .chart { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 180px 22px 18px; column-gap: 8px; padding: 14px 14px 8px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
-  .chart.sk { height: 240px; animation: sh 1.4s ease-in-out infinite; }
   .axis { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--paper-mute); }
   .bars { display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 50%; }
   .col { flex: 1; min-width: 0; display: flex; align-items: flex-end; }
@@ -111,5 +129,4 @@
   .meter span { display: block; height: 100%; background: var(--accent-fill); transform-origin: left; }
   .val, .pct { text-align: right; font-size: 13.5px; }
   .pct { color: var(--paper-mute); }
-  @keyframes sh { 50% { opacity: 0.5; } }
 </style>

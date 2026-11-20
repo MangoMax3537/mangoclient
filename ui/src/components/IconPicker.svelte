@@ -134,7 +134,7 @@
             <p class="hint">{t('icons.autoHint')}</p>
           {:else if st.state === 'preparing'}
             <div class="state" role="status">
-              <div class="skgrid" aria-hidden="true">{#each Array(14) as _, i (i)}<span class="skel sk" style:animation-delay="{(i % 7) * 90}ms"></span>{/each}</div>
+              <div class="skgrid" aria-hidden="true">{#each Array(14) as _, i (i)}<span class="skel sk"></span>{/each}</div>
               <div class="bar" aria-hidden="true"><span></span></div>
               <p><b>{t('icons.preparing')}</b></p>
               <p class="hint">{t('icons.privacy')}</p>

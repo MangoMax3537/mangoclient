@@ -8,13 +8,21 @@
   import UpdatePill from './components/UpdatePill.svelte';
   import Activity from './components/Activity.svelte';
   import Lazy from './components/Lazy.svelte';
-  import ViewSkeleton from './components/ViewSkeleton.svelte';
+  import { BusyGate } from './lib/loadState.svelte';
   import DropHint from './components/DropHint.svelte';
-  import { dialogs, screens } from './lib/lazy';
+  import { dialogs, screens, skeletons } from './lib/lazy';
   import { pf, watchDrops } from './lib/portability.svelte';
   import { actions, app, auth, errorText, flow, init, initTheme, nav, t, updates } from './lib/stores.svelte';
   import { inHttp, inTauri, kind } from './lib/api';
 
+  // Dev: `?view=library|discover|servers|stats|settings` opens that view at start (used to look at the skeletons).
+  try {
+    const v = new URLSearchParams(location.search).get('view');
+    if (v && ['home', 'library', 'discover', 'servers', 'stats', 'settings'].includes(v)) nav.view = v as typeof nav.view;
+  } catch { /* no location */ }
+  // Boot: nothing for the first ~150 ms, then the skeleton of the screen that is about to appear.
+  const boot = new BusyGate();
+  $effect(() => { boot.update(!app.ready); });
   onMount(() => {
     initTheme();
     void init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); });
@@ -23,7 +31,7 @@
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
 
-{#snippet skel()}<ViewSkeleton />{/snippet}
+{#snippet skel()}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/snippet}
 
 <div class="shell">
   <div class="strip" data-tauri-drag-region>
@@ -38,7 +46,7 @@
     <Rail />
     <main>
       {#if !app.ready}
-        <ViewSkeleton />
+        {#if boot.show}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/if}
       {:else}
         {#if app.error}
           <div class="banner" role="alert">{errorText(app.error)}

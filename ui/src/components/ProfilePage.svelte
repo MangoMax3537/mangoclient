@@ -8,7 +8,7 @@
   import Seg from './Seg.svelte';
   import Overview from './profile/Overview.svelte';
   import Lazy from './Lazy.svelte';
-  import { tabs } from '../lib/lazy';
+  import { skeletons, tabs } from '../lib/lazy';
   import PanoramaBackground from './PanoramaBackground.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import ProfileMoreMenu from './ProfileMoreMenu.svelte';
@@ -37,7 +37,11 @@
   }
 </script>
 
-{#snippet tabSkel()}<div class="tsk" role="status"><span class="sr-only">{t('common.loading')}</span><div class="skel" aria-hidden="true"></div><div class="skel" aria-hidden="true"></div><div class="skel" aria-hidden="true"></div></div>{/snippet}
+{#snippet skContent()}<Lazy load={skeletons.profileTab} props={{ tab: 'content' }} />{/snippet}
+{#snippet skMedia()}<Lazy load={skeletons.profileTab} props={{ tab: 'media' }} />{/snippet}
+{#snippet skBackups()}<Lazy load={skeletons.profileTab} props={{ tab: 'backups' }} />{/snippet}
+{#snippet skLogs()}<Lazy load={skeletons.profileTab} props={{ tab: 'logs' }} />{/snippet}
+{#snippet skSettings()}<Lazy load={skeletons.profileTab} props={{ tab: 'settings' }} />{/snippet}
 
 {#if p}
   <div class="page">
@@ -77,11 +81,11 @@
     <div class="panel" role="tabpanel" aria-labelledby="ptab-{nav.profileTab}">
       {#key p.id}
         {#if nav.profileTab === 'overview'}<Overview profile={p} />
-        {:else if nav.profileTab === 'content'}<Lazy load={tabs.content} props={{ profile: p }} fallback={tabSkel} />
-        {:else if nav.profileTab === 'media'}<Lazy load={tabs.media} props={{ profile: p }} fallback={tabSkel} />
-        {:else if nav.profileTab === 'backups'}<Lazy load={tabs.backups} props={{ profile: p }} fallback={tabSkel} />
-        {:else if nav.profileTab === 'logs'}<Lazy load={tabs.logs} props={{ profile: p }} fallback={tabSkel} />
-        {:else}<Lazy load={tabs.settings} props={{ profile: p }} fallback={tabSkel} />{/if}
+        {:else if nav.profileTab === 'content'}<Lazy load={tabs.content} props={{ profile: p }} fallback={skContent} />
+        {:else if nav.profileTab === 'media'}<Lazy load={tabs.media} props={{ profile: p }} fallback={skMedia} />
+        {:else if nav.profileTab === 'backups'}<Lazy load={tabs.backups} props={{ profile: p }} fallback={skBackups} />
+        {:else if nav.profileTab === 'logs'}<Lazy load={tabs.logs} props={{ profile: p }} fallback={skLogs} />
+        {:else}<Lazy load={tabs.settings} props={{ profile: p }} fallback={skSettings} />{/if}
       {/key}
     </div>
   </div>
@@ -108,7 +112,5 @@
   .hero.compact h1 { font-size: 26px; }
   .playcol { display: grid; gap: var(--s-2); justify-items: end; }
   .tabs { flex: none; }
-  .tsk { display: grid; gap: 10px; max-width: 760px; }
-  .tsk .skel { height: 56px; }
   .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; }
 </style>

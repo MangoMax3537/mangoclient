@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Img from './Img.svelte';
+  import { fallbackImage } from '../lib/fallbackImage';
   // Background picker for an instance: Auto (wallpaper by version rule), Wallpapers, Minecraft panorama, Screenshot, Upload, None. Live preview in a mini hero.
   import { untrack } from 'svelte';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
@@ -120,7 +122,7 @@
             {#each shots as s (s.name)}
               {@const on = draft.kind === 'screenshot' && draft.name === s.name}
               <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => (draft = { kind: 'screenshot', name: s.name, url: s.url })}>
-                <img src={s.url} alt="" loading="lazy" draggable="false" />
+                <Img src={s.url} lazy fallback={fallbackImage('world', s.name, 300)} />
                 <span class="cap mono">{fmtDateTime(s.taken, lang())}</span>
                 {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
               </button>
@@ -135,7 +137,7 @@
           {#each all as w (w.id)}
             {@const on = draft.kind === 'wallpaper' && draft.id === w.id}
             <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => { reset = false; draft = { kind: 'wallpaper', id: w.id, label: w.label, url: w.url }; }}>
-              <img src={w.url} alt="" loading="lazy" draggable="false" />
+              <Img src={w.url} lazy fallback={fallbackImage('world', w.id, 300)} />
               <span class="cap">{w.label}</span>
               {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
             </button>
@@ -179,7 +181,6 @@
   .th:hover { border-color: var(--line); }
   .th.on { border-color: var(--accent-fill); }
   .th:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .th img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 4px; font-size: var(--fs-xs); text-align: left; color: #f4f1ea; background: linear-gradient(0deg, rgba(11, 12, 14, 0.8), transparent); }
   .chk { position: absolute; right: 6px; top: 6px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); }
   .sh { aspect-ratio: 16 / 9; border-radius: var(--r-m); }

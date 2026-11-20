@@ -2,6 +2,8 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import Tile from './Tile.svelte';
+  import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
   import { tip } from '../lib/tooltip';
   import { actions, app, isBusy, nav, selectedProfile, servers, t } from '../lib/stores.svelte';
 
@@ -10,6 +12,8 @@
   );
   const prof = $derived(selectedProfile());
   $effect(() => { actions.loadServers(); });
+  const gate = new BusyGate();
+  $effect(() => { gate.update(!servers.loaded); return () => gate.destroy(); });
 </script>
 
 <section class="qj" aria-labelledby="qj-h">
@@ -18,7 +22,7 @@
     <button class="btn text" type="button" onclick={() => (nav.view = 'servers')}>{t('nav.servers')}<ArrowRightIcon weight="bold" size={14} aria-hidden="true" /></button>
   </header>
   {#if !servers.loaded}
-    <ul>{#each Array(3) as _, i (i)}<li class="sk"><span class="img skel"></span><span class="b skel"></span></li>{/each}</ul>
+    {#if gate.show}<ListRowSkeleton count={4} img={32} rowHeight={50} padding="0" gap={12} bars={[{ w: '36%', h: 13 }, { w: '22%', h: 10 }]} tail={32} />{/if}
   {:else if top.length === 0}
     <p class="hint">{t('servers.empty')}</p>
   {:else}
@@ -54,6 +58,4 @@
   .ping { color: var(--paper); font-weight: 500; }
   .sep { margin: 0 6px; opacity: 0.45; }
   .ic { width: 32px; height: 32px; padding: 0; }
-  .sk .img { width: 32px; height: 32px; }
-  .sk .b { height: 12px; width: 120px; }
 </style>

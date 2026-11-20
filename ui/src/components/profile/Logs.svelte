@@ -9,6 +9,10 @@
   import EmptyState from '../EmptyState.svelte';
   import VirtualList from '../VirtualList.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
+  import LoadError from '../LoadError.svelte';
+  import ProfileTabSkeleton from '../skeleton/ProfileTabSkeleton.svelte';
+  import LogLineSkeleton from '../skeleton/LogLineSkeleton.svelte';
+  import { BusyGate, createLoadState } from '../../lib/loadState.svelte';
   import { fmtBytes, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
   import { analyzable } from '../../lib/portability';
@@ -27,24 +31,27 @@
 
   const entry = $derived(list?.find((l) => l.id === sel) ?? null);
 
+  const listLoad = createLoadState<LogEntry[]>({ isEmpty: () => false });
   $effect(() => {
     const id = profile.id;
-    let dead = false;
-    list = null; sel = null; text = null; link = null;
-    getApi().logsList({ profileId: id }).then((l) => {
-      if (dead) return;
-      list = l;
-      sel = (l.find((x) => x.kind === 'crash') ?? l[0])?.id ?? null;
-    }, (e) => { if (!dead) { list = []; toast(errorText(e), 'error'); } });
-    return () => { dead = true; };
+    sel = null; text = null; link = null; list = null;
+    listLoad.run(() => getApi().logsList({ profileId: id }));
+    return () => listLoad.cancel();
   });
+  $effect(() => {
+    const l = listLoad.data;
+    if (l) { list = l; sel = (l.find((x) => x.kind === 'crash') ?? l[0])?.id ?? null; }
+  });
+  // the log viewer: its own load (the file may be large), skeleton lines after the usual delay
+  const readGate = new BusyGate();
+  $effect(() => { readGate.update(reading || (!text && !!sel)); return () => readGate.destroy(); });
   $effect(() => {
     const id = sel;
     const pid = profile.id;
     link = null;
     if (!id) { text = null; return; }
     let dead = false;
-    reading = true;
+    reading = true; text = null;
     getApi().logsRead({ profileId: pid, id }).then((r) => { if (!dead) { text = { lines: r.text.split('\n'), truncated: r.truncated }; reading = false; } },
       (e) => { if (!dead) { text = { lines: [], truncated: false }; reading = false; toast(errorText(e), 'error'); } });
     return () => { dead = true; };
@@ -75,7 +82,8 @@
 
 <div class="lg">
   {#if list === null}
-    <p class="hint">{t('common.loading')}</p>
+    {#if listLoad.phase === 'error'}<LoadError error={listLoad.error} onretry={() => listLoad.retry()} />
+    {:else if listLoad.showSkeleton}<ProfileTabSkeleton tab="logs" bare />{/if}
   {:else if list.length === 0}
     <EmptyState title={t('logs.emptyTitle')} hint={t('logs.empty')}>
       <button class="btn accent" type="button" disabled={!app.accounts.length || isBusy(profile.id)} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
@@ -113,7 +121,7 @@
       {#if text?.truncated}<div class="trunc hint">{t('logs.truncated')}</div>{/if}
       <div class="out" class:crash={entry?.kind === 'crash'}>
         {#if reading || !text}
-          <p class="hint pad">{t('common.loading')}</p>
+          {#if readGate.show}<LogLineSkeleton count={16} lineHeight={20} pad="0 12px" />{/if}
         {:else}
           <VirtualList items={text.lines} rowHeight={20} key={(_, i) => i} label={entry?.name ?? ''} overscan={20}>
             {#snippet row(l)}<div class="ln mono {logLevel(l)}">{l || ' '}</div>{/snippet}
@@ -145,7 +153,6 @@
   .res .field { flex: 1; height: 32px; }
   .trunc { font-size: 13px; }
   .out { flex: 1; min-height: 0; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
-  .pad { padding: 12px 14px; margin: 0; }
   .ln { height: 20px; line-height: 20px; padding: 0 12px; font-size: 12.5px; white-space: pre; color: var(--paper-dim); user-select: text; }
   .ln.warn { color: var(--mango); }
   .ln.error { color: var(--tomato); }

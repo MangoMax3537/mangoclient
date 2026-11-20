@@ -23,6 +23,10 @@
     LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openBlocked, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
   } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
+  import Loadable from './Loadable.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
 
   const p = $derived(selectedProfile());
   const info = $derived(p ? launchInfo(p.id) : null);
@@ -39,14 +43,9 @@
   const prog = $derived(launching && info ? (info.state === 'downloading' ? stageProgress(info) : null) : null);
   void LAUNCH_STAGES;
 
-  let stats = $state<StatsSummary | null>(null);
-  $effect(() => {
-    let dead = false;
-    getApi().statsSummary({ days: 14 }).then((s) => { if (!dead) stats = s; }, () => { if (!dead) stats = null; });
-    return () => { dead = true; };
-  });
-  const series = $derived((stats?.days ?? []).map((d) => d.ms));
-  const sparkLabel = $derived(stats ? t('stats.chartLabel', { days: 14, total: fmtDuration(stats.totalMs) }) : '');
+  const stats = createLoadState<StatsSummary>({ isEmpty: () => false });
+  $effect(() => { stats.run(() => getApi().statsSummary({ days: 14 })); return () => stats.cancel(); });
+  const sparkLabel = (st: StatsSummary) => t('stats.chartLabel', { days: 14, total: fmtDuration(st.totalMs) });
 
   function toggle() {
     if (!p) return;
@@ -130,13 +129,20 @@
         <QuickJoin />
         <section class="pt" aria-labelledby="pt-h">
           <header><h2 id="pt-h">{t('home.last14')}</h2></header>
-          {#if stats}
-            <div class="big display">{fmtDuration(stats.totalMs)}</div>
-            <Spark values={series} label={sparkLabel} />
-            <div class="axis mono" aria-hidden="true"><span>14</span><span>0</span></div>
-          {:else}
-            <div class="skel" style:height="96px"></div>
-          {/if}
+          <Loadable state={stats} compactError>
+            {#snippet skeleton()}
+              <SkeletonRegion class="spk">
+                <div class="bigsk"><Skeleton variant="bar" h={34} w={130} radius={6} /></div>
+                <Skeleton variant="box" w="100%" h={64} radius={4} />
+                <div class="axissk"><Skeleton variant="bar" lh={17} h={9} w={16} /><Skeleton variant="bar" lh={17} h={9} w={10} /></div>
+              </SkeletonRegion>
+            {/snippet}
+            {#snippet children(st)}
+              <div class="big display">{fmtDuration(st.totalMs)}</div>
+              <Spark values={st.days.map((d) => d.ms)} label={sparkLabel(st)} />
+              <div class="axis mono" aria-hidden="true"><span>14</span><span>0</span></div>
+            {/snippet}
+          </Loadable>
         </section>
       </div>
     </div>
@@ -198,6 +204,9 @@
   .pt { min-width: 0; display: grid; gap: var(--s-2); }
   .pt header { margin-bottom: 0; }
   .big { font-size: var(--fs-3xl); color: var(--mango); line-height: 1; margin: 4px 0 var(--s-2); }
+  :global(.spk) { display: grid; gap: var(--s-2); }
+  .bigsk { display: flex; align-items: center; height: 40px; margin: 4px 0 var(--s-2); }
+  .axissk { display: flex; justify-content: space-between; }
   .axis { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--paper-mute); }
   @media (max-width: 1100px) { .split { grid-template-columns: 1fr; gap: var(--s-6); } .total { display: none; } }
   @keyframes pulse { 50% { opacity: 0.4; } }

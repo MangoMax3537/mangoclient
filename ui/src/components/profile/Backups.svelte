@@ -4,6 +4,9 @@
   import CameraIcon from 'phosphor-svelte/lib/CameraIcon';
   import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
   import EmptyState from '../EmptyState.svelte';
+  import Skeleton from '../skeleton/Skeleton.svelte';
+  import BackupRowSkeleton from '../skeleton/BackupRowSkeleton.svelte';
+  import { BusyGate } from '../../lib/loadState.svelte';
   import Tile from '../Tile.svelte';
   import BusyBar from '../BusyBar.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
@@ -21,6 +24,8 @@
   let deleteOf = $state<Backup | null>(null);
   let deleteError = $state('');
   const list = $derived(wb.backups[profile.id]);
+  const gate = new BusyGate();
+  $effect(() => { gate.update(list === undefined); return () => gate.destroy(); });
   const worlds = $derived(wb.worlds[profile.id]);
   const running = $derived(isBusy(profile.id));
   const pending = $derived(wb.busy[profile.id]);
@@ -56,7 +61,7 @@
   {/if}
 
   {#if list === undefined}
-    <ul class="rows" aria-busy="true" aria-label={t('common.loading')}>{#each Array(4) as _, i (i)}<li class="row"><span class="skel img"></span><span class="skel ln"></span></li>{/each}</ul>
+    {#if gate.show}<BackupRowSkeleton count={4} />{/if}
   {:else if list.length === 0 && !pending}
     <EmptyState title={t('backups.emptyTitle')} hint={t('backups.empty')}>
       <button class="btn accent" type="button" onclick={() => (snapshotOpen = true)}><CameraIcon weight="bold" size={16} aria-hidden="true" />{t('backups.snapshot')}</button>
@@ -64,7 +69,7 @@
   {:else}
     <ul class="rows">
       {#if pending}
-        <li class="row pend"><span class="skel img notch" style:--n="8px"></span><BusyBar label={t(`backups.busy.${pending.kind}`)} /></li>
+        <li class="row pend"><Skeleton variant="box" w={44} h={44} notch={8} /><BusyBar label={t(`backups.busy.${pending.kind}`)} /></li>
       {/if}
       {#each list as b (b.id)}
         <li class="row">
@@ -111,8 +116,6 @@
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .row:last-child { border-bottom: 0; }
   .row.pend { grid-template-columns: auto minmax(0, 1fr); }
-  .row .img { width: 44px; height: 44px; }
-  .row .ln { height: 14px; width: 50%; }
   .t { display: grid; gap: 5px; min-width: 0; }
   .t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }

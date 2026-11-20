@@ -5,6 +5,12 @@
   import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import Img from './Img.svelte';
+  import LoadError from './LoadError.svelte';
+  import DrawerSkeleton from './skeleton/DrawerSkeleton.svelte';
+  import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
+  import { fallbackImage } from '../lib/fallbackImage';
   import { fmtCompact, fmtDate } from '../lib/format';
   import { markdownLite } from '../lib/markdown';
   import type { Key } from '../lib/i18n';
@@ -22,19 +28,19 @@
     onclose: () => void;
   }
   let { hit, scope, installed, busy, progress, oninstall, onclose }: Props = $props();
-  let detail = $state<ProjectDetail | null>(null);
-  let versions = $state<ProjectVersion[] | null>(null);
+  const detailLoad = createLoadState<ProjectDetail>({ isEmpty: () => false });
+  const versLoad = createLoadState<ProjectVersion[]>({ isEmpty: () => false });
+  const detail = $derived(detailLoad.data);
+  const versions = $derived(versLoad.data);
   let shot = $state(0);
-  let failed = $state(false);
 
   $effect(() => {
     const id = hit.projectId;
-    let dead = false;
-    detail = null; versions = null; shot = 0; failed = false;
+    shot = 0;
     const api = getApi();
-    api.projectDetail({ provider: hit.provider, projectId: id }).then((d) => { if (!dead) detail = d; }, (e) => { if (!dead) { failed = true; toast(errorText(e), 'error'); } });
-    api.projectVersions({ provider: hit.provider, projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }).then((v) => { if (!dead) versions = v; }, () => { if (!dead) versions = []; });
-    return () => { dead = true; };
+    detailLoad.run(() => api.projectDetail({ provider: hit.provider, projectId: id }));
+    versLoad.run(() => api.projectVersions({ provider: hit.provider, projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }));
+    return () => { detailLoad.cancel(); versLoad.cancel(); };
   });
 
   const blocks = $derived(detail ? markdownLite(detail.body) : []);
@@ -64,10 +70,10 @@
   {#if detail}
     {#if detail.gallery.length}
       <section aria-label={t('drawer.gallery')}>
-        <img class="big" src={detail.gallery[shot]} alt={t('drawer.galleryAlt', { n: shot + 1, title: hit.title })} draggable="false" />
+        <div class="big"><Img src={detail.gallery[shot]} alt={t('drawer.galleryAlt', { n: shot + 1, title: hit.title })} fallback={fallbackImage('mod', hit.projectId, 512)} /></div>
         <ul class="thumbs">
           {#each detail.gallery as g, i (g + i)}
-            <li><button type="button" class:on={i === shot} aria-label={t('drawer.galleryAlt', { n: i + 1, title: hit.title })} aria-pressed={i === shot} onclick={() => (shot = i)}><img src={g} alt="" loading="lazy" draggable="false" /></button></li>
+            <li><button type="button" class:on={i === shot} aria-label={t('drawer.galleryAlt', { n: i + 1, title: hit.title })} aria-pressed={i === shot} onclick={() => (shot = i)}><Img src={g} lazy fallback={fallbackImage('mod', hit.projectId, 128)} /></button></li>
           {/each}
         </ul>
       </section>
@@ -90,16 +96,18 @@
       {#if detail.sourceUrl}<div><dt>{t('drawer.source')}</dt><dd class="mono">{detail.sourceUrl}</dd></div>{/if}
       {#if detail.issuesUrl}<div><dt>{t('drawer.issues')}</dt><dd class="mono">{detail.issuesUrl}</dd></div>{/if}
     </dl>
-  {:else if failed}
-    <p class="err">{t('err.unknown')}</p>
-  {:else}
-    <div class="sk"></div>
+  {:else if detailLoad.phase === 'error'}
+    <LoadError compact error={detailLoad.error} onretry={() => detailLoad.retry()} />
+  {:else if detailLoad.showSkeleton}
+    <DrawerSkeleton />
   {/if}
 
   <section aria-labelledby="dv-h">
     <h3 id="dv-h" class="eyebrow">{t('drawer.versions')}</h3>
-    {#if versions === null}
-      <p class="hint">{t('common.loading')}</p>
+    {#if versLoad.phase === 'error'}
+      <LoadError compact error={versLoad.error} onretry={() => versLoad.retry()} />
+    {:else if versions === null}
+      {#if versLoad.showSkeleton}<ListRowSkeleton count={4} img={18} padding="8px 0" gap={10} bars={[{ w: '30%', h: 13 }, { w: '62%', h: 10 }]} tail={92} />{/if}
     {:else if versions.length === 0}
       <p class="hint">{t('drawer.noVersions')}</p>
     {:else}
@@ -131,11 +139,10 @@
   .stats span { display: inline-flex; align-items: center; gap: 5px; }
   .cta { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
   section { margin-top: 16px; }
-  .big { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--ink-1); display: block; }
+  .big { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--ink-1); overflow: hidden; }
   .thumbs { display: flex; gap: 6px; list-style: none; margin: 8px 0 0; padding: 0; overflow: auto; }
   .thumbs button { width: 84px; aspect-ratio: 16 / 9; border-radius: var(--r-s); overflow: hidden; border: 2px solid transparent; }
   .thumbs button.on { border-color: var(--mango); }
-  .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .body :global(p) { margin: 0 0 10px; color: var(--paper-dim); }
   .body h3 { margin: 14px 0 6px; font-size: 17px; }
   .body h3.h1 { font-size: 20px; }
@@ -146,8 +153,6 @@
   .facts div { display: flex; gap: 12px; }
   dt { width: 80px; flex: none; color: var(--paper-mute); font-size: 13px; }
   dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
-  .sk { height: 160px; margin-top: 16px; background: var(--ink-1); border-radius: var(--r-m); animation: sh 1.4s ease-in-out infinite; }
-  @keyframes sh { 50% { opacity: 0.5; } }
   h3.eyebrow { margin-bottom: 6px; }
   .vers { list-style: none; margin: 0; padding: 0; display: grid; }
   .vers li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }

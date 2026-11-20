@@ -7,6 +7,9 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import LoadError from './LoadError.svelte';
+  import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
   import { updatable, updateRows, updateSteps, providerLabel, type RunStep, type UpdateRow } from '../lib/install';
   import { fmtBytes } from '../lib/format';
   import { app, getApi, lang, t, tp } from '../lib/stores.svelte';
@@ -15,17 +18,21 @@
   interface Props { profileId: string; infos: UpdateInfo[]; onconfirm: (steps: RunStep[]) => void; onclose: () => void }
   let { profileId, infos, onconfirm, onclose }: Props = $props();
 
-  let rows = $state<UpdateRow[] | null>(null);
+  const rl = createLoadState<UpdateRow[]>({ isEmpty: () => false });
+  const rows = $derived(rl.data);
   let skip = $state<string[]>([]);
   const profile = $derived(app.profiles.find((p) => p.id === profileId));
 
-  async function load() {
-    rows = null; skip = [];
-    const plans = await Promise.all(infos.map((i): Promise<InstallPlan | null> =>
-      getApi().installPlan({ provider: i.provider ?? 'modrinth', projectId: i.projectId, versionId: i.versionId, profileId }).catch(() => null)));
-    rows = updateRows(infos, plans);
-  }
-  $effect(() => { void infos; untrack(() => void load()); });
+  $effect(() => {
+    const list = infos;
+    untrack(() => { skip = []; });
+    rl.run(async () => {
+      const plans = await Promise.all(list.map((i): Promise<InstallPlan | null> =>
+        getApi().installPlan({ provider: i.provider ?? 'modrinth', projectId: i.projectId, versionId: i.versionId, profileId }).catch(() => null)));
+      return updateRows(list, plans);
+    });
+    return () => rl.cancel();
+  });
 
   const active = $derived((rows ? updatable(rows) : []).filter((r) => !skip.includes(r.info.projectId)));
   const bytes = $derived(active.reduce((a, r) => a + r.bytes, 0));
@@ -39,8 +46,10 @@
 
 <Modal title={t('flow.upd.title', { name: profile?.name ?? '' })} {onclose} size="lg" onenter={confirm}>
   <p class="hint lead">{t('flow.upd.lead')}</p>
-  {#if rows === null}
-    <ul class="skl" aria-busy="true" aria-label={t('common.loading')}>{#each Array(4) as _, i (i)}<li><span class="skel img notch" style:--n="8px"></span><span class="skel ln"></span></li>{/each}</ul>
+  {#if rl.phase === 'error'}
+    <LoadError error={rl.error} onretry={() => rl.retry()} />
+  {:else if rows === null}
+    {#if rl.showSkeleton}<DialogBodySkeleton rows={4} img={36} />{/if}
   {:else}
     <ul class="rows">
       {#each rows as r (r.info.projectId)}
@@ -83,10 +92,6 @@
 
 <style>
   .lead { margin: 0 0 10px; }
-  .skl { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  .skl li { display: flex; gap: 12px; align-items: center; }
-  .skl .img { width: 36px; height: 36px; }
-  .skl .ln { height: 14px; width: 50%; }
   .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); }
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 20px; gap: 12px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .row:last-child { border-bottom: 0; }

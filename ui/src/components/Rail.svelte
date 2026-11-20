@@ -8,11 +8,15 @@
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import Accounts from './Accounts.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
   import { tip } from '../lib/tooltip';
   import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
 
   const recent = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 5));
   const acc = $derived(selectedAccount());
+  const gate = new BusyGate();
+  $effect(() => { gate.update(!app.ready); return () => gate.destroy(); });
   // credential-state dot on the account button: ok / not saved / sign-in needed (offline accounts have none)
   const cred = $derived(!acc || acc.type !== 'microsoft' ? null : accountNeedsLogin(acc) ? 'login' : (acc.credentialsLocked || acc.credentialsPersisted === false) ? 'warn' : 'ok');
   const credText = $derived(cred === 'login' ? t('rail.cred.login') : cred === 'warn' ? t('rail.cred.warn') : cred === 'ok' ? t('rail.cred.ok') : '');
@@ -36,7 +40,10 @@
     {/each}
   </ul>
 
-  <ul class="recent" aria-label={t('nav.recent')}>
+  <ul class="recent" aria-label={t('nav.recent')} aria-busy={!app.ready}>
+    {#if !app.ready && gate.show}
+      {#each Array(4) as _, i (i)}<li aria-hidden="true"><span class="ring"><Skeleton variant="box" w={40} h={40} notch={7} /></span></li>{/each}
+    {/if}
     {#each recent as p (p.id)}
       {@const sel = nav.view === 'profile' ? p.id === nav.profileId : p.id === selectedProfile()?.id}
       <li class:sel class:on={nav.view === 'profile' && p.id === nav.profileId}>
@@ -54,7 +61,7 @@
       <button type="button" class="avatar" aria-haspopup="dialog" aria-expanded={nav.accounts} use:tip={`${acc?.name ?? t('nav.noAccount')}${credText ? ` · ${credText}` : ''}`}
         aria-label="{t('nav.accounts')}: {acc?.name ?? t('nav.noAccount')}{credText ? `. ${credText}` : ''}{keystoreMissing() ? `. ${t('persist.railHint')}` : ''}"
         onclick={(e) => { e.stopPropagation(); nav.accounts = !nav.accounts; }}>
-        <span class="ring notch" style:--n="9px"><Tile kind="account" id={acc?.uuid ?? ''} src={acc?.headUrl} size={40} notch={7} /></span>
+        <span class="ring notch" style:--n="9px">{#if app.ready}<Tile kind="account" id={acc?.uuid ?? ''} src={acc?.headUrl} size={40} notch={7} />{:else if gate.show}<Skeleton variant="box" w={40} h={40} notch={7} />{:else}<span class="ph"></span>{/if}</span>
         {#if cred}<span class="sq cred" class:ok={cred === 'ok'} class:warn={cred === 'warn'} class:bad={cred === 'login'} aria-hidden="true"></span>{/if}
       </button>
       {#if nav.accounts}<Accounts />{/if}
@@ -83,6 +90,7 @@
   li.sel .ring { background: var(--accent-fill); }
   .prof:focus-visible, .avatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
   .recent li .sq { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border: 2px solid var(--ink-1); box-sizing: border-box; }
+  .ph { display: block; width: 40px; height: 40px; }
   .pulse { animation: pulse 1.6s ease-in-out infinite; }
   .cred { position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border: 2px solid var(--ink-1); box-sizing: border-box; }
   @media (max-height: 680px) { .recent li:nth-child(n + 4) { display: none; } }

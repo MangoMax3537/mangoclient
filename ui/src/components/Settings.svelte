@@ -1,4 +1,8 @@
 <script lang="ts">
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
+  import LoadError from './LoadError.svelte';
+  import { BusyGate, createLoadState } from '../lib/loadState.svelte';
   import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import BroomIcon from 'phosphor-svelte/lib/BroomIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
@@ -20,15 +24,19 @@
   const maxRam = $derived(Math.max(2048, app.totalRamMb || 8192));
   let args = $state(app.config?.javaArgs ?? '');
   let argTimer: ReturnType<typeof setTimeout> | undefined;
-  let usage = $state<StorageUsage[] | null>(null);
+  const usageLoad = createLoadState<StorageUsage[]>({ isEmpty: () => false });
+  let usageOverride = $state<StorageUsage[] | null>(null);
+  const usage = $derived(usageOverride ?? usageLoad.data);
   let clearing = $state<StorageKey | null>(null);
   let confirmKey = $state<StorageKey | null>(null);
   const totalBytes = $derived((usage ?? []).reduce((a, u) => a + u.bytes, 0));
   const gameActive = $derived(anyGameActive());
-  $effect(() => { getApi().storageUsage().then((u) => (usage = u), (e) => toast(errorText(e), 'error')); });
+  const updGate = new BusyGate();
+  $effect(() => { updGate.update(updates.status.state === 'checking'); return () => updGate.destroy(); });
+  $effect(() => { usageLoad.run(() => getApi().storageUsage()); return () => usageLoad.cancel(); });
   async function clearKey(key: StorageKey) {
     clearing = key;
-    try { usage = await getApi().storageClear({ key }); toast(t('storage.cleared', { name: t(`storage.${key}` as Key) }), 'ok'); }
+    try { usageOverride = await getApi().storageClear({ key }); toast(t('storage.cleared', { name: t(`storage.${key}` as Key) }), 'ok'); }
     catch (e) { toast(errorText(e), 'error'); }
     clearing = null; confirmKey = null;
   }
@@ -225,8 +233,15 @@
 
     <section aria-labelledby="s-storage">
       <h2 id="s-storage" class="eyebrow">{t('storage.title')}</h2>
-      {#if !usage}
-        <p class="hint">{t('common.loading')}</p>
+      {#if usageLoad.phase === 'error' && !usage}
+        <LoadError compact error={usageLoad.error} onretry={() => usageLoad.retry()} />
+      {:else if !usage}
+        {#if usageLoad.showSkeleton}
+          <SkeletonRegion>
+            <div class="totsk"><Skeleton variant="bar" lh={19} h={11} w={150} /></div>
+            <ul class="usage">{#each Array(4) as _, i (i)}<li><Skeleton variant="bar" lh={22} h={13} w="64%" /><Skeleton variant="box" w="100%" h={8} radius={2} /><Skeleton variant="box" w={92} h={36} radius={8} /></li>{/each}</ul>
+          </SkeletonRegion>
+        {/if}
       {:else}
         <p class="hint total mono">{t('storage.total', { size: fmtBytes(totalBytes, lang()) })}</p>
         <ul class="usage">
@@ -247,7 +262,7 @@
     <section aria-labelledby="s-updates">
       <h2 id="s-updates" class="eyebrow">{t('update.title')}</h2>
       <div class="row">
-        <div class="txt"><b>{t('settings.version')} <span class="mono">{app.version}</span></b><div class="hint" role="status" aria-live="polite">{usText}</div></div>
+        <div class="txt"><b>{t('settings.version')} <span class="mono">{app.version}</span></b>{#if us.state === 'checking' && updGate.show}<Skeleton variant="bar" lh={20} h={11} w={180} />{:else}<div class="hint" role="status" aria-live="polite">{usText}</div>{/if}</div>
         {#if us.state === 'ready'}
           <button class="btn accent" type="button" onclick={() => (updates.overlay = true)}>{t('update.install')}</button>
         {:else}
@@ -298,4 +313,5 @@
   .bar { height: 8px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--mango); transform-origin: left; }
   .total { margin: 6px 0 2px; }
+  .totsk { margin: 6px 0 2px; }
 </style>

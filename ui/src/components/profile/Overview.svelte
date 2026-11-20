@@ -5,28 +5,35 @@
   import ScrollIcon from 'phosphor-svelte/lib/ScrollIcon';
   import ImagesIcon from 'phosphor-svelte/lib/ImagesIcon';
   import BlockedBanner from '../BlockedBanner.svelte';
+  import Img from '../Img.svelte';
+  import LoadError from '../LoadError.svelte';
+  import ScreenshotGridSkeleton from '../skeleton/ScreenshotGridSkeleton.svelte';
+  import LogLineSkeleton from '../skeleton/LogLineSkeleton.svelte';
+  import { createLoadState } from '../../lib/loadState.svelte';
+  import { fallbackImage } from '../../lib/fallbackImage';
   import { fmtDate, fmtDuration, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
   import { actions, errorText, getApi, lang, nav, openDiscover, openProfile, t, toast } from '../../lib/stores.svelte';
   import type { LogEntry, ProfileView, Screenshot } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
-  let shots = $state<Screenshot[] | null>(null);
-  let excerpt = $state<{ entry: LogEntry; lines: string[] } | null | undefined>(undefined);
+  const shotsLoad = createLoadState<Screenshot[]>({ isEmpty: () => false });
+  const logLoad = createLoadState<{ entry: LogEntry; lines: string[] } | null>({ isEmpty: () => false });
+  const shots = $derived(shotsLoad.data);
+  const excerpt = $derived(logLoad.data);
 
   $effect(() => {
     const id = profile.id;
-    let dead = false;
-    shots = null; excerpt = undefined;
     const api = getApi();
-    api.screenshotsList({ profileId: id }).then((l) => { if (!dead) shots = l; }, () => { if (!dead) shots = []; });
-    api.logsList({ profileId: id }).then(async (l) => {
+    shotsLoad.run(() => api.screenshotsList({ profileId: id }));
+    logLoad.run(async () => {
+      const l = await api.logsList({ profileId: id });
       const e = l.find((x) => x.kind === 'game') ?? l[0];
-      if (!e) { if (!dead) excerpt = null; return; }
+      if (!e) return null;
       const r = await api.logsRead({ profileId: id, id: e.id });
-      if (!dead) excerpt = { entry: e, lines: r.text.split('\n').slice(-12) };
-    }).catch(() => { if (!dead) excerpt = null; });
-    return () => { dead = true; };
+      return { entry: e, lines: r.text.split('\n').slice(-12) };
+    });
+    return () => { shotsLoad.cancel(); logLoad.cancel(); };
   });
 
   async function reveal() {
@@ -54,14 +61,15 @@
     <header><h2 id="ov-shots" class="eyebrow">{t('overview.screenshots')}</h2>
       {#if shots?.length}<button class="btn ghost" type="button" onclick={() => (nav.profileTab = 'media')}>{t('overview.all')}</button>{/if}
     </header>
-    {#if shots === null}
-      <div class="strip"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+    {#if shotsLoad.phase === 'error'}<LoadError compact error={shotsLoad.error} onretry={() => shotsLoad.retry()} />
+    {:else if shots === null}
+      {#if shotsLoad.showSkeleton}<ScreenshotGridSkeleton count={3} min={150} gap={8} />{/if}
     {:else if shots.length === 0}
       <p class="hint">{t('media.empty')}</p>
     {:else}
       <ul class="strip">
         {#each shots.slice(0, 6) as s (s.name)}
-          <li><button type="button" aria-label={s.name} onclick={() => (nav.profileTab = 'media')}><img src={s.url} alt="" loading="lazy" draggable="false" /></button></li>
+          <li><button type="button" aria-label={s.name} onclick={() => (nav.profileTab = 'media')}><Img src={s.url} lazy fallback={fallbackImage('world', s.name, 300)} /></button></li>
         {/each}
       </ul>
     {/if}
@@ -71,7 +79,8 @@
     <header><h2 id="ov-log" class="eyebrow">{t('overview.lastLog')}{#if excerpt}<span class="mono dim">&nbsp;&middot;&nbsp;{excerpt.entry.name}</span>{/if}</h2>
       <button class="btn ghost" type="button" onclick={() => (nav.profileTab = 'logs')}>{t('overview.openLogs')}</button>
     </header>
-    {#if excerpt === undefined}<div class="sk wide"></div>
+    {#if logLoad.phase === 'error'}<LoadError compact error={logLoad.error} onretry={() => logLoad.retry()} />
+    {:else if logLoad.phase === 'loading'}{#if logLoad.showSkeleton}<div class="skpre"><LogLineSkeleton count={12} lineHeight={19.375} pad="10px 14px" /></div>{/if}
     {:else if excerpt === null}<p class="hint">{t('logs.empty')}</p>
     {:else}
       <pre class="mono">{#each excerpt.lines as l, i (i)}<span class="ln {logLevel(l)}">{l}{'\n'}</span>{/each}</pre>
@@ -102,11 +111,8 @@
   .dim { color: var(--paper-mute); text-transform: none; letter-spacing: 0; font-weight: 400; }
   .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
   .strip button { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); }
-  .strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .strip button:hover { border-color: var(--mango); }
-  .sk { aspect-ratio: 16 / 9; background: var(--ink-2); border-radius: var(--r-m); animation: shimmer 1.4s ease-in-out infinite; }
-  .sk.wide { aspect-ratio: auto; height: 150px; }
-  @keyframes shimmer { 50% { opacity: 0.5; } }
+  .skpre { background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
   pre { margin: 0; padding: 10px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; line-height: 1.55; overflow: auto; user-select: text; }
   .ln { color: var(--paper-dim); }
   .ln.warn { color: var(--mango); }

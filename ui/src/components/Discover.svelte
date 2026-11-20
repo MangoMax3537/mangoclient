@@ -12,14 +12,17 @@
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
+  import SearchResultSkeleton from './skeleton/SearchResultSkeleton.svelte';
+  import LoadError from './LoadError.svelte';
+  import { BusyGate, createLoadState } from '../lib/loadState.svelte';
+  import type { SearchResult } from '../lib/types';
   import EmptyState from './EmptyState.svelte';
   import Lazy from './Lazy.svelte';
   import { dialogs } from '../lib/lazy';
   import { fmtCompact } from '../lib/format';
   import { effectiveProvider, providerLabel, sourceOptions } from '../lib/install';
   import type { Key } from '../lib/i18n';
-  import { toAppError } from '../lib/api';
-  import { app, errorText, getApi, installs, lang, loadProviders, nav, openProfile, providers, startInstall, t, tp, type FlowProject } from '../lib/stores.svelte';
+    import { app, errorText, getApi, installs, lang, loadProviders, nav, openProfile, providers, startInstall, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { ContentItem, Loader, ProjectHit, ProjectType, Provider, SearchSort, VersionManifest } from '../lib/types';
 
   const PAGE = 20;
@@ -32,11 +35,17 @@
   let loader = $state<Loader | ''>('');
   let mcVersion = $state('');
   let sort = $state<SearchSort>('relevance');
-  let hits = $state<ProjectHit[]>([]);
-  let total = $state(0);
-  let loading = $state(true);
-  let more = $state(false);
-  let error = $state<{ code: string; text: string } | null>(null);
+  // One load state for the search: the first page loads with the skeleton, "load more" refreshes silently (old rows stay, skeleton rows are appended).
+  const search = createLoadState<SearchResult>({ isEmpty: () => false });
+  const hits = $derived(search.data?.hits ?? []);
+  const total = $derived(search.data?.total ?? 0);
+  const loading = $derived(search.phase === 'loading' || search.phase === 'idle');
+  const more = $derived(search.refreshing);
+  const error = $derived(search.phase === 'error' ? { code: search.error?.code ?? 'unknown', text: errorText(search.error) } : null);
+  const gate = new BusyGate();
+  const moreGate = new BusyGate();
+  $effect(() => { gate.update(loading); return () => gate.destroy(); });
+  $effect(() => { moreGate.update(more); return () => moreGate.destroy(); });
   let manifest = $state<VersionManifest | null>(null);
   let scopeItems = $state<Record<string, ContentItem>>({});
   let drawer = $state<ProjectHit | null>(null);
@@ -70,28 +79,24 @@
     return () => { dead = true; };
   });
 
-  let seq = 0;
-  async function run(append: boolean) {
-    const my = ++seq;
-    if (append) more = true; else loading = true;
-    error = null;
-    try {
+  function run(append: boolean) {
+    const offset = append ? hits.length : 0;
+    const prev = append ? hits : [];
+    search.run(async (signal) => {
+      void signal;
       const r = await getApi().searchProjects({
         params: {
-          provider: source, query: query.trim(), projectType: type, sort, offset: append ? hits.length : 0, limit: PAGE,
+          provider: source, query: query.trim(), projectType: type, sort, offset, limit: PAGE,
           ...(loader && (type === 'mod' || type === 'modpack') ? { loader } : {}), ...(mcVersion ? { mcVersion } : {}),
         },
       });
-      if (my !== seq) return;
-      hits = append ? [...hits, ...r.hits] : r.hits;
-      total = r.total;
-    } catch (e) { if (my === seq) error = { code: toAppError(e).code, text: errorText(e) }; }
-    if (my === seq) { loading = false; more = false; }
+      return { ...r, hits: [...prev, ...r.hits] };
+    }, { silent: append });
   }
   $effect(() => {
     void type; void query; void loader; void mcVersion; void sort; void source;
     const h = setTimeout(() => run(false), 220);
-    return () => clearTimeout(h);
+    return () => { clearTimeout(h); };
   });
 
   type St = 'install' | 'installing' | 'installed' | 'update';
@@ -165,8 +170,10 @@
   </div>
 
   <div class="results" aria-busy={loading}>
-    {#if loading}
-      <ul class="list">{#each Array(6) as _, i (i)}<li class="row sk"><span class="img notch skel" style:--n="9px"></span><span class="b1 skel"></span></li>{/each}</ul>
+    {#if gate.show}
+      <SearchResultSkeleton count={6} />
+    {:else if loading && hits.length === 0}
+      <!-- first ~150 ms of a first load: nothing yet, so a fast answer never flashes a skeleton -->
     {:else if error}
       <EmptyState title={t('discover.errTitle')} hint={error.text}>
         {#if error.code === 'curseforge.no_api_key'}<button class="btn accent" type="button" onclick={() => (nav.view = 'settings')}><KeyIcon weight="bold" size={14} aria-hidden="true" />{t('discover.source.openSettings')}</button>
@@ -205,6 +212,8 @@
           </li>
         {/each}
       </ul>
+      {#if moreGate.show}<SearchResultSkeleton count={3} top={false} />{/if}
+      {#if search.refreshError}<LoadError compact error={search.refreshError} onretry={() => run(true)} />{/if}
       {#if hits.length < total}
         <div class="morebar"><button class="btn" type="button" disabled={more} onclick={() => run(true)}>{more ? t('common.loading') : t('discover.loadMore')}</button></div>
       {/if}
@@ -252,8 +261,6 @@
   .ib.upd { border-color: var(--mango); color: var(--mango); }
   .count { margin: 0; }
   .morebar { display: flex; justify-content: center; padding: 16px 0 4px; }
-  .sk .img { width: 56px; height: 56px; }
-  .sk .b1 { height: 14px; width: 280px; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 1100px) { .stats { display: none; } .row { grid-template-columns: 56px minmax(0, 1fr) 132px; } }

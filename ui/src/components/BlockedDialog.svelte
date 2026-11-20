@@ -10,6 +10,9 @@
   import ArrowsLeftRightIcon from 'phosphor-svelte/lib/ArrowsLeftRightIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import { canFinishSilently, missingFiles, openAllNeedsConfirm, openPagesSequentially, sortBlocked, summarize } from '../lib/blocked';
   import type { Key } from '../lib/i18n';
@@ -70,6 +73,8 @@
     opening = null;
   }
   const stateKey = (f: BlockedFile) => `blocked.state.${f.state}` as Key;
+  const gate = new BusyGate();
+  $effect(() => { gate.update(!loaded); return () => gate.destroy(); });
 </script>
 
 <Modal title={t('blocked.title', { name: profile?.name ?? '' })} onclose={close} size="lg" onenter={done}>
@@ -102,7 +107,7 @@
     </div>
 
     {#if !loaded}
-      <div class="skl" aria-busy="true" aria-label={t('common.loading')}>{#each Array(4) as _, i (i)}<span class="skel row-sk"></span>{/each}</div>
+      {#if gate.show}<SkeletonRegion class="skl-blk">{#each Array(4) as _, i (i)}<Skeleton variant="box" w="100%" h={56} radius={8} />{/each}</SkeletonRegion>{/if}
     {:else}
       <ul class="list" aria-label={t('blocked.listLabel')}>
         {#each rows as f (f.fileName)}
@@ -181,8 +186,7 @@
   .st.found, .st.installed { color: var(--leaf); }
   .st.matched_modrinth { color: var(--sky); }
   .acts { display: inline-flex; gap: 4px; justify-content: flex-end; min-width: 0; }
-  .skl { display: grid; gap: 6px; }
-  .row-sk { height: 56px; }
+  :global(.skl-blk) { display: grid; gap: 6px; }
   .how { margin: 12px 0 0; }
   .grow { margin-right: auto; }
   .grow-l { margin-right: auto; }

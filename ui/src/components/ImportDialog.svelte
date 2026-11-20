@@ -5,6 +5,9 @@
   import PackageIcon from 'phosphor-svelte/lib/PackageIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
   import BlockedPlanNote from './BlockedPlanNote.svelte';
   import { fmtBytes } from '../lib/format';
   import {
@@ -23,6 +26,8 @@
   const pct = $derived.by(() => { const e = installs['import']; return e && e.total ? Math.round((e.done / e.total) * 100) : 0; });
   const errCode = $derived(st?.s === 'error' ? st.code : '');
   const errText = $derived.by(() => { const k = importErrorKey(errCode); return k ? t(k) : errorText({ code: errCode }); });
+  const gate = new BusyGate();
+  $effect(() => { gate.update(st?.s === 'planning'); return () => gate.destroy(); });
 </script>
 
 {#if st && pf.impOpen}
@@ -37,7 +42,12 @@
     </div>
 
     {#if st.s === 'planning'}
-      <div class="skl" aria-busy="true" aria-label={t('import.planning')} role="status"><span class="skel ln"></span><span class="skel ln"></span><span class="skel ln"></span><span class="sr-only">{t('import.planning')}</span></div>
+      {#if gate.show}
+        <SkeletonRegion class="skl-imp">
+          <Skeleton variant="bar" lh={20} h={11} w={150} /><Skeleton variant="box" w="100%" h={36} radius={8} />
+          <Skeleton variant="bar" lh={22} h={13} w="40%" /><Skeleton variant="bar" lh={22} h={13} w="34%" /><Skeleton variant="bar" lh={22} h={13} w="46%" />
+        </SkeletonRegion>
+      {/if}
     {:else if st.s === 'error' && !plan}
       <p class="err box" role="alert">{errText}</p>
     {:else if plan}
@@ -102,7 +112,7 @@
   dd { margin: 0; }
   .creates { margin: 12px 0 0; }
   .box { margin: 14px 0 0; padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
-  .skl { display: grid; gap: 10px; align-content: start; min-height: 220px; }
+  :global(.skl-imp) { display: grid; gap: 10px; align-content: start; min-height: 220px; }
   .ln { height: 14px; width: 60%; }
   .prog { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
   .bar { flex: 1; height: 6px; background: var(--ink-4); overflow: hidden; }

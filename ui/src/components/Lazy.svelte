@@ -5,6 +5,7 @@
   import type { Component } from 'svelte';
   import type { Loader } from '../lib/lazy';
   import { t } from '../lib/stores.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
 
   interface Props { load: Loader; props?: Record<string, unknown>; fallback?: Snippet }
   let { load, props = {}, fallback }: Props = $props();
@@ -18,13 +19,16 @@
     load().then((m) => { if (my === seq) C = m.default; }, () => { if (my === seq) failed = true; });
   }
   $effect(() => { void load; untrack(run); });
+  // the fallback skeleton only appears when the chunk takes longer than ~150 ms
+  const gate = new BusyGate();
+  $effect(() => { gate.update(C === null && !failed); return () => gate.destroy(); });
 </script>
 
 {#if C}
   <C {...props} />
 {:else if failed}
   <div class="lz" role="alert">{t('lazy.failed')} <button class="btn small" type="button" onclick={run}>{t('common.retry')}</button></div>
-{:else if fallback}
+{:else if fallback && gate.show}
   {@render fallback()}
 {/if}
 

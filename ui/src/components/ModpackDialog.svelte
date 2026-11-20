@@ -3,6 +3,9 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import LoadError from './LoadError.svelte';
+  import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
+  import { createLoadState } from '../lib/loadState.svelte';
   import BlockedPlanNote from './BlockedPlanNote.svelte';
   import { fmtBytes } from '../lib/format';
   import { providerLabel } from '../lib/install';
@@ -12,19 +15,18 @@
   interface Props { project: FlowProject; versionId?: string; onclose: () => void }
   let { project, versionId, onclose }: Props = $props();
 
-  let plan = $state<ModpackPlan | null>(null);
-  let error = $state('');
+  const pLoad = createLoadState<ModpackPlan>({ isEmpty: () => false });
+  const plan = $derived(pLoad.data);
   let name = $state('');
   let run = $state<InstallRun | null>(null);
 
-  async function load() {
-    plan = null; error = ''; name = project.title;
-    try {
-      const p = await getApi().modpackPlan({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) });
-      plan = p; name = p.name;
-    } catch (e) { error = errorText(e); }
-  }
-  $effect(() => { void project.projectId; void versionId; untrack(() => void load()); });
+  $effect(() => {
+    void project.projectId; void versionId;
+    untrack(() => { name = project.title; });
+    pLoad.run(() => getApi().modpackPlan({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
+    return () => pLoad.cancel();
+  });
+  $effect(() => { const p = pLoad.data; if (p) untrack(() => { name = p.name; }); });
 
   const nameOk = $derived(name.trim().length > 0 && name.trim().length <= 48);
   const running = $derived(!!run && !run.finished);
@@ -48,10 +50,10 @@
     </div>
   </div>
 
-  {#if error}
-    <p class="err" role="alert">{error} <button class="btn small" type="button" onclick={load}>{t('common.retry')}</button></p>
+  {#if pLoad.phase === 'error'}
+    <LoadError error={pLoad.error} onretry={() => pLoad.retry()} />
   {:else if !plan}
-    <div class="skl" aria-busy="true" aria-label={t('common.loading')}><span class="skel ln"></span><span class="skel ln"></span><span class="skel ln"></span></div>
+    {#if pLoad.showSkeleton}<DialogBodySkeleton rows={3} img={0} framed={false} />{/if}
   {:else}
     <label class="lbl" for="mp-name">{t('flow.pack.name')}</label>
     <input id="mp-name" class="field" bind:value={name} maxlength="48" autocomplete="off" aria-invalid={!nameOk} disabled={!!run} />
@@ -94,8 +96,6 @@
   .facts div:nth-last-child(-n + 2) { border-bottom: 0; }
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
-  .skl { display: grid; gap: 10px; }
-  .ln { height: 14px; width: 60%; }
   .prog { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
   .bar { flex: 1; height: 6px; background: var(--ink-4); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--accent-fill); transform-origin: left; transition: transform var(--dur) var(--ease); }

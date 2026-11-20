@@ -12,6 +12,8 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import EmptyState from '../EmptyState.svelte';
   import Tile from '../Tile.svelte';
+  import WorldCardSkeleton from '../skeleton/WorldCardSkeleton.svelte';
+  import { BusyGate } from '../../lib/loadState.svelte';
   import BusyBar from '../BusyBar.svelte';
   import BackupDialog from '../BackupDialog.svelte';
   import WorldDeleteDialog from '../WorldDeleteDialog.svelte';
@@ -38,6 +40,9 @@
     return () => { dead = true; };
   });
 
+  const gate = new BusyGate();
+  $effect(() => { gate.update(worlds === undefined); return () => gate.destroy(); });
+
   async function reveal() {
     try { toast(t('worlds.folderOpened', { path: await getApi().worldOpenFolder({ profileId: profile.id }) }), 'info'); } catch (e) { toast(errorText(e), 'error'); }
   }
@@ -63,7 +68,7 @@
   {#if pending}<div class="pend"><BusyBar label={pending.kind === 'snapshot' ? t('backups.busy.snapshot') : pending.kind === 'backup' ? t('worlds.backupRunning', { name: pending.name ?? '' }) : pending.kind === 'delete' ? t('worlds.deleteRunning', { name: pending.name ?? '' }) : t('backups.busy.restore')} /></div>{/if}
 
   {#if worlds === undefined}
-    <ul class="grid" aria-busy="true" aria-label={t('common.loading')}>{#each Array(2) as _, i (i)}<li class="card"><span class="skel img"></span><span class="skel ln"></span></li>{/each}</ul>
+    {#if gate.show}<WorldCardSkeleton count={2} />{/if}
   {:else if worlds.length === 0}
     <EmptyState title={t('worlds.emptyTitle')} hint={failed ? '' : t('worlds.empty')}>
       <button class="btn accent" type="button" disabled={!app.accounts.length || running} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
@@ -124,6 +129,4 @@
   .folder { margin: 0; font-size: var(--fs-xs); color: var(--paper-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft); margin-top: 4px; }
   .acts .danger { margin-left: auto; }
-  .card .img { width: 64px; height: 64px; }
-  .card .ln { height: 14px; width: 60%; align-self: center; }
 </style>

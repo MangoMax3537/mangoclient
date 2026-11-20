@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { BlockFace } from '../lib/types';
+  import { imgWatch } from '../lib/imgLoad';
 
   interface Props {
     /** Face image URLs (mangoimg://block/<id>/<face>). */
@@ -16,6 +17,18 @@
     onfail?: () => void;
   }
   let { faces, size = 40, fill = false, radius = 6, notch = 0, tint = null, label = '', onfail }: Props = $props();
+
+  // The tile is a plain grey box until all three faces have loaded, then the cube fades in (opacity only). A failed face reports onfail.
+  let done = $state<Record<BlockFace, boolean>>({ top: false, left: false, right: false });
+  let instant = $state(false);
+  let seen = '';
+  $effect.pre(() => { const k = `${faces.top}|${faces.left}|${faces.right}`; if (k !== seen) { seen = k; done = { top: false, left: false, right: false }; instant = false; } });
+  const ready = $derived(done.top && done.left && done.right);
+  const watch = (face: BlockFace) => ({
+    src: faces[face],
+    onload: (i: boolean) => { if (i && !ready) instant = true; done = { ...done, [face]: true }; },
+    onerror: () => onfail?.(),
+  });
 </script>
 
 <span
@@ -24,12 +37,13 @@
   style:border-radius={notch ? undefined : `${radius}px`}
   role={label ? 'img' : undefined} aria-label={label || undefined} aria-hidden={label ? undefined : 'true'}
 >
-  <span class="scene">
+  {#if !ready}<span class="skel fill" aria-hidden="true"></span>{/if}
+  <span class="scene" class:ready class:instant>
     <span class="shadow"></span>
     <span class="cube">
-      <span class="f top"><img class="px" src={faces.top} alt="" draggable="false" onerror={() => onfail?.()} /></span>
-      <span class="f left"><img class="px" src={faces.left} alt="" draggable="false" onerror={() => onfail?.()} /></span>
-      <span class="f right"><img class="px" src={faces.right} alt="" draggable="false" onerror={() => onfail?.()} /></span>
+      <span class="f top"><img class="px" src={faces.top} alt="" decoding="async" draggable="false" use:imgWatch={watch('top')} /></span>
+      <span class="f left"><img class="px" src={faces.left} alt="" decoding="async" draggable="false" use:imgWatch={watch('left')} /></span>
+      <span class="f right"><img class="px" src={faces.right} alt="" decoding="async" draggable="false" use:imgWatch={watch('right')} /></span>
     </span>
   </span>
 </span>
@@ -43,6 +57,10 @@
       radial-gradient(72% 62% at 50% 44%, color-mix(in srgb, var(--tint, var(--sky)) 26%, transparent), transparent 72%),
       color-mix(in srgb, var(--ink-3) 80%, var(--tint, var(--sky)));
   }
+  .fill { position: absolute; inset: 0; display: block; }
+  .scene { opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .scene.ready { opacity: 1; }
+  .scene.instant { transition: none; }
   .scene { --w: 62cqmin; --a: calc(var(--w) * 0.57735); position: absolute; left: 50%; top: 50%; width: var(--w); height: calc(var(--a) * 2); transform: translate(-50%, -52%); }
   .cube { position: absolute; inset: 0; transition: transform var(--dur) var(--ease); }
   /* hexagon underlay: closes the hairline seams between faces and gives a dark contour */

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import Skeleton from '../skeleton/Skeleton.svelte';
+  import { BusyGate } from '../../lib/loadState.svelte';
   import SwapIcon from 'phosphor-svelte/lib/SwapIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
   import Modal from '../Modal.svelte';
@@ -61,6 +63,8 @@
   let applying = $state(false);
   const LOADERS: Loader[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'];
   const versions = $derived((manifest?.versions ?? []).filter((v) => v.type === 'release' || (app.config?.showSnapshots && v.type === 'snapshot') || v.id === profile.mcVersion));
+  const mGate = new BusyGate();
+  $effect(() => { mGate.update(!manifest); return () => mGate.destroy(); });
   onMount(() => { getApi().versionsManifest().then((m) => (manifest = m), (e) => toast(errorText(e), 'error')); });
   let seq = 0;
   $effect(() => {
@@ -169,7 +173,7 @@
       <label for="cv-loader">{t('new.loader')}</label>
       <select id="cv-loader" class="field" bind:value={loader}>{#each LOADERS as l (l)}<option value={l}>{l === 'vanilla' ? t('profile.vanilla') : l}</option>{/each}</select>
       <label for="cv-mc">{t('col.version')}</label>
-      <select id="cv-mc" class="field mono" bind:value={mcVersion} disabled={!manifest}>{#each versions as v (v.id)}<option value={v.id}>{v.id}</option>{/each}</select>
+      {#if !manifest && mGate.show}<Skeleton variant="box" w="100%" h={36} radius={8} />{:else}<select id="cv-mc" class="field mono" bind:value={mcVersion} disabled={!manifest}>{#each versions as v (v.id)}<option value={v.id}>{v.id}</option>{/each}</select>{/if}
       {#if loader !== 'vanilla'}
         <label for="cv-lv">{t('new.loaderVersion')}</label>
         <select id="cv-lv" class="field mono" bind:value={loaderVersion}>{#each loaderVersions as lv (lv.version)}<option value={lv.version}>{lv.version}{lv.stable ? ` (${t('new.recommended')})` : ''}</option>{/each}</select>

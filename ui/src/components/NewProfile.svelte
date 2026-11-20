@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import LoadError from './LoadError.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
+  import { BusyGate, createLoadState } from '../lib/loadState.svelte';
   import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
@@ -26,6 +30,9 @@
   let color = $state(COLORS[0]);
   let touched = $state(false);
   let manifest = $state<VersionManifest | null>(null);
+  const manifestLoad = createLoadState<VersionManifest>({ isEmpty: () => false });
+  const lvGate = new BusyGate();
+  $effect(() => { lvGate.update(loaderLoading); return () => lvGate.destroy(); });
   let filter = $state<'release' | 'snapshot' | 'all'>('release');
   let q = $state('');
   let limit = $state(PAGE);
@@ -58,10 +65,16 @@
 
   onMount(() => {
     dlg?.showModal();
-    getApi().versionsManifest().then((m) => {
+    manifestLoad.run(() => getApi().versionsManifest());
+    return () => manifestLoad.cancel();
+  });
+
+  $effect(() => {
+    const m = manifestLoad.data;
+    if (m && !manifest) {
       manifest = m;
       mcVersion = prefill?.mcVersion && m.versions.some((v) => v.id === prefill.mcVersion) ? prefill.mcVersion : m.latest.release;
-    }).catch((e) => (error = errorText(e)));
+    }
   });
 
   function close() { nav.newProfile = false; nav.newProfilePrefill = null; }
@@ -165,8 +178,10 @@
           {/each}
         </div>
       </div>
-      {#if !manifest}
-        <p class="hint">{t('new.loadingVersions')}</p>
+      {#if manifestLoad.phase === 'error' && !manifest}
+        <LoadError compact error={manifestLoad.error} onretry={() => manifestLoad.retry()} />
+      {:else if !manifest}
+        {#if manifestLoad.showSkeleton}<div class="vlist"><ListRowSkeleton count={6} img={0} rowHeight={35} padding="0 12px" gap={0} bars={[{ w: '22%', h: 13 }]} /></div>{/if}
       {:else if filtered.length === 0}
         <p class="hint">{t('new.noVersions')}</p>
       {:else}
@@ -190,7 +205,7 @@
       {#if loader !== 'vanilla'}
         <label class="lbl" for="np-lv">{t('new.loaderVersion')}</label>
         {#if loaderLoading}
-          <p class="hint">{t('new.loadingVersions')}</p>
+          {#if lvGate.show}<Skeleton variant="box" w="100%" h={36} radius={8} />{/if}
         {:else if !loaderVersions.length}
           <p class="err">{t('new.noLoaderVersion')}</p>
         {:else}

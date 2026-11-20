@@ -9,6 +9,9 @@
   import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
   import PuzzlePieceIcon from 'phosphor-svelte/lib/PuzzlePieceIcon';
   import Modal from './Modal.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
+  import { BusyGate } from '../lib/loadState.svelte';
   import EmptyState from './EmptyState.svelte';
   import { causeView, hasCauses, rankCauses, reportText } from '../lib/portability';
   import { hasKey, type Key } from '../lib/i18n';
@@ -60,13 +63,17 @@
   function diag() { const id = profileId; onclose(); openDiagnostics(id); }
   function showMod(m: string) { const id = profileId; onclose(); showModInContent(id, m); }
   const confKey = (c: string) => `crash.conf.${c}` as Key;
+  const gate = new BusyGate();
+  $effect(() => { gate.update(!report && !error); return () => gate.destroy(); });
 </script>
 
 <Modal title={t('crash.title')} {onclose} variant="drawer">
   {#if error}
     <p class="err box" role="alert">{error} <button class="btn small" type="button" onclick={load}>{t('common.retry')}</button></p>
   {:else if !report}
-    <div class="skl" aria-busy="true" role="status"><span class="sr-only">{t('crash.analyzing')}</span><span class="skel s1"></span><span class="skel s2"></span><span class="skel s3"></span></div>
+    {#if gate.show}
+      <SkeletonRegion class="skl-crash"><Skeleton variant="bar" w="80%" h={24} radius={6} /><Skeleton variant="box" w="100%" h={96} radius={8} /><Skeleton variant="box" w="100%" h={96} radius={8} /></SkeletonRegion>
+    {/if}
     <p class="hint">{t('crash.analyzing')}</p>
   {:else if noLog}
     <EmptyState title={t('crash.noLog.title')} hint={t('crash.noLog.hint')} />
@@ -174,8 +181,7 @@
   .tog:hover { color: var(--paper); }
   .ex { margin: 6px 0 0; padding: 10px 12px; max-height: 260px; overflow: auto; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; user-select: text; }
   .box { padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
-  .skl { display: grid; gap: 12px; }
-  .s1 { height: 24px; width: 80%; } .s2 { height: 96px; } .s3 { height: 96px; }
+  :global(.skl-crash) { display: grid; gap: 12px; }
   .res { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); border-radius: var(--r-m); }
   .res .field { flex: 1; height: 32px; }
   .grow { margin-right: auto; }
