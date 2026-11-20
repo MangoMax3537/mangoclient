@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHORTCUT_GROUPS, isTypingTarget, matchShortcut, mouseNav, shortcutLabel, type KeyLike } from './keybinds';
+import { SHORTCUT_GROUPS, capText, isTypingTarget, matchShortcut, mouseNav, shortcutLabel, type KeyLike } from './keybinds';
 import { translate } from './i18n';
 
 const k = (key: string, o: Partial<KeyLike> = {}): KeyLike => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
@@ -101,5 +101,21 @@ describe('shortcut sheet content', () => {
       expect(translate('de', g.title)).not.toBe(g.title); expect(translate('en', g.title)).not.toBe(g.title);
       for (const i of g.items) { expect(translate('de', i.label)).not.toBe(i.label); expect(translate('en', i.label)).not.toBe(i.label); }
     }
+  });
+});
+
+describe('key caps follow the UI language', () => {
+  it('German keyboards say Strg, Umschalt and Eingabe; English and Mac symbols stay', () => {
+    expect(capText('Ctrl', 'de')).toBe('Strg');
+    expect(capText('Shift', 'de')).toBe('Umschalt');
+    expect(capText('Enter', 'de')).toBe('Eingabe');
+    expect(capText('F2', 'de')).toBe('F2');
+    expect(capText('Ctrl', 'en')).toBe('Ctrl');
+    expect(capText('⌘', 'de')).toBe('⌘');
+  });
+  it('the tooltip label is localized too', () => {
+    expect(shortcutLabel('skins', false, 'de')).toBe('Strg+5');
+    expect(shortcutLabel('skins', false, 'en')).toBe('Ctrl+5');
+    expect(shortcutLabel('playStop', false, 'de')).toBe('Strg+Umschalt+P');
   });
 });

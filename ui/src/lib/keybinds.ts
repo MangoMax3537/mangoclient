@@ -141,10 +141,14 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 /** The words every shortcut entry is found by in the settings search. */
 export const SHORTCUT_ALIASES: readonly string[] = ['tastenkürzel', 'tastenkombination', 'shortcut', 'shortcuts', 'hotkey', 'hotkeys', 'keybinds', 'keybind', 'tastatur', 'keyboard', 'kürzel', 'tasten', 'keys'];
 
+const DE_CAPS: Readonly<Record<string, string>> = { Ctrl: 'Strg', Shift: 'Umschalt', Enter: 'Eingabe', Menu: 'Menü' };
+/** The text of one key cap in the UI language (German keyboards say Strg and Umschalt); Mac symbols and function keys stay as they are. */
+export const capText = (cap: string, lang: string): string => (lang === 'de' ? DE_CAPS[cap] ?? cap : cap);
+
 /** `Ctrl+1` / `⌘1` for the tooltip of a control; the first combination of the action. */
-export function shortcutLabel(action: ShortcutAction, mac: boolean): string {
+export function shortcutLabel(action: ShortcutAction, mac: boolean, lang = 'en'): string {
   for (const g of SHORTCUT_GROUPS) for (const it of g.items) if (it.action === action) {
-    const first = it.keys(mac)[0];
+    const first = it.keys(mac)[0].map((k) => capText(k, lang));
     return mac ? first.join('') : first.join('+');
   }
   return '';

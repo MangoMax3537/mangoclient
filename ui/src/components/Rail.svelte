@@ -16,7 +16,7 @@
   import { instanceMenu } from '../lib/instanceMenu';
   import { contextmenu } from '../lib/contextMenu.svelte';
   import { shortcutLabel, type ShortcutAction } from '../lib/keybinds';
-  import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, platform, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
+  import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, lang, platform, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
 
   const recent = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 5));
   const acc = $derived(selectedAccount());
@@ -34,7 +34,7 @@
     { v: 'stats', a: 'stats', label: t('nav.stats'), icon: ChartBarIcon, go: () => (nav.view = 'stats') },
   ] as { v: string; a: ShortcutAction; label: string; icon: typeof HouseIcon; go: () => void }[]);
   const ops = { select: (id: string) => void actions.selectProfile(id), open: (id: string) => openProfile(id), isSelected: (id: string) => selectedProfile()?.id === id };
-  const withKey = (label: string, a: ShortcutAction): string => `${label} (${shortcutLabel(a, platform.mac)})`;
+  const withKey = (label: string, a: ShortcutAction): string => `${label} (${shortcutLabel(a, platform.mac, lang())})`;
 </script>
 
 <nav class="rail" aria-label={t('nav.main')}>

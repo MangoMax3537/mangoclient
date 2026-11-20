@@ -20,7 +20,7 @@
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { entriesFor } from '../lib/settingsIndex';
-  import { SHORTCUT_GROUPS } from '../lib/keybinds';
+  import { SHORTCUT_GROUPS, capText } from '../lib/keybinds';
   import { jumpTo } from '../lib/settingsJump';
   import { parseWindowSize } from '../lib/windowSize';
   import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
@@ -213,7 +213,7 @@
                     <span class="caps">
                       {#each it.keys(platform.mac) as combo, i (i)}
                         {#if i > 0}<span class="or">{t('keys.or')}</span>{/if}
-                        <span class="combo">{#each combo as k, j (j)}<kbd>{k}</kbd>{/each}</span>
+                        <span class="combo">{#each combo as k, j (j)}<kbd>{capText(k, lang())}</kbd>{/each}</span>
                       {/each}
                     </span>
                   </SettingRow>

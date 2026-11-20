@@ -16,12 +16,12 @@
   import { stripMouseAction, titleBarModel, windowControls } from '../lib/titlebar';
   import { tip } from '../lib/tooltip';
   import type { Key } from '../lib/i18n';
-  import { app, getApi, goView, hist, nav, navBack, navForward, platform, t, win } from '../lib/stores.svelte';
+  import { app, getApi, goView, hist, nav, navBack, lang, navForward, platform, t, win } from '../lib/stores.svelte';
 
   const model = $derived(titleBarModel(platform.mode, win));
   const wc = () => windowControls(getApi());
   const MOD = platform.mac;
-  const hint = (text: string, a: Parameters<typeof shortcutLabel>[0]): string => `${text} (${shortcutLabel(a, MOD)})`;
+  const hint = (text: string, a: Parameters<typeof shortcutLabel>[0]): string => `${text} (${shortcutLabel(a, MOD, lang())})`;
 
   const VIEW_KEY: Record<string, Key> = {
     home: 'nav.home', library: 'nav.library', discover: 'nav.discover', servers: 'nav.servers', skins: 'nav.skins', stats: 'nav.stats', settings: 'nav.settings',

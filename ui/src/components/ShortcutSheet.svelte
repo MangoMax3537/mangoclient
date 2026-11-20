@@ -1,8 +1,8 @@
 <script lang="ts">
   // The keyboard shortcut sheet: every global shortcut, grouped, with platform-aware key caps (Ctrl on Windows/Linux, the Command key on macOS).
   import Modal from './Modal.svelte';
-  import { SHORTCUT_GROUPS } from '../lib/keybinds';
-  import { platform, t } from '../lib/stores.svelte';
+  import { SHORTCUT_GROUPS, capText } from '../lib/keybinds';
+  import { lang, platform, t } from '../lib/stores.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
 </script>
@@ -19,7 +19,7 @@
               <dd>
                 {#each it.keys(platform.mac) as combo, i (i)}
                   {#if i > 0}<span class="or">{t('keys.or')}</span>{/if}
-                  <span class="combo">{#each combo as k, j (j)}<kbd>{k}</kbd>{/each}</span>
+                  <span class="combo">{#each combo as k, j (j)}<kbd>{capText(k, lang())}</kbd>{/each}</span>
                 {/each}
               </dd>
             </div>
