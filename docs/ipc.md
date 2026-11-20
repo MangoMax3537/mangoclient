@@ -1,6 +1,6 @@
 # IPC contract: UI <-> Rust
 
-Single source of truth for the first UI slice. The Rust service layer (`app/crates/app`, package `mango-app`, no Tauri dependency) implements it as plain async functions; `app/src-tauri` exposes each as a Tauri command; `app/ui` calls them through `src/lib/api.ts` (`Api` interface with a `tauriApi` and a `mockApi`). JSON is camelCase. Command names are snake_case.
+Single source of truth for the first UI slice. The Rust service layer (`crates/app`, package `mango-app`, no Tauri dependency) implements it as plain async functions; `src-tauri` exposes each as a Tauri command; `ui` calls them through `src/lib/api.ts` (`Api` interface with a `tauriApi` and a `mockApi`). JSON is camelCase. Command names are snake_case.
 
 ## Errors
 Every command returns `Result<T, AppError>`. `AppError = { code: string, message: string, needsRelogin: boolean }`. `code` is the stable key (from the crates' `code()`), `message` is English diagnostic text; the UI localizes by `code`.

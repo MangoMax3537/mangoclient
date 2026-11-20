@@ -1,6 +1,6 @@
 # MangoClient redesign: Claude Design prompt
 
-Paste everything below the line into Claude Design (claude.ai, Design). Attach `src/assets/icon.png` and a couple of screenshots of the current launcher if you can.
+Paste everything below the line into Claude Design (claude.ai, Design). Attach `assets/brand/icon.png` and a couple of screenshots of the current launcher if you can.
 
 ---
 

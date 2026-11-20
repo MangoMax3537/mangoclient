@@ -6,7 +6,7 @@ const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const mod = path.join(root, 'mod');
-const assets = path.join(root, 'src', 'main', 'assets');
+const assets = path.join(root, 'bundle', 'mangoconfig');
 const versions = [
   '1.20.5', '1.20.6', '1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4',
   '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11',
@@ -36,7 +36,7 @@ try {
     if (/^MangoConfig-.*\.jar$/i.test(name)) fs.unlinkSync(path.join(assets, name));
   }
   for (const name of fs.readdirSync(stage)) fs.copyFileSync(path.join(stage, name), path.join(assets, name));
-  process.stdout.write(`\nStaged ${versions.length} MangoConfig ${release} builds in src/main/assets\n`);
+  process.stdout.write(`\nStaged ${versions.length} MangoConfig ${release} builds in bundle/mangoconfig\n`);
 } finally {
   fs.rmSync(stage, { recursive: true, force: true });
 }

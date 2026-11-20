@@ -1,4 +1,4 @@
-// Turns the launcher's pixel-art mango (src/assets/icons/64x64.png) into logo.bin for
+// Turns the launcher's pixel-art mango (assets/brand/icons/64x64.png) into logo.bin for
 // the in-game home screen: the art at its native pixel grid, as ARGB ints.
 //
 // The home screen draws it one GUI pixel per art pixel with plain fills, so it
@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const source = path.join(__dirname, '..', '..', 'src', 'assets', 'icons', '64x64.png');
+const source = path.join(__dirname, '..', '..', 'assets', 'brand', 'icons', '64x64.png');
 const target = path.join(__dirname, '..', 'src', 'client', 'resources', 'assets', 'mangoconfig', 'logo.bin');
 
 function decode(file) {

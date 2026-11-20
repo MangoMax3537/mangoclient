@@ -3,3 +3,5 @@ dist/
 *.log
 .DS_Store
 todo.txt
+target/
+src-tauri/target/

@@ -1,28 +1,32 @@
 # MangoClient
 
 Minecraft launcher (profiles, Modrinth, Microsoft/offline accounts, bundled MangoConfig in-game mod).
-Currently Electron + vanilla JS (v1.3.4). **We are rewriting it in Rust and redesigning the whole UI.**
+Rust rewrite of the former Electron launcher (v1.3.4), with a fully redesigned UI. The old Electron code is gone from this tree: read it with `git show master:src/main/<file>.js` (history), or from the working copy in `/tmp/mangoclient-legacy/` (src/, test/, tools/, CI; lives in RAM and is cleared on reboot). Paths like `src/main/x.js` in these docs refer to that legacy source.
 Targets: Windows 10/11 x64, macOS 11+ (arm64 + x64), Linux x86_64 (glibc 2.31+). All three are first-class.
 
 ## Layout
 
 | Path | Status |
 | --- | --- |
-| `src/` (Electron main + renderer) | Legacy. Behavior spec only. Deleted once the Rust app reaches parity. |
-| `test/` | Legacy `node --test`. Behavior checklist, see "Porting the tests". |
-| `server/` | Go presence/stats service. **Unchanged.** Wire contract frozen. |
+| `crates/` | Rust workspace members (see below). |
+| `src-tauri/` | Tauri 2 shell (own `[workspace]`, excluded from the root workspace so `cargo test --workspace` needs no webkit). |
+| `ui/` | Svelte 5 + TypeScript frontend (Vite, npm). |
+| `bundle/mangoconfig/` | The 14 prebuilt MangoConfig jars shipped with the launcher (`MangoConfig-<ver>+mc<mc>.jar`). |
+| `assets/brand/` | The real MangoClient icon (`icon.png`, `icons/`), source of truth for app icons and fallback image. |
 | `mod/` | MangoConfig Fabric mod (Java/Gradle). **Stays Java.** Only the launcher interface matters. |
-| `tools/build-mods.js` | Builds the 14 jars. Keep, or port to an xtask. Output naming must not change. |
-| `app/` (new) | Rust workspace (see below). |
+| `server/` | Go presence/stats service. **Unchanged.** Wire contract frozen. |
+| `tools/` | `build-mods.js` (builds the jars into `bundle/mangoconfig/`), `mango-badges.ps1`. |
+| `docs/` | `port-spec.md`, `ipc.md`, `redesign-brief.md`, `ideas.md`. |
+
+Run: `cargo test --workspace`; UI: `cd ui && npm run dev`; desktop app: `cargo build --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol` (needs `webkit2gtk-4.1` on Linux).
 
 ## Target architecture (decided unless the user overrides)
 
 Tauri 2 shell + Rust core + a typed TypeScript/Svelte frontend. Chosen over pure-Rust UI (iced/egui/Slint) because the redesign needs rich motion, imagery and the 3D skin viewer, and the existing WebGL viewer ports as-is. Business logic lives only in Rust; the frontend is a thin client over typed commands/events.
 
 ```
-app/
-  Cargo.toml                workspace
-  crates/
+Cargo.toml                  workspace (root)
+crates/
     core/        profiles, settings, store, migrations, paths   (no UI, no Tauri)
     auth/        Microsoft -> Xbox -> XSTS -> Minecraft, offline accounts, credential vault
     net/         reqwest client, download w/ sha512+size verify, retry, progress
@@ -99,7 +103,7 @@ archive (traversal, symlinks, limits) · content routing + dependency trees + ex
 
 1. **Update path for existing Electron users**: keep publishing `latest*.yml` so v1.3.4 can auto-update into the Rust build, or require a manual reinstall for the first Rust release.
 2. **Signing**: no Authenticode or Apple Developer ID today. Needed for a trustworthy updater and to avoid SmartScreen/Gatekeeper warnings.
-3. **Jar bundling**: jars are committed under `src/main/assets/` today. New location, and keep committing vs build in CI.
+3. **Jar bundling**: jars now live in `bundle/mangoconfig/` (committed). Still open: keep committing vs build in CI, and the Tauri `bundle.resources` wiring so packaged apps find them.
 4. **UI stack**: DECIDED, Tauri 2 + Svelte 5 + TypeScript (Vite). Performance budget: cold start under 1s to interactive, idle RAM under 120 MB (launcher window open), under 40 MB when hidden/tray while the game runs, installer under 15 MB. Rules: heavy work only in Rust (hashing, downloads, zip, NBT, JSON parsing), never in the webview; send progress events throttled to 10/s; virtualize long lists (mod lists, version pickers); no UI framework runtime beyond Svelte; images served via the custom scheme, resized in Rust; one WebGL canvas only while the skin viewer is visible, destroyed otherwise; animate only transform/opacity; destroy the webview when the window is hidden for the game session if idle RAM is above budget.
 5. **Credential migration**: force re-login once vs implement an OSCrypt-compatible reader for old `encryptedCredentials`.
 

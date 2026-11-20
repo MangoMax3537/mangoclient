@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/icon.png" width="128" height="128" alt="MangoClient logo">
+  <img src="assets/brand/icon.png" width="128" height="128" alt="MangoClient logo">
 </p>
 
 <h1 align="center">MangoClient</h1>
@@ -76,43 +76,39 @@ While you are in game, MangoConfig sends a presence heartbeat so other MangoClie
 
 ## Development
 
+MangoClient 2.0 is a Rust rewrite (Tauri 2 shell, Rust crates for all logic, Svelte 5 frontend). It is under active development and has no release yet.
+
 ### Requirements
 
-- Node.js 22.12 or newer
-- npm
-- JDK 21 for building the bundled MangoConfig jars
+- Rust (stable) and Node.js 22 or newer with npm
+- Linux only: `webkit2gtk-4.1` (for example `sudo pacman -S webkit2gtk-4.1`, or `libwebkit2gtk-4.1-dev` on Debian/Ubuntu)
+- JDK 21 only if you rebuild the bundled MangoConfig jars
 
-### Run from source
-
-```bash
-git clone https://github.com/MangoMax3537/mangoclient.git
-cd mangoclient
-npm install
-npm start
-```
-
-Use `npm run dev` to start Electron with developer tools enabled.
-
-### Test and build
+### Run and test
 
 ```bash
-npm test
-npm run build
+cargo test --workspace            # all Rust crates
+cd ui && npm install && npm run dev   # UI in the browser with mock data
+cd ui && npm run build && cd ..
+cargo build --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol   # desktop app
+cargo run -p mango-cli -- --help  # headless launcher
 ```
 
-`npm run build` first compiles MangoConfig for every supported Minecraft version and then creates platform packages in `dist/`. To create only an unpacked Electron application, run `npm run pack`.
+Set `MANGOCLIENT_HOME` to use a separate data directory while developing.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
-| `src/main/` | Electron main process, launcher, authentication, downloads, profiles, and updater |
-| `src/renderer/` | Launcher interface, styles, icons, and translations |
-| `src/main/assets/` | MangoConfig jars bundled with the launcher |
+| `crates/` | Rust crates: core, auth, net, java, minecraft, loaders, modrinth, curseforge, content, servers, mango, archive, updater, runtime, app (service layer), cli |
+| `src-tauri/` | Tauri 2 desktop shell |
+| `ui/` | Svelte 5 + TypeScript frontend |
+| `bundle/mangoconfig/` | Prebuilt MangoConfig jars shipped with the launcher |
+| `assets/brand/` | MangoClient icon |
 | `mod/` | MangoConfig Fabric mod source and compatibility layers |
-| `server/` | Presence and launcher statistics service |
-| `test/` | Node.js test suite |
-| `tools/` | Release and multi-version build tooling |
+| `server/` | Presence and launcher statistics service (Go) |
+| `tools/` | Mod build tooling |
+| `docs/` | Port spec, IPC contract, design brief, ideas |
 
 ## License
 
