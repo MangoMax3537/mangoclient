@@ -246,6 +246,10 @@ pub(crate) fn skin_err(e: AuthError) -> AppError {
             "skin.cape_not_applied",
             "The skin service did not apply the cape",
         ),
+        AuthError::TextureHost => AppError::new(
+            "skin.texture_host",
+            "The skin service pointed to a texture on an untrusted host",
+        ),
         AuthError::Timeout => {
             AppError::new("skin.timeout", "The skin service did not answer in time")
         }
@@ -266,6 +270,22 @@ fn skin_timeout() -> AppError {
 
 fn offline_refusal() -> AppError {
     skin_err(AuthError::OfflineSkin)
+}
+
+/// A name typed for a rename: trimmed, 1..=48 characters, no control characters.
+fn checked_name(raw: &str) -> Res<String> {
+    let name = raw.trim();
+    let bad = |why: &str| AppError::new("skin.invalid_name", format!("Invalid skin name: {why}"));
+    if name.is_empty() {
+        return Err(bad("empty"));
+    }
+    if name.chars().any(char::is_control) {
+        return Err(bad("control characters"));
+    }
+    if name.chars().count() > MAX_NAME_CHARS {
+        return Err(bad("too long"));
+    }
+    Ok(name.to_string())
 }
 
 // ---- library files ----
@@ -975,6 +995,31 @@ impl AppService {
             save_index(paths, &skins)?;
             let _ = std::fs::remove_file(library_dir(paths).join(format!("{id}.png")));
             Ok(skins.iter().map(view).collect())
+        })
+        .await?
+    }
+
+    /// Rename a saved skin; returns the updated entry.
+    pub async fn skin_library_rename(&self, id: String, name: String) -> Res<LibrarySkin> {
+        let name = checked_name(&name)?;
+        if !valid_library_id(&id) {
+            return Err(AppError::new(
+                "skin.not_found",
+                "That skin is not in the library",
+            ));
+        }
+        let svc = self.clone();
+        tokio::task::spawn_blocking(move || -> Res<LibrarySkin> {
+            let _gate = lock(&svc.inner.skin_gate);
+            let paths = &svc.inner.paths;
+            let mut skins = load_index(paths);
+            let entry = skins.iter_mut().find(|e| e.id == id).ok_or_else(|| {
+                AppError::new("skin.not_found", "That skin is not in the library")
+            })?;
+            entry.name = name;
+            let out = view(entry);
+            save_index(paths, &skins)?;
+            Ok(out)
         })
         .await?
     }

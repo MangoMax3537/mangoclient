@@ -52,6 +52,15 @@ describe('skins against the mock', () => {
     expect(rest).toHaveLength(n);
     await expect(a.skinLibraryRemove({ id: 'gone' })).rejects.toMatchObject({ code: 'skin.not_found' });
   });
+  it('library rename: trims, persists, validates, unknown id', async () => {
+    const a = api();
+    const e = (await a.skinLibraryList())[0];
+    const r = await a.skinLibraryRename({ id: e.id, name: '  Fresh  ' });
+    expect(r).toMatchObject({ id: e.id, name: 'Fresh' });
+    expect((await a.skinLibraryList()).find((x) => x.id === e.id)?.name).toBe('Fresh');
+    for (const bad of ['', '   ', 'x'.repeat(49), 'a\nb']) await expect(a.skinLibraryRename({ id: e.id, name: bad })).rejects.toMatchObject({ code: 'skin.invalid_name' });
+    await expect(a.skinLibraryRename({ id: 'gone', name: 'Ok' })).rejects.toMatchObject({ code: 'skin.not_found' });
+  });
   it('username copy: invalid name, unknown player, ok with model', async () => {
     const a = api();
     await expect(a.skinUseUsername({ uuid: ONLINE, name: 'a' })).rejects.toMatchObject({ code: 'auth.invalid_username' });

@@ -97,7 +97,7 @@ export interface SkinsMockCtx {
   noCapes?: boolean;
 }
 
-export type SkinsApi = Pick<Api, 'skinGet' | 'skinUpload' | 'skinUseUsername' | 'skinSetCape' | 'skinLibraryList' | 'skinLibraryAdd' | 'skinLibrarySaveCurrent' | 'skinLibraryRemove' | 'skinLibraryApply'>;
+export type SkinsApi = Pick<Api, 'skinGet' | 'skinUpload' | 'skinUseUsername' | 'skinSetCape' | 'skinLibraryList' | 'skinLibraryAdd' | 'skinLibrarySaveCurrent' | 'skinLibraryRemove' | 'skinLibraryRename' | 'skinLibraryApply'>;
 
 const NAME = /^[A-Za-z0-9_]{3,16}$/;
 const CAPE_NAMES = ['Migrator', 'Vanilla', 'Mojang Office', 'Cherry Blossom'];
@@ -195,6 +195,14 @@ export function createSkinsMock(ctx: SkinsMockCtx): { api: SkinsApi; init: () =>
       if (!library.some((x) => x.id === id)) throw fail('skin.not_found');
       library = library.filter((x) => x.id !== id);
       return structuredClone(library);
+    },
+    async skinLibraryRename({ id, name }) {
+      const n = name.trim();
+      if (!n || n.length > 48 || /[\u0000-\u001f\u007f]/.test(n)) throw fail('skin.invalid_name');
+      const e = library.find((x) => x.id === id);
+      if (!e) throw fail('skin.not_found');
+      e.name = n;
+      return structuredClone(e);
     },
     async skinLibraryApply({ uuid, id }) {
       const a = editable(uuid); await delay();

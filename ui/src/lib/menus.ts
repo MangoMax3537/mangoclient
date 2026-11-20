@@ -9,6 +9,7 @@ import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
 import FloppyDiskIcon from 'phosphor-svelte/lib/FloppyDiskIcon';
 import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
 import GlobeIcon from 'phosphor-svelte/lib/GlobeIcon';
+import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
 import PowerIcon from 'phosphor-svelte/lib/PowerIcon';
 import SignInIcon from 'phosphor-svelte/lib/SignInIcon';
 import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
@@ -78,10 +79,11 @@ export function serverMenu(s: ServerEntry, o: ServerMenuOps): MenuItem[] {
 }
 
 /* ---- skins ---- */
-export interface SkinMenuOps { apply: (s: LibrarySkin) => void; remove: (s: LibrarySkin) => void; busy: boolean }
+export interface SkinMenuOps { apply: (s: LibrarySkin) => void; rename: (s: LibrarySkin) => void; remove: (s: LibrarySkin) => void; busy: boolean }
 export function librarySkinMenu(s: LibrarySkin, o: SkinMenuOps): MenuItem[] {
   return [
     { id: 'apply', label: t('skins.applyShort'), icon: UserSwitchIcon, disabled: o.busy, reason: t('menu.busyReason'), run: () => o.apply(s) },
+    { id: 'rename', label: t('menu.rename'), icon: PencilSimpleIcon, disabled: o.busy, reason: t('menu.busyReason'), run: () => o.rename(s) },
     { id: 'copy', label: t('menu.copyName'), icon: CopyIcon, run: () => void copyText(s.name) },
     SEP,
     { id: 'remove', label: t('skins.remove'), icon: TrashIcon, danger: true, disabled: o.busy, reason: t('menu.busyReason'), run: () => o.remove(s) },

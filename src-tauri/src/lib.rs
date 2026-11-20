@@ -688,6 +688,11 @@ async fn skin_library_remove(svc: Svc<'_>, id: String) -> Res<Vec<LibrarySkin>> 
 }
 
 #[tauri::command]
+async fn skin_library_rename(svc: Svc<'_>, id: String, name: String) -> Res<LibrarySkin> {
+    svc.skin_library_rename(id, name).await
+}
+
+#[tauri::command]
 async fn skin_library_apply(svc: Svc<'_>, uuid: String, id: String) -> Res<SkinInfo> {
     svc.skin_library_apply(uuid, id).await
 }
@@ -1176,6 +1181,7 @@ pub fn run() {
             skin_library_add,
             skin_library_save_current,
             skin_library_remove,
+            skin_library_rename,
             skin_library_apply,
             java_list,
             java_install,

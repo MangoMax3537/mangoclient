@@ -96,6 +96,7 @@ export const COMMANDS = {
   skinLibraryAdd: 'skin_library_add',
   skinLibrarySaveCurrent: 'skin_library_save_current',
   skinLibraryRemove: 'skin_library_remove',
+  skinLibraryRename: 'skin_library_rename',
   skinLibraryApply: 'skin_library_apply',
   javaList: 'java_list',
   javaInstall: 'java_install',

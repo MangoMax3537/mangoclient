@@ -14,7 +14,7 @@ export const activeCape = (i: Pick<SkinInfo, 'capes'> | null | undefined): CapeI
 export const canEditSkin = (i: Pick<SkinInfo, 'canEdit'> | null | undefined): boolean => i?.canEdit === true;
 
 /** Error codes of Part 13 that the page maps to a dedicated sentence; everything else goes through the generic `err.<family>`. */
-export const SKIN_ERROR_CODES = ['skin.offline_account', 'skin.invalid_png', 'skin.too_large', 'skin.not_found', 'skin.upload_failed', 'skin.library_full', 'auth.invalid_username'] as const;
+export const SKIN_ERROR_CODES = ['skin.offline_account', 'skin.invalid_png', 'skin.too_large', 'skin.not_found', 'skin.upload_failed', 'skin.library_full', 'skin.invalid_name', 'auth.invalid_username'] as const;
 
 /** A default library name from a file name: `my_skin.png` -> `my skin`. */
 export function nameFromFile(file: string): string {

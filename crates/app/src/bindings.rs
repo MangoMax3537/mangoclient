@@ -206,6 +206,7 @@ pub fn generate(dir: &Path) -> Result<(), String> {
         SkinLibraryAddArgs,
         SkinLibrarySaveCurrentArgs,
         SkinLibraryApplyArgs,
+        SkinLibraryRenameArgs,
         JavaInstallArgs,
         WindowStartResizeArgs,
     );

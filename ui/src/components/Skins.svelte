@@ -7,6 +7,7 @@
   import UserPlusIcon from 'phosphor-svelte/lib/UserPlusIcon';
   import BookmarkSimpleIcon from 'phosphor-svelte/lib/BookmarkSimpleIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
+  import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
   import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
@@ -21,6 +22,7 @@
   import SkinUploadDialog from './SkinUploadDialog.svelte';
   import SkinUsernameDialog from './SkinUsernameDialog.svelte';
   import SkinSaveDialog from './SkinSaveDialog.svelte';
+  import SkinRenameDialog from './SkinRenameDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import EmptyState from './EmptyState.svelte';
   import LoadError from './LoadError.svelte';
@@ -104,6 +106,7 @@
 
   let dialog = $state<null | 'upload' | 'addLib' | 'user' | 'save'>(null);
   let removing = $state<LibrarySkin | null>(null);
+  let renaming = $state<LibrarySkin | null>(null);
   let busy = $state<string | null>(null);
   let actionError = $state('');
   const model = $derived(data ? (data.slim ? t('skins.slim') : t('skins.classic')) : '');
@@ -263,11 +266,12 @@
               {:else}
                 <ul class="grid">
                   {#each library as s (s.id)}
-                    <li class="card nb" style:--n="8px" use:contextmenu={() => librarySkinMenu(s, { apply: (x) => void applyLib(x), remove: (x) => (removing = x), busy: busy !== null })}>
+                    <li class="card nb" style:--n="8px" use:contextmenu={() => librarySkinMenu(s, { apply: (x) => void applyLib(x), rename: (x) => { actionError = ''; renaming = x; }, remove: (x) => (removing = x), busy: busy !== null })}>
                       <div class="thumb"><SkinFlat url={s.url} slim={s.variant === 'slim'} scale={4} label={s.name} /></div>
                       <div class="meta"><b class="n" title={s.name}>{s.name}</b><span class="v mono">{s.variant === 'slim' ? t('skins.slim') : t('skins.classic')}</span></div>
                       <div class="cacts">
                         <button class="btn small" type="button" disabled={busy !== null} aria-label={t('skins.apply', { name: s.name })} onclick={() => applyLib(s)}>{busy === `lib:${s.id}` ? t('skins.applying') : t('skins.applyShort')}</button>
+                        <button class="btn small ghost ic" type="button" disabled={busy !== null} use:tip={{ text: t('menu.rename'), side: 'top' }} aria-label={t('skins.renameNamed', { name: s.name })} onclick={() => { actionError = ''; renaming = s; }}><PencilSimpleIcon weight="bold" size={14} aria-hidden="true" /></button>
                         <button class="btn small ghost ic" type="button" disabled={busy !== null} use:tip={{ text: t('skins.remove'), side: 'top' }} aria-label={t('skins.removeNamed', { name: s.name })} onclick={() => (removing = s)}><TrashIcon weight="bold" size={14} aria-hidden="true" /></button>
                       </div>
                     </li>
@@ -314,6 +318,7 @@
 {#if dialog === 'addLib'}<SkinUploadDialog mode="library" {uuid} onclose={() => (dialog = null)} ondone={() => { dialog = null; lib.retry(); toast(t('skins.addedLib'), 'ok'); }} {onrelogin} />{/if}
 {#if dialog === 'user'}<SkinUsernameDialog {uuid} current={data} accountName={acc?.name ?? ''} onclose={() => { dialog = null; lib.retry(); }} ondone={setInfo} {onrelogin} />{/if}
 {#if dialog === 'save'}<SkinSaveDialog {uuid} defaultName={acc?.name ?? 'Skin'} onclose={() => (dialog = null)} ondone={() => { dialog = null; lib.retry(); toast(t('skins.savedLib'), 'ok'); }} />{/if}
+{#if renaming}<SkinRenameDialog skin={renaming} onclose={() => (renaming = null)} ondone={(e) => { renaming = null; lib.retry(); toast(t('skins.renamed', { name: e.name }), 'ok'); }} />{/if}
 {#if removing}
   <ConfirmDialog danger title={t('skins.removeTitle', { name: removing.name })} body={t('skins.removeBody')} confirmLabel={t('skins.remove')} busy={busy !== null} onconfirm={removeLib} oncancel={() => (removing = null)} />
 {/if}

@@ -73,6 +73,7 @@ import type { ServerStatus } from "./ServerStatus";
 import type { SkinInfo } from "./SkinInfo";
 import type { SkinLibraryAddArgs } from "./SkinLibraryAddArgs";
 import type { SkinLibraryApplyArgs } from "./SkinLibraryApplyArgs";
+import type { SkinLibraryRenameArgs } from "./SkinLibraryRenameArgs";
 import type { SkinLibrarySaveCurrentArgs } from "./SkinLibrarySaveCurrentArgs";
 import type { SkinSetCapeArgs } from "./SkinSetCapeArgs";
 import type { SkinUploadArgs } from "./SkinUploadArgs";
@@ -186,6 +187,7 @@ export type CommandMap = {
   "skin_library_add": { args: SkinLibraryAddArgs; result: LibrarySkin };
   "skin_library_save_current": { args: SkinLibrarySaveCurrentArgs; result: LibrarySkin };
   "skin_library_remove": { args: IdArgs; result: Array<LibrarySkin> };
+  "skin_library_rename": { args: SkinLibraryRenameArgs; result: LibrarySkin };
   "skin_library_apply": { args: SkinLibraryApplyArgs; result: SkinInfo };
   "java_list": { args: NoArgs; result: Array<JavaInfo> };
   "java_install": { args: JavaInstallArgs; result: JavaInfo };

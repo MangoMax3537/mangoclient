@@ -243,6 +243,7 @@ args! {
         name: Option<String>,
     }
     SkinLibraryApplyArgs { uuid: String, id: String }
+    SkinLibraryRenameArgs { id: String, name: String }
     JavaInstallArgs { major: u32 }
     WindowStartResizeArgs { direction: crate::window_cmds::ResizeDirection }
 }
@@ -441,6 +442,8 @@ table! {
         |s, a| s.skin_library_save_current(a.uuid, a.name).await;
     "skin_library_remove": IdArgs => Vec<LibrarySkin> =
         |s, a| s.skin_library_remove(a.id).await;
+    "skin_library_rename": SkinLibraryRenameArgs => LibrarySkin =
+        |s, a| s.skin_library_rename(a.id, a.name).await;
     "skin_library_apply": SkinLibraryApplyArgs => SkinInfo =
         |s, a| s.skin_library_apply(a.uuid, a.id).await;
     "java_list": NoArgs => Vec<JavaInfo> = |s, _a| s.java_list().await;

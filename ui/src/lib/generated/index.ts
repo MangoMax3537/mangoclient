@@ -124,6 +124,7 @@ export type { ServerStatus } from "./ServerStatus";
 export type { SkinInfo } from "./SkinInfo";
 export type { SkinLibraryAddArgs } from "./SkinLibraryAddArgs";
 export type { SkinLibraryApplyArgs } from "./SkinLibraryApplyArgs";
+export type { SkinLibraryRenameArgs } from "./SkinLibraryRenameArgs";
 export type { SkinLibrarySaveCurrentArgs } from "./SkinLibrarySaveCurrentArgs";
 export type { SkinSetCapeArgs } from "./SkinSetCapeArgs";
 export type { SkinSourceName } from "./SkinSourceName";
