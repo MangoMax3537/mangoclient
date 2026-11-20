@@ -74,7 +74,10 @@
   .axissk { display: flex; justify-content: space-between; }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-7); }
   .pg { height: 100%; overflow: hidden; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
-  .pg.narrow { max-width: 800px; display: grid; align-content: start; gap: 24px; }
+  /* same centred column as Settings (SettingsLayout): the navigator column is reserved, so nothing shifts when the page arrives */
+  .pg.narrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 800px) minmax(0, 1fr); grid-template-rows: none; align-content: start; justify-content: stretch; gap: 24px 0; }
+  .pg.narrow > * { grid-column: 2; }
+  @media (min-width: 1100px) { .pg.narrow { grid-template-columns: minmax(0, 1fr) minmax(0, 800px) minmax(176px, 1fr); } }
   .head { display: grid; gap: 4px; }
   .bar { display: flex; gap: var(--s-3); align-items: center; }
   .page { display: flex; flex-direction: column; height: 100%; padding: 16px 20px 0; gap: 12px; }

@@ -4,6 +4,8 @@
   import ResizeBorders from './components/ResizeBorders.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import Rail from './components/Rail.svelte';
+  import AppBackground from './components/AppBackground.svelte';
+  import { engineProfile } from './lib/bgMode';
   import Home from './components/Home.svelte';
   import Library from './components/Library.svelte';
   import ProfilePage from './components/ProfilePage.svelte';
@@ -14,7 +16,7 @@
   import DropHint from './components/DropHint.svelte';
   import { dialogs, screens, skeletons } from './lib/lazy';
   import { pf, watchDrops } from './lib/portability.svelte';
-  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, t, toast, ui, updates, lang } from './lib/stores.svelte';
+  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, selectedProfile, t, toast, ui, updates, lang } from './lib/stores.svelte';
   import { inTauri, kind } from './lib/api';
   import { installShortcuts } from './lib/shortcutActions';
   import { installNativeMenuGuard } from './lib/contextMenu.svelte';
@@ -55,6 +57,9 @@
     deleting = false;
   }
   $effect(() => { if (ui.confirmDelete && !delP) ui.confirmDelete = null; });
+  const bgProfile = $derived(engineProfile(nav.view, nav.profileId, app.profiles, selectedProfile()));
+  const bgMode = $derived(nav.view === 'home' && bgProfile ? 'hero' : 'full');
+  const bgOn = $derived(app.ready && (nav.view === 'home' ? !!bgProfile || ui.backgroundEverywhere : ui.backgroundEverywhere));
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
 
@@ -65,6 +70,9 @@
   <div class="body">
     <Rail />
     <main>
+      {#if bgOn}
+        <AppBackground profileId={bgProfile?.id ?? ''} mcVersion={bgProfile?.mcVersion ?? ''} background={bgProfile?.background ?? { kind: 'auto' }} tint={bgProfile?.color ?? null} mode={bgMode} cycle={nav.view !== 'profile'} />
+      {/if}
       {#if !app.ready}
         {#if boot.show}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/if}
       {:else}
@@ -121,7 +129,7 @@
 <style>
   .shell { position: relative; display: flex; flex-direction: column; height: 100%; min-width: 960px; min-height: 600px; background: var(--ink-0); }
   .body { flex: 1; display: flex; min-height: 0; }
-  main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); }
-  .view { height: 100%; min-height: 0; }
+  main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); isolation: isolate; }
+  .view { position: relative; z-index: 1; height: 100%; min-height: 0; }
   .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); color: var(--paper); }
 </style>

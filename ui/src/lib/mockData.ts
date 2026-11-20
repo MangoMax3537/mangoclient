@@ -170,3 +170,12 @@ export function rng(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** Mirrors the core: a bundled MangoConfig exists for fabric/quilt on 1.20.5, 1.20.6 and 1.21 to 1.21.11. */
+export const mangoSupported = (mc: string, loader: string): boolean =>
+  (loader === 'fabric' || loader === 'quilt') && (mc === '1.20.5' || mc === '1.20.6' || /^1\.21(\.([0-9]|1[01]))?$/.test(mc));
+/** `mangoConfigSupported` + `mangoConfigActive` (supported, not switched off by the profile or the global setting). */
+export const mangoFlags = (p: { mcVersion: string; loader: string; mangoConfig: boolean | null }, globalOn: boolean): { mangoConfigSupported: boolean; mangoConfigActive: boolean } => {
+  const supported = mangoSupported(p.mcVersion, p.loader);
+  return { mangoConfigSupported: supported, mangoConfigActive: supported && (p.mangoConfig ?? globalOn) };
+};

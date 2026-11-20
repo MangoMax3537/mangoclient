@@ -13,9 +13,11 @@
     /** Start angle of the panorama (degrees). */
     angle: number;
     paused?: boolean;
+    /** Full-window mode (behind the other views): a flat uniform scrim in the page colour, no hero gradient, no watermark. */
+    full?: boolean;
     onready?: () => void;
   }
-  let { res: want, look, tint = null, angle, paused = false, onready }: Props = $props();
+  let { res: want, look, tint = null, angle, paused = false, full = false, onready }: Props = $props();
 
   let imgFailed = $state(false);
   $effect(() => { void want; imgFailed = false; });
@@ -47,7 +49,7 @@
   const FACE_CLASS = ['front', 'right', 'back', 'left', 'up', 'down'] as const;
 </script>
 
-<div class="stage" style:--sc={look.dim} style:--blur="{look.blur}px" style:--tint={tint ?? 'var(--accent-fill)'} aria-hidden="true">
+<div class="stage" class:full style:--sc={look.dim} style:--blur="{look.blur}px" style:--tint={tint ?? 'var(--accent-fill)'} aria-hidden="true">
   {#if res.kind === 'panorama'}
     <div class="scene" class:ready={!waiting}>
       <div class="cube" class:paused={paused} style:--a0="{angle}deg" style:--d="{panoramaDelay(angle)}" style:--dur="{PANORAMA_SECONDS}s">
@@ -60,15 +62,18 @@
     <img bind:this={artEl} class="art" class:ready={artLoaded} src={res.url} alt="" draggable="false" decoding="async" use:imgWatch={{ src: res.url, onload: () => { void onArt(); }, onerror: () => { imgFailed = true; } }} />
   {:else}
     <div class="surface" class:glow={res.kind === 'watermark'}></div>
-    {#if res.kind === 'watermark'}<img class="mark px" src={brandIcon(512)} alt="" draggable="false" />{/if}
+    {#if res.kind === 'watermark' && !full}<img class="mark px" src={brandIcon(512)} alt="" draggable="false" />{/if}
   {/if}
-  {#if waiting}<div class="wait skel"></div>{/if}
+  {#if waiting && !full}<div class="wait skel"></div>{/if}
   <div class="scrim" class:plain={res.kind === 'plain' || res.kind === 'watermark'}></div>
 </div>
 
 <style>
   .stage { position: absolute; inset: 0; overflow: hidden; background: var(--hero-bg); container-type: size; }
   .wait { position: absolute; inset: 0; }
+  /* full-window mode: the page colour under a uniform scrim, so text on top stays readable in both themes */
+  .stage.full, .stage.full .surface { background: var(--ink-0); }
+  .stage.full .scrim, .stage.full .scrim.plain { background: color-mix(in srgb, var(--ink-0) calc(var(--sc) * 100%), transparent); }
   .art, .scene { opacity: 0; transition: opacity var(--dur-slow) var(--ease); }
   .art.ready, .scene.ready { opacity: 1; }
   .art { position: absolute; inset: calc(var(--blur) * -2); width: calc(100% + var(--blur) * 4); height: calc(100% + var(--blur) * 4); object-fit: cover; filter: blur(var(--blur)); transform-origin: 70% 40%; animation: kb 36s ease-out infinite alternate; }

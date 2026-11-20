@@ -11,5 +11,11 @@ export default defineConfig({
   resolve: { alias: { '@backgrounds': backgrounds } },
   server: { port: 5173, strictPort: false, fs: { allow: ['.', fileURLToPath(new URL('../assets', import.meta.url))] } },
   build: { outDir: 'dist', target: 'es2022', chunkSizeWarningLimit: 600 },
-  test: { environment: 'node', include: ['src/**/*.test.ts'] },
+  test: {
+    // `*.dom.test.ts` mount real components in jsdom (client build of Svelte, `browser` condition); everything else runs in node
+    projects: [
+      { extends: true, test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'], exclude: ['src/**/*.dom.test.ts', 'node_modules/**'] } },
+      { extends: true, resolve: { conditions: ['browser'] }, test: { name: 'dom', environment: 'jsdom', include: ['src/**/*.dom.test.ts'] } },
+    ],
+  },
 });

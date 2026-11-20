@@ -22,3 +22,13 @@ describe('instance card clicks', () => {
   });
   it('keyboard-synthesized click (detail 0) selects', () => { const { log, h } = setup(); h.onclick({ detail: 0 }); expect(log).toEqual(['select:p1']); });
 });
+
+import { railTileHandlers } from './instanceCard';
+describe('rail tile', () => {
+  it('one click selects and opens; middle click does nothing', () => {
+    const log: string[] = [];
+    const h = railTileHandlers('p1', { select: (id) => log.push(`select:${id}`), open: (id) => log.push(`open:${id}`), isSelected: () => false });
+    h.onclick({ button: 1 }); expect(log).toEqual([]);
+    h.onclick({ button: 0 }); expect(log).toEqual(['select:p1', 'open:p1']);
+  });
+});

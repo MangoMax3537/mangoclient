@@ -40,7 +40,9 @@ describe('SettingRow', () => {
 describe('one hairline between neighbours', () => {
   it('separators are drawn only as adjacent-sibling top borders, never as row/section bottom borders', () => {
     const css = src('../app.css');
-    expect(css).toMatch(/\.set-sections > \* \+ \* \{ border-top/);
+    // sections are separated by whitespace only: a gap, no rule between them
+    expect(css).toMatch(/\.set-sections \{ display: grid; gap: (4[0-9]|5[0-6])px; \}/);
+    expect(css).not.toMatch(/\.set-sections > \* \+ \*/);
     expect(css).toMatch(/\.set-rows > \* \+ \* \{ border-top/);
     for (const f of ['./Settings.svelte', './profile/ProfileSettings.svelte', './SettingSection.svelte', './SettingRow.svelte']) {
       expect(src(f), f).not.toMatch(/border-bottom/);

@@ -123,7 +123,7 @@ export function createPortabilityMock(c: PortabilityCtx): { api: PartPortability
       }
       const p: ProfileView = {
         id, name: (name ?? plan.name).trim() || plan.name, mcVersion: plan.mcVersion, loader: plan.loader, loaderVersion: plan.loaderVersion, color: null, coverUrl: null, ram: plan.appliedRamMb, ramSource: plan.appliedRamMb === null ? 'default' : 'modpack', ramHint: plan.ram, effectiveRamMb: plan.appliedRamMb ?? 4096,
-        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, group: null, tags: [], lastPlayed: null, playTimeMs: 0, created: Date.now(),
+        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, mangoConfigSupported: false, mangoConfigActive: false, group: null, tags: [], lastPlayed: null, playTimeMs: 0, created: Date.now(),
         modCount: plan.kind === 'prism' ? 31 : Math.max(0, plan.fileCount - 12), icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' },
       };
       c.addProfile(p);

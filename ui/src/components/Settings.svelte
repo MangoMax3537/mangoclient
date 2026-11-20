@@ -16,6 +16,7 @@
   import SettingRow from './SettingRow.svelte';
   import SettingSection from './SettingSection.svelte';
   import SettingsSearch from './SettingsSearch.svelte';
+  import SettingsLayout from './SettingsLayout.svelte';
   import { BACKUP_KEEP_MAX, BACKUP_KEEP_MIN, clampKeep, parseKeep } from '../lib/backups';
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
@@ -23,7 +24,7 @@
   import { SHORTCUT_GROUPS, capText } from '../lib/keybinds';
   import { jumpTo } from '../lib/settingsJump';
   import { parseWindowSize } from '../lib/windowSize';
-  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
+  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setBackgroundEverywhere, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
@@ -52,6 +53,12 @@
   const show = (id: string) => matches === null || matches.has(id);
   const appEntries = entriesFor('app');
   const sec = (id: string) => matches === null || appEntries.some((e) => e.section === id && matches?.has(e.id));
+
+  /** The sections that exist (and still have a match), in page order: the navigator lists exactly these. */
+  const navItems = $derived(([
+    ['look', t('settings.group.appearance')], ['launcher', t('settings.group.general')], ['accounts', t('nav.accounts')], ['game', t('settings.group.game')],
+    ['backups', t('settings.group.backups')], ['keys', t('keys.sectionLabel')], ['storage', t('storage.title')], ['updates', t('update.title')],
+  ] as [string, string][]).filter(([id]) => sec(id)).map(([id, title]) => ({ id, title })));
 
   /* window size */
   let wText = $state(String(app.config?.width ?? 1280));
@@ -90,7 +97,7 @@
 </script>
 
 {#if cfg}
-  <div class="scroller"><div class="settings">
+  <div class="scroller"><SettingsLayout items={navItems}><div class="settings">
     <h1 class="display">{t('settings.title')}</h1>
     <SettingsSearch scope="app" bind:matches onpick={(e) => jumpTo(e)} />
 
@@ -100,6 +107,11 @@
           {#if show('theme')}
             <SettingRow id="theme" label={t('settings.theme')} hint={t('settings.theme.hint')}>
               <Seg options={themeOpts} value={theme.mode} label={t('settings.theme')} idPrefix="theme" onchange={(v) => applyTheme(v as ThemeMode)} />
+            </SettingRow>
+          {/if}
+          {#if show('bgAll')}
+            <SettingRow id="bgAll" asLabel label={t('settings.bgAll')} hint={t('settings.bgAllHint')}>
+              <Toggle checked={ui.backgroundEverywhere} onchange={(on) => setBackgroundEverywhere(on)} />
             </SettingRow>
           {/if}
           {#if show('cycleBg')}
@@ -272,7 +284,7 @@
     </div>
 
     {#if matches === null}<footer class="hint mono">{t('settings.version')} {app.version} &middot; {t('settings.dataDir')}: {app.rootDir}</footer>{/if}
-  </div></div>
+  </div></SettingsLayout></div>
 {/if}
 
 {#if confirmKey}
@@ -282,7 +294,7 @@
 
 <style>
   .scroller { height: 100%; overflow: auto; }
-  .settings { padding: var(--s-5) 32px 40px; max-width: 800px; display: grid; gap: 20px; align-content: start; }
+  .settings { padding: var(--s-5) 0 56px; display: grid; gap: 20px; align-content: start; }
   h1 { font-size: var(--fs-3xl); }
   .step { display: grid; gap: 4px; justify-items: end; }
   .ctl { display: flex; gap: 6px; align-items: center; }

@@ -132,13 +132,16 @@ void main() {
   vUV = aUV;
   gl_Position = uProj * uView * uModel * vec4(aPos, 1.0);
 }`;
+// The canvas is premultiplied (the one mode every engine composites the same way); the texture holds straight alpha, so the shader premultiplies.
+// uOpaque = 1 for the base layer: like the game, the base layer ignores the skin's alpha (only the overlay layer and the cape are cut out).
 const FRAG = `
-precision mediump float;
-varying vec2 vUV; varying float vLight; uniform sampler2D uTex;
+precision highp float;
+varying vec2 vUV; varying float vLight; uniform sampler2D uTex; uniform float uOpaque;
 void main() {
   vec4 c = texture2D(uTex, vUV);
-  if (c.a < 0.02) discard;
-  gl_FragColor = vec4(c.rgb * vLight, c.a);
+  if (uOpaque > 0.5) c.a = 1.0;
+  else if (c.a < 0.02) discard;
+  gl_FragColor = vec4(c.rgb * vLight * c.a, c.a);
 }`;
 
 export type Pose = 'idle' | 'walking';
@@ -175,6 +178,36 @@ export function expandLegacy(src: TextureSource, doc: Document = document): HTML
   return c;
 }
 
+/** Walking swing: about +-35 degrees (0.61 rad) at 6 rad/s. */
+export const WALK_SWING = 0.61;
+export const swingAngle = (time: number, walking: boolean): number => (walking ? Math.sin(time * 6) * WALK_SWING : Math.sin(time * 1.2) * 0.07);
+export const bobOffset = (time: number, walking: boolean): number => (walking ? Math.abs(Math.sin(time * 6)) * 0.5 : 0);
+
+/**
+ * Model matrix of a body part: arms and legs rotate around the shoulder / hip joint (6 units above the limb centre), arms opposite to the legs
+ * on the same side, the head turns a little. Pure, so the tests check exactly what is drawn.
+ */
+export function partMatrix(name: PartName, pivot: Vec3, root: M4, time: number, walking: boolean): M4 {
+  const swing = swingAngle(time, walking);
+  let m = translate(root, 0, bobOffset(time, walking), 0);
+  const [px, py, pz] = pivot;
+  if (/^right(Arm|Sleeve)$/.test(name)) { m = translate(m, px, py + 6, pz); m = rotateX(m, swing); m = translate(m, 0, -6, 0); }
+  else if (/^left(Arm|Sleeve)$/.test(name)) { m = translate(m, px, py + 6, pz); m = rotateX(m, -swing); m = translate(m, 0, -6, 0); }
+  else if (/Leg|Pants/.test(name)) { const dir = name.startsWith('right') ? -1 : 1; m = translate(m, px, py + 6, pz); m = rotateX(m, walking ? swing * dir : 0); m = translate(m, 0, -6, 0); }
+  else if (name === 'head' || name === 'hat') { m = translate(m, px, py, pz); m = rotateY(m, Math.sin(time * 0.5) * 0.12); }
+  else m = translate(m, px, py, pz);
+  return m;
+}
+/** Cape matrix: hangs from the shoulders, leans back a little and sways a little; its outer face is turned to the back of the player. */
+export function capeMatrix(root: M4, time: number, walking: boolean, animated: boolean): M4 {
+  const lean = !animated ? (walking ? 0.3 : 0.09) : walking ? 0.28 + Math.abs(Math.sin(time * 6)) * 0.22 : 0.09 + Math.sin(time * 1.2) * 0.03;
+  let m = translate(root, 0, bobOffset(time, walking), 0);
+  m = translate(m, 0, 24, -2.5);
+  m = rotateX(m, lean);
+  m = translate(m, 0, -8, 0);
+  return rotateY(m, Math.PI);
+}
+
 export const IDLE_ROTATION = 0.5;
 export const MAX_PITCH = 0.5;
 
@@ -195,7 +228,7 @@ export class SkinRenderer {
   onLost: (() => void) | null = null;
 
   #prog: WebGLProgram;
-  #loc: { aPos: number; aUV: number; aNormal: number; uProj: WebGLUniformLocation | null; uView: WebGLUniformLocation | null; uModel: WebGLUniformLocation | null; uTex: WebGLUniformLocation | null };
+  #loc: { aPos: number; aUV: number; aNormal: number; uProj: WebGLUniformLocation | null; uView: WebGLUniformLocation | null; uModel: WebGLUniformLocation | null; uTex: WebGLUniformLocation | null; uOpaque: WebGLUniformLocation | null };
   #skinTex: WebGLTexture | null;
   #capeTex: WebGLTexture | null = null;
   #hasCape = false;
@@ -207,7 +240,7 @@ export class SkinRenderer {
   #cleanup: (() => void) | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement, opts: { slim?: boolean; rotation?: number } = {}) {
-    const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true });
     if (!gl) throw new Error('WebGL is not available');
     this.gl = gl;
     this.slim = !!opts.slim;
@@ -222,9 +255,9 @@ export class SkinRenderer {
     this.#prog = prog;
     this.#loc = {
       aPos: gl.getAttribLocation(prog, 'aPos'), aUV: gl.getAttribLocation(prog, 'aUV'), aNormal: gl.getAttribLocation(prog, 'aNormal'),
-      uProj: gl.getUniformLocation(prog, 'uProj'), uView: gl.getUniformLocation(prog, 'uView'), uModel: gl.getUniformLocation(prog, 'uModel'), uTex: gl.getUniformLocation(prog, 'uTex'),
+      uProj: gl.getUniformLocation(prog, 'uProj'), uView: gl.getUniformLocation(prog, 'uView'), uModel: gl.getUniformLocation(prog, 'uModel'), uTex: gl.getUniformLocation(prog, 'uTex'), uOpaque: gl.getUniformLocation(prog, 'uOpaque'),
     };
-    gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
     this.#skinTex = gl.createTexture();
     this.#buildParts();
@@ -258,13 +291,22 @@ export class SkinRenderer {
   setPose(p: Pose): void { this.pose = p; }
   setCapeAnim(on: boolean): void { this.capeAnim = on; }
 
-  #upload(tex: WebGLTexture | null, src: TextureSource): void {
+  /** Texture bytes through a 2D canvas (straight alpha). This avoids the engine's own image path for WebGL (colour management, premultiplication, decode quirks). */
+  #upload(tex: WebGLTexture | null, src: TextureSource | HTMLCanvasElement): void {
     const gl = this.gl;
+    const w = (src as { width: number }).width, h = (src as { height: number }).height;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('no 2d context');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0);
+    const px = ctx.getImageData(0, 0, w, h).data; // throws SecurityError when tainted
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(px.buffer, px.byteOffset, px.byteLength));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -343,7 +385,7 @@ export class SkinRenderer {
   /** One frame; `dt` seconds advance the animation clock. */
   render(dt = 0): void {
     const gl = this.gl, L = this.#loc;
-    this.time += dt;
+    if (Number.isFinite(dt)) this.time += dt;
     if (this.autoRotate) this.rotation += dt * 0.35;
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -353,20 +395,8 @@ export class SkinRenderer {
     gl.uniform1i(L.uTex, 0);
 
     const walking = this.pose === 'walking';
-    const swing = walking ? Math.sin(this.time * 6) * 0.9 : Math.sin(this.time * 1.2) * 0.07;
-    const bob = walking ? Math.abs(Math.sin(this.time * 6)) * 0.5 : 0;
     const root = rotateX(rotateY(identity(), this.rotation), this.pitch);
-
-    const place = (name: PartName, pivot: Vec3): M4 => {
-      let m = translate(root, 0, bob, 0);
-      const [px, py, pz] = pivot;
-      if (/^right(Arm|Sleeve)$/.test(name)) { m = translate(m, px, py + 6, pz); m = rotateX(m, swing); m = translate(m, 0, -6, 0); }
-      else if (/^left(Arm|Sleeve)$/.test(name)) { m = translate(m, px, py + 6, pz); m = rotateX(m, -swing); m = translate(m, 0, -6, 0); }
-      else if (/Leg|Pants/.test(name)) { const dir = name.startsWith('right') ? -1 : 1; m = translate(m, px, py + 6, pz); m = rotateX(m, walking ? swing * dir : 0); m = translate(m, 0, -6, 0); }
-      else if (name === 'head' || name === 'hat') { m = translate(m, px, py, pz); m = rotateY(m, Math.sin(this.time * 0.5) * 0.12); }
-      else m = translate(m, px, py, pz);
-      return m;
-    };
+    const place = (name: PartName, pivot: Vec3): M4 => partMatrix(name, pivot, root, this.time, walking);
     const draw = (p: GlPart, model: M4) => {
       gl.uniformMatrix4fv(L.uModel, false, model);
       const bind = (buf: WebGLBuffer, loc: number, size: number) => { gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0); };
@@ -375,19 +405,14 @@ export class SkinRenderer {
       gl.drawElements(gl.TRIANGLES, p.count, gl.UNSIGNED_SHORT, 0);
     };
 
-    // solid parts and the cape first, then the alpha overlay layer, so blending is correct
+    // base layer (opaque) and the cape first, then the alpha overlay layer, so blending is correct
     gl.bindTexture(gl.TEXTURE_2D, this.#skinTex);
+    gl.uniform1f(L.uOpaque, 1);
     for (const p of this.#parts) if (!p.def.overlay) draw(p, place(p.def.name, p.def.pivot));
+    gl.uniform1f(L.uOpaque, 0);
     if (this.#hasCape && this.#cape && this.#capeTex) {
-      // hangs from the shoulders, leans back a little; the outer face (front of the cuboid) is turned to the back of the player
-      const lean = !this.capeAnim ? (walking ? 0.3 : 0.09) : walking ? 0.28 + Math.abs(Math.sin(this.time * 6)) * 0.22 : 0.09 + Math.sin(this.time * 1.2) * 0.03;
-      let m = translate(root, 0, bob, 0);
-      m = translate(m, 0, 24, -2.5);
-      m = rotateX(m, lean);
-      m = translate(m, 0, -8, 0);
-      m = rotateY(m, Math.PI);
       gl.bindTexture(gl.TEXTURE_2D, this.#capeTex);
-      draw(this.#cape, m);
+      draw(this.#cape, capeMatrix(root, this.time, walking, this.capeAnim));
       gl.bindTexture(gl.TEXTURE_2D, this.#skinTex);
     }
     for (const p of this.#parts) if (p.def.overlay) draw(p, place(p.def.name, p.def.pivot));

@@ -1,3 +1,4 @@
+import { mangoFlags } from './mockData';
 import { derivedRam } from './ram';
 import type {
   Api, Unlisten,
@@ -19,6 +20,8 @@ export interface MockOptions {
   timeScale?: number;
   /** Start with config.firstRunDone=false so the onboarding shows. */
   firstRun?: boolean;
+  /** Start with zero profiles (the real core no longer creates a default instance). `?noprofiles`. */
+  noProfiles?: boolean;
   /** What `accountSignInMicrosoft` does: succeed (default), resolve null (cancelled) or fail with a login error variant. */
   login?: 'success' | 'cancel' | { error: string };
   /** Simulate a system without keystore: Microsoft accounts are memory-only. */
@@ -62,6 +65,7 @@ export function mockOptionsFromSearch(search: string): MockOptions {
   const err = q.get('mockLoginError');
   return {
     firstRun: q.has('onboarding'),
+    noProfiles: q.has('noprofiles'),
     login: err ? { error: err } : q.get('mockLogin') === 'cancel' ? 'cancel' : 'success',
     noKeystore: q.has('mockNoKeystore'),
     needsRelogin: q.has('mockRelogin'),
@@ -87,7 +91,7 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'ramSource' | 'ramHint' | 'effectiveRamMb' | 'javaArgs' | 'mangoConfig' | 'javaPath' | 'window' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: 4096, javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'ramSource' | 'ramHint' | 'effectiveRamMb' | 'javaArgs' | 'mangoConfig' | 'mangoConfigSupported' | 'mangoConfigActive' | 'javaPath' | 'window' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: 4096, javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, mangoConfigSupported: false, mangoConfigActive: false, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, ramSource: 'user', effectiveRamMb: 6144, group: 'Survival', tags: ['main', 'fabric'], lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
@@ -149,12 +153,12 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
     autoSnapshot: true, backupKeep: 5,
   };
-  let profiles = seedProfiles(now);
+  let profiles = opts.noProfiles ? [] : seedProfiles(now);
   let accounts = seedAccounts(now, opts);
   setTimeout(() => skinsMock.init(), 0);
-  config.selectedProfile = profiles[0].id;
+  config.selectedProfile = profiles[0]?.id ?? null;
   config.selectedAccount = accounts[0].uuid;
-  const running = new Set<string>(opts.running ? [profiles[0].id] : []);
+  const running = new Set<string>(opts.running && profiles[0] ? [profiles[0].id] : []);
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
@@ -187,7 +191,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     gameActive: (id) => running.has(id) || timers.has(id),
   });
   const portabilityMock = createPortabilityMock({
-    scale, emit, emitDrop, profiles: () => profiles, find, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); },
+    scale, emit, emitDrop, profiles: () => profiles, find, addProfile: (p) => { Object.assign(p, mangoFlags(p, config.mangoConfig)); profiles = [...profiles, p]; icons.sync(); },
     crash: opts.crash, importError: opts.importError, exportError: opts.exportError,
   });
   const skinsMock = createSkinsMock({
@@ -201,7 +205,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     ],
   };
   const part2 = createContentApi({
-    now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); }, find,
+    now, scale, emit, profiles: () => profiles, addProfile: (p) => { Object.assign(p, mangoFlags(p, config.mangoConfig)); profiles = [...profiles, p]; icons.sync(); }, find,
     gameActive: () => running.size > 0 || timers.size > 0,
   });
   const api: MockApi = {
@@ -213,7 +217,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     dev: { ...portabilityMock.dev },
     async appState(): Promise<AppState> {
       return {
-        version: '2.0.0', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram) })), accounts: structuredClone(accounts),
+        version: '2.0.0', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram), ...mangoFlags(p, config.mangoConfig) })), accounts: structuredClone(accounts),
         totalRamMb: 16384, defaultRamMb: 4096, ramLimits: { minMb: 1024, maxMb: 14336, totalMb: 16384 }, running: [...running], rootDir: '~/.mangoclient',
       };
     },
@@ -230,9 +234,10 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: config.ram,
-        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
+        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, mangoConfigSupported: false, mangoConfigActive: false, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
         icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [],
       };
+      Object.assign(p, mangoFlags(p, config.mangoConfig));
       profiles = [...profiles, p];
       icons.sync();
       return structuredClone(p);
@@ -275,7 +280,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
         next.ramSource = r === null ? 'default' : hit !== null && r === hit ? 'modpack' : 'user';
       }
       Object.assign(p, next);
-      Object.assign(p, derivedRam(p.ram, p.ramSource, config.ram));
+      Object.assign(p, derivedRam(p.ram, p.ramSource, config.ram), mangoFlags(p, config.mangoConfig));
       return structuredClone(p);
     },
     async profileDelete({ id }) {

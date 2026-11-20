@@ -133,6 +133,10 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
 /* Notched box with a hard 1px border: the border is the element's own background (--line), a ::before inset by 1px paints the fill with a slightly smaller notch,
    so the diagonal cuts are outlined too. Set --n (notch) and --fill per element; children render above the fill. */
 :where(.nb, .pop) { position: relative; }
+/* The UA gives <dialog> and [popover] `border: solid` in the text colour (white in the dark theme): that was the bright ring around pop-ups.
+   The only border of a floating surface is the neutral --line one drawn by .nb / .pop below. */
+dialog, [popover] { border: 0; outline: 0; }
+dialog:focus, dialog:focus-visible, .nb[tabindex='-1']:focus, .nb[tabindex='-1']:focus-visible { outline: none; }
 .nb, .pop {
   --n: var(--notch-m); --fill: var(--ink-2); isolation: isolate; background: var(--line);
   clip-path: polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
@@ -224,10 +228,10 @@ input[type='range']::-moz-range-thumb { width: 10px; height: 16px; background: v
 input[type='range']:focus-visible { outline-offset: 3px; }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-fill); }
 
-/* ---- settings layout: exactly ONE hairline between two adjacent things ----------------------------
+/* ---- settings layout: exactly ONE hairline between two adjacent rows; sections are separated by whitespace only ----------------------------
    Separators are drawn only as `adjacent + adjacent { border-top }`, never as border-bottom on the one and border-top on the next,
    so two neighbours can never produce a double line. Used by Settings, the instance Settings tab and SettingRow/SettingSection. */
-.set-sections > * + * { border-top: 1px solid var(--line); }
+.set-sections { display: grid; gap: 48px; }
 .set-rows > * + * { border-top: 1px solid var(--line-soft); }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; }
 .set-row.stack { flex-direction: column; align-items: stretch; gap: 8px; }

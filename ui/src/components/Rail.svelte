@@ -6,13 +6,14 @@
   import TShirtIcon from 'phosphor-svelte/lib/TShirtIcon';
   import ChartBarIcon from 'phosphor-svelte/lib/ChartBarIcon';
   import GearIcon from 'phosphor-svelte/lib/GearIcon';
+  import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import Accounts from './Accounts.svelte';
   import Skeleton from './skeleton/Skeleton.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
   import { tip } from '../lib/tooltip';
-  import { cardHandlers } from '../lib/instanceCard';
+  import { railTileHandlers } from '../lib/instanceCard';
   import { instanceMenu } from '../lib/instanceMenu';
   import { contextmenu } from '../lib/contextMenu.svelte';
   import { shortcutLabel, type ShortcutAction } from '../lib/keybinds';
@@ -55,8 +56,8 @@
     {#each recent as p (p.id)}
       <!-- highlighted only where that instance is the subject: its own page, or Home while Home shows it. Never in Library, Discover, Servers, Stats, Settings. -->
       {@const sel = nav.view === 'profile' ? p.id === nav.profileId : nav.view === 'home' && p.id === selectedProfile()?.id}
-      <li class:sel class:picked={!sel && p.id === selectedProfile()?.id} class:on={nav.view === 'profile' && p.id === nav.profileId} use:contextmenu={() => instanceMenu(p)}>
-        <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined} {...cardHandlers(p.id, ops)}>
+      <li class:sel class:on={nav.view === 'profile' && p.id === nav.profileId} use:contextmenu={() => instanceMenu(p)}>
+        <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined} {...railTileHandlers(p.id, ops)}>
           <span class="ring notch" style:--n="9px"><InstanceIcon profile={p} size={40} notch={7} /></span>
         </button>
         {#if isBusy(p.id)}<span class="sq ok pulse" aria-hidden="true"></span><span class="sr-only">{t('home.running')}</span>{/if}
@@ -65,6 +66,9 @@
   </ul>
 
   <ul class="bottom">
+    <li>
+      <button type="button" class="nav add" use:tip={withKey(t('rail.newInstance'), 'newProfile')} aria-label={t('rail.newInstance')} onclick={() => (nav.newProfile = true)}><PlusIcon weight="bold" size={22} aria-hidden="true" /></button>
+    </li>
     <li class="acc">
       <button type="button" class="avatar" aria-haspopup="dialog" aria-expanded={nav.accounts} use:tip={`${acc?.name ?? t('nav.noAccount')}${credText ? ` · ${credText}` : ''}`}
         aria-label="{t('nav.accounts')}: {acc?.name ?? t('nav.noAccount')}{credText ? `. ${credText}` : ''}{keystoreMissing() ? `. ${t('persist.railHint')}` : ''}"
@@ -94,9 +98,7 @@
   /* active indicator: a bar flush with the rail edge */
   li.on::before { content: ''; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; background: var(--accent-fill); z-index: 1; }
   .ring { display: block; width: 44px; height: 44px; padding: 2px; background: transparent; transition: background var(--dur) var(--ease); }
-  .prof:hover .ring, .avatar:hover .ring { background: var(--line); }
   li.sel .ring { background: var(--accent-fill); }
-  li.picked .ring { background: var(--paper-mute); }
   .prof:focus-visible, .avatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
   .recent li .sq { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border: 2px solid var(--ink-1); box-sizing: border-box; }
   .ph { display: block; width: 40px; height: 40px; }

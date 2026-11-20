@@ -42,6 +42,7 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   /* ---- launcher settings ---- */
   e('app', 'look', 'theme', 'settings.theme', ['theme', 'design', 'darkmode', 'dark mode', 'dunkel', 'dunkelmodus', 'hell', 'light', 'light mode', 'farbschema', 'appearance', 'darstellung', 'color scheme', 'nachtmodus'], 'settings.theme.hint'),
   e('app', 'look', 'cycleBg', 'settings.cycleBg', ['hintergrund', 'wallpaper', 'mango client', 'mango-client', 'wechseln', 'cycle', 'slideshow', 'diashow', 'background', 'home', 'panorama', 'rotate', 'überblenden', 'crossfade', 'animation'], 'settings.cycleBgHint'),
+  e('app', 'look', 'bgAll', 'settings.bgAll', ['hintergrund', 'background', 'alle bereiche', 'all areas', 'überall', 'everywhere', 'unscharf', 'blur', 'abdunkeln', 'dim', 'bibliothek', 'library', 'wallpaper']),
   e('app', 'launcher', 'language', 'settings.language', ['language', 'sprache', 'locale', 'deutsch', 'english', 'englisch', 'german', 'translation', 'übersetzung']),
   e('app', 'launcher', 'keepOpen', 'settings.keepOpen', ['launcher', 'fenster', 'window', 'hide', 'ausblenden', 'minimieren', 'close', 'schließen', 'tray'], 'settings.keepOpenHint'),
   e('app', 'launcher', 'telemetry', 'settings.telemetry', ['telemetry', 'telemetrie', 'ping', 'analytics', 'statistik', 'privacy', 'datenschutz', 'tracking', 'anonym', 'anonymous', 'nutzungsdaten'], 'settings.telemetryHint'),

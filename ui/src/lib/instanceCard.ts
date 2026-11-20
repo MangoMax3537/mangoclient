@@ -17,3 +17,15 @@ export function cardHandlers(id: string, o: CardOps) {
     },
   };
 }
+
+/** Rail tiles: ONE click opens the instance page (and selects it). Enter / Space reach the same handler as a click (detail 0). Middle click (auxclick) and the
+ *  context menu never fire `click`, so they never navigate. */
+export function railTileHandlers(id: string, o: Pick<CardOps, 'select' | 'open' | 'isSelected'>) {
+  return {
+    onclick: (e: { button?: number }) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      if (!o.isSelected(id)) o.select(id);
+      o.open(id);
+    },
+  };
+}

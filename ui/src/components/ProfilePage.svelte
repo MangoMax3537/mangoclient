@@ -1,9 +1,5 @@
 <script lang="ts">
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
-  import CubeIcon from 'phosphor-svelte/lib/CubeIcon';
-  import CoffeeIcon from 'phosphor-svelte/lib/CoffeeIcon';
-  import MemoryIcon from 'phosphor-svelte/lib/MemoryIcon';
-  import ClockIcon from 'phosphor-svelte/lib/ClockIcon';
   import PlayButton from './PlayButton.svelte';
   import Seg from './Seg.svelte';
   import Overview from './profile/Overview.svelte';
@@ -21,19 +17,17 @@
   import { enter } from '../lib/motion';
   import { rememberScroll } from '../lib/scrollMemory';
   import NoAccountHint from './NoAccountHint.svelte';
-  import { fmtDuration, fmtRam } from '../lib/format';
+  import { heroLine } from '../lib/infoLine';
   import type { Key } from '../lib/i18n';
   import { untrack } from 'svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { CONTENT_TAB_TYPE, effectiveTab, isContentTab, profileTabs } from '../lib/profileTabs';
-  import { actions, app, contentRev, errorText, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, t, toast, ui, type ProfileTab } from '../lib/stores.svelte';
+  import { actions, app, contentRev, errorText, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, lang, t, toast, ui, type ProfileTab } from '../lib/stores.svelte';
   import type { ContentItem, ContentType, UpdateInfo } from '../lib/types';
 
   let { id }: { id: string } = $props();
   const p = $derived(app.profiles.find((x) => x.id === id) ?? null);
   const busy = $derived(isBusy(id));
-  const ram = $derived(p ? p.effectiveRamMb : 0);
-  const loaderLabel = $derived(p ? (p.loader === 'vanilla' ? t('profile.vanilla') : `${p.loader} ${p.loaderVersion ?? ''}`.trim()) : '');
 
   // The instance's content (all types) and its update infos feed the tab counts and the four content tabs.
   const cl = createLoadState<ContentItem[]>({ isEmpty: () => false });
@@ -129,13 +123,7 @@
             {:else}
               <h1 title={t('rename.hint')} ondblclick={() => (ui.renameInline = p.id)}>{p.name}</h1>
             {/if}
-            <ul class="chips" aria-label={p.name}>
-              <li class="chip mono"><CubeIcon weight="bold" size={14} aria-hidden="true" />{p.mcVersion}</li>
-              <li class="chip">{loaderLabel}</li>
-              <li class="chip mono"><CoffeeIcon weight="bold" size={14} aria-hidden="true" />{t('chip.java')} {t('chip.auto')}</li>
-              <li class="chip mono"><MemoryIcon weight="bold" size={14} aria-hidden="true" />{ram ? fmtRam(ram) : t('chip.default')}</li>
-              <li class="chip mono"><ClockIcon weight="bold" size={14} aria-hidden="true" />{fmtDuration(p.playTimeMs)}</li>
-            </ul>
+            <p class="info mono" aria-label={p.name}>{heroLine(p, lang(), t)}</p>
           </div>
           <div class="playcol">
             <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
@@ -181,10 +169,10 @@
   h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .rn { display: grid; gap: 4px; min-width: 0; }
   .rn-in { height: 48px; font: 700 clamp(24px, 3.4vw, 36px)/1.05 var(--font-display); letter-spacing: -0.015em; color: var(--paper); background: rgba(var(--scrim), 0.6); border-color: var(--hero-line); }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .info { margin: 0; color: var(--hero-dim); font-size: var(--fs-md); }
   .playcol { display: grid; gap: var(--s-2); justify-items: end; flex: 0 1 auto; max-width: min(100%, 300px); }
   /* short windows (960x600): the same hero, a little tighter, so the tab content keeps its room */
-  @media (max-height: 700px) { .inner { gap: 6px; padding: 8px 20px 12px 28px; } h1 { font-size: clamp(26px, 3.4vw, 34px); } .chips { gap: 6px; } }
+  @media (max-height: 700px) { .inner { gap: 6px; padding: 8px 20px 12px 28px; } h1 { font-size: clamp(26px, 3.4vw, 34px); } }
   .tabs { flex: none; max-width: 100%; }
   .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; }
 </style>

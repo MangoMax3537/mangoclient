@@ -10,7 +10,7 @@
   import LogLineSkeleton from '../skeleton/LogLineSkeleton.svelte';
   import { createLoadState } from '../../lib/loadState.svelte';
   import { fallbackImage } from '../../lib/fallbackImage';
-  import { fmtDate, fmtDuration, fmtRelative } from '../../lib/format';
+  import { fmtDate, fmtDuration, fmtRam, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
   import { actions, errorText, getApi, lang, nav, openDiscover, openProfile, t, toast } from '../../lib/stores.svelte';
   import type { LogEntry, ProfileView, Screenshot } from '../../lib/types';
@@ -56,6 +56,8 @@
     <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
     <div><dt>{t('home.lastPlayed')}</dt><dd class="mono">{profile.lastPlayed ? fmtRelative(profile.lastPlayed, lang()) : t('home.never')}</dd></div>
     <div><dt>{t('home.mods')}</dt><dd class="mono">{profile.modCount}</dd></div>
+    <div><dt>{t('chip.java')}</dt><dd class="mono">{t('chip.auto')}</dd></div>
+    <div><dt>{t('chip.ram')}</dt><dd class="mono">{profile.effectiveRamMb ? fmtRam(profile.effectiveRamMb) : t('chip.default')}</dd></div>
   </dl>
 
   {#if showShots}

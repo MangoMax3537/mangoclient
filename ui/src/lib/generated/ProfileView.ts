@@ -32,6 +32,15 @@ javaPath: string | null,
  */
 window: WindowSettings, mangoConfig: boolean | null, 
 /**
+ * A bundled MangoConfig build exists for this loader and Minecraft version.
+ */
+mangoConfigSupported: boolean, 
+/**
+ * What a launch will really inject: supported and not switched off by the
+ * profile or the global setting.
+ */
+mangoConfigActive: boolean, 
+/**
  * Library group; `null` = ungrouped.
  */
 group: string | null, tags: Array<string>, lastPlayed: number | null, playTimeMs: number, created: number, modCount: number, 

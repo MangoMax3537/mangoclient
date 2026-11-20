@@ -13,7 +13,8 @@
   import TagIcon from 'phosphor-svelte/lib/TagIcon';
   import FoldersIcon from 'phosphor-svelte/lib/FoldersIcon';
   import { tip } from '../lib/tooltip';
-  import { fmtDuration, fmtRelative } from '../lib/format';
+  import { fmtDuration, fmtShortDate } from '../lib/format';
+  import { lastPlayedText, versionLoader } from '../lib/infoLine';
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
   import { writeLibraryLayout } from '../lib/layoutHint';
   import { pickAndImport } from '../lib/portability.svelte';
@@ -100,7 +101,7 @@
 
   {#if app.profiles.length === 0}
     <EmptyState title={t('home.noProfiles')} hint={t('home.noProfilesHint')}>
-      <button class="btn accent" type="button" onclick={() => (nav.newProfile = true)}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('library.new')}</button>
+      <button class="btn accent" type="button" onclick={() => (nav.newProfile = true)}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('home.createInstance')}</button>
     </EmptyState>
   {:else if items.length === 0}
     <EmptyState title={t('library.empty')} hint={t('library.emptyHint')}>
@@ -149,8 +150,8 @@
       <span class="cover"><InstanceIcon profile={p} fill radius={0} /></span>
       <span class="info">
         <b>{p.name}</b>
-        <span class="mono sub">{p.mcVersion}<span class="sep">/</span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}{#if p.modCount}<span class="sep">/</span>{tp('profile.mods', p.modCount)}{/if}</span>
-        <span class="mono sub dim">{fmtDuration(p.playTimeMs)}<span class="sep">/</span>{fmtRelative(p.lastPlayed, lang()) ?? t('home.never')}</span>
+        <span class="mono sub">{versionLoader(p, t)}</span>
+        <span class="mono sub dim">{lastPlayedText(p, lang(), t)}</span>
         {@render tagChips(p, 3)}
       </span>
     </button>
@@ -168,7 +169,7 @@
       <span class="nmc"><b class="nm">{p.name}</b>{@render tagChips(p, 4)}</span>
       <span class="mono">{p.mcVersion}</span>
       <span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}</span>
-      <span class="mono r dim">{fmtRelative(p.lastPlayed, lang()) ?? t('home.never')}</span>
+      <span class="mono r dim">{p.lastPlayed ? fmtShortDate(p.lastPlayed, lang()) : t('home.never')}</span>
       <span class="mono r">{fmtDuration(p.playTimeMs)}</span>
     </button>
   </li>
@@ -208,8 +209,10 @@
   .kebab:hover { background: rgba(11, 12, 14, 0.85); }
   .card { display: grid; grid-template-rows: auto 1fr; width: 100%; text-align: left; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
-  .card.sel { box-shadow: inset 0 0 0 2px var(--accent-fill); }
-  .card.sel .info { background: color-mix(in srgb, var(--accent-fill) 9%, var(--ink-2)); }
+  /* the info panel is always the neutral surface (never the tile tint); selection is a 1px accent frame drawn over the card */
+  .card { position: relative; }
+  .info { background: var(--ink-2); }
+  .card.sel::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--accent-fill); pointer-events: none; }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 14px 14px; min-width: 0; }
@@ -220,7 +223,7 @@
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 64px 76px 124px 120px; gap: var(--s-3); align-items: center; width: 100%; padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); }
   button.row { transition: background var(--dur) var(--ease); }
   button.row:hover { background: var(--ink-2); }
-  button.row.sel { background: color-mix(in srgb, var(--accent-fill) 11%, var(--ink-1)); box-shadow: inset 3px 0 0 var(--accent-fill); }
+  button.row.sel { background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--accent-fill); }
   button.row:focus-visible { outline-offset: -2px; }
   .row.head { padding-inline: 8px; border-top: 1px solid var(--line); padding-block: 8px; font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; border-bottom: 1px solid var(--line); }
   .nm { font: 600 var(--fs-lg) var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

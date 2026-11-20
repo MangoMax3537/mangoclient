@@ -418,7 +418,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
         ramSource: 'user' as const, ramHint: null, effectiveRamMb: 4096,
-        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
+        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, mangoConfigSupported: false, mangoConfigActive: false, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
         icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, group: null, tags: [], // the pack logo becomes the image icon
       };
       ctx.addProfile(p);

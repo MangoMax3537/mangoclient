@@ -29,7 +29,7 @@ describe('packaged CSP', () => {
 
 /** Modules that load backgrounds, wallpapers, icons, panorama faces, skin and cape textures. */
 const IMAGE_MODULES = [
-  '../components/BgLayer.svelte', '../components/HomeBackground.svelte', '../components/PanoramaBackground.svelte',
+  '../components/BgLayer.svelte', '../components/AppBackground.svelte', '../components/PanoramaBackground.svelte',
   '../components/BackgroundPicker.svelte', '../components/Img.svelte', '../components/BlockIcon.svelte', '../components/IconPicker.svelte',
   '../components/SkinViewer.svelte', '../components/Tile.svelte', './imgLoad.ts', './wallpapers.ts', './bgCycle.ts', './skinTexture.ts',
   './fallbackImage.ts', './instanceIcon.ts',

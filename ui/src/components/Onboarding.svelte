@@ -9,7 +9,7 @@
   import PersistNotice from './PersistNotice.svelte';
   import { brandIcon } from '../lib/fallbackImage';
   import type { Key } from '../lib/i18n';
-  import { actions, app, errorText, t } from '../lib/stores.svelte';
+  import { actions, app, errorText, nav, t } from '../lib/stores.svelte';
 
   const STEPS = ['welcome', 'language', 'account', 'done'] as const;
   let step = $state(0);
@@ -32,6 +32,8 @@
   }
   async function finish() {
     await actions.setConfig({ firstRunDone: true });
+    // no default instance exists: the next thing to do is creating one (the dialog focuses its name field)
+    if (app.profiles.length === 0) nav.newProfile = true;
   }
   function next() { step = Math.min(STEPS.length - 1, step + 1); }
 </script>

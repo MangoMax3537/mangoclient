@@ -11,7 +11,9 @@
   import RamControl from '../RamControl.svelte';
   import GroupTagsEditor from '../GroupTagsEditor.svelte';
   import SettingRow from '../SettingRow.svelte';
+  import Toggle from '../Toggle.svelte';
   import SettingSection from '../SettingSection.svelte';
+  import SettingsLayout from '../SettingsLayout.svelte';
   import SettingsSearch from '../SettingsSearch.svelte';
   import { entriesFor } from '../../lib/settingsIndex';
   import { jumpTo } from '../../lib/settingsJump';
@@ -31,6 +33,8 @@
   const show = (id: string) => matches === null || matches.has(id);
   const instEntries = entriesFor('instance');
   const sec = (id: string) => matches === null || instEntries.some((e) => e.section === id && matches?.has(e.id));
+  const navItems = $derived(([['p-general', t('psettings.group.general')], ['p-game', t('settings.group.game')], ['p-danger', t('psettings.danger')]] as [string, string][])
+    .filter(([id]) => sec(id.slice(2))).map(([id, title]) => ({ id, title })));
   let name = $state(untrack(() => profile.name));
   let args = $state(untrack(() => profile.javaArgs));
   let saved = $state(false);
@@ -170,7 +174,7 @@
   }
 </script>
 
-<div class="ps">
+<SettingsLayout items={navItems} width={760}><div class="ps">
   <div class="top">
     <SettingsSearch scope="instance" bind:matches onpick={(e) => jumpTo(e)} />
     <div class="status" role="status" aria-live="polite">{#if saved}<span class="ok">{t('settings.saved')}</span>{/if}</div>
@@ -286,11 +290,18 @@
         {/if}
 
         {#if show('mango')}
-          <SettingRow id="mango" label={t('psettings.mango')} hint={t('psettings.mangoHint', { state: app.config?.mangoConfig ? t('psettings.on') : t('psettings.off') })}>
-            <Seg label={t('psettings.mango')} value={mc3} idPrefix="psmc"
-              options={[{ value: 'default', label: t('psettings.default') }, { value: 'on', label: t('psettings.on') }, { value: 'off', label: t('psettings.off') }]}
-              onchange={(v) => save({ mangoConfig: v === 'default' ? null : v === 'on' })} />
-          </SettingRow>
+          {#if profile.mangoConfigSupported}
+            <SettingRow id="mango" label={t('psettings.mango')} hint={t('psettings.mangoHint', { state: app.config?.mangoConfig ? t('psettings.on') : t('psettings.off') })}>
+              <Seg label={t('psettings.mango')} value={mc3} idPrefix="psmc"
+                options={[{ value: 'default', label: t('psettings.default') }, { value: 'on', label: t('psettings.on') }, { value: 'off', label: t('psettings.off') }]}
+                onchange={(v) => save({ mangoConfig: v === 'default' ? null : v === 'on' })} />
+            </SettingRow>
+          {:else}
+            <SettingRow id="mango" asLabel label={t('psettings.mango')} hint={t('psettings.mangoUnsupportedHint', { version: profile.mcVersion, loader: profile.loader })}>
+              <span class="mono dim">{t('psettings.mangoUnsupported')}</span>
+              <Toggle checked={false} disabled label={t('psettings.mango')} onchange={() => {}} />
+            </SettingRow>
+          {/if}
         {/if}
       </SettingSection>
     {/if}
@@ -309,7 +320,7 @@
       </SettingSection>
     {/if}
   </div>
-</div>
+</div></SettingsLayout>
 
 {#if confirmDelete}
   <ConfirmDialog danger busy={deleting} title={t('psettings.confirmTitle', { name: profile.name })} body={t('psettings.confirmBody')}
@@ -344,7 +355,8 @@
   .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
   .bgthumb { position: relative; flex: none; width: 100px; height: 56px; overflow: hidden; border: 1px solid var(--line); }
   .delcol { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 260px; }
-  .ps { max-width: 760px; display: grid; gap: 14px; }
+  .ps { display: grid; gap: 14px; }
+  .dim { color: var(--paper-mute); margin-right: 10px; }
   .top { display: grid; gap: 4px; }
   .status { height: 18px; font-size: 13px; }
   .ok { color: var(--leaf); }
