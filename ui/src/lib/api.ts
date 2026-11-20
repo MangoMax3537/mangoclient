@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen as tauriListen } from '@tauri-apps/api/event';
 import type {
   ApiEvents, AppError, AppState, Config, LoaderVersion, Loader, ProfileView, PublicAccount, VersionManifest,
-  ContentItem, ContentType, LogEntry, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
+  ContentItem, ContentType, InstallPlan, InstallTarget, LogEntry, ModpackPlan, Provider, ProviderStatus, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
   ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
 import { createMockApi, mockOptionsFromSearch } from './mockApi';
@@ -38,11 +38,16 @@ export interface Api {
   contentUninstall(args: { profileId: string; projectId: string }): Promise<{ blocked: boolean; dependents: string[]; items: ContentItem[] }>;
   contentCheckUpdates(args: { profileId: string }): Promise<UpdateInfo[]>;
   contentOpenFolder(args: { profileId: string; type: ContentType }): Promise<string>;
-  modrinthSearch(args: { params: SearchParams }): Promise<SearchResult>;
-  modrinthProject(args: { projectId: string }): Promise<ProjectDetail>;
-  modrinthVersions(args: { projectId: string; profileId?: string }): Promise<ProjectVersion[]>;
-  modrinthInstall(args: { profileId: string; projectId: string; versionId?: string }): Promise<ContentItem[]>;
-  modrinthInstallModpack(args: { projectId: string; versionId?: string; name?: string }): Promise<ProfileView>;
+  /* Part 4: providers, install planning, modpacks */
+  providersStatus(): Promise<ProviderStatus[]>;
+  searchProjects(args: { params: SearchParams }): Promise<SearchResult>;
+  projectDetail(args: { provider: Provider; projectId: string }): Promise<ProjectDetail>;
+  projectVersions(args: { provider: Provider; projectId: string; profileId?: string }): Promise<ProjectVersion[]>;
+  installTargets(args: { provider: Provider; projectId: string; versionId?: string }): Promise<InstallTarget[]>;
+  installPlan(args: { provider: Provider; projectId: string; versionId?: string; profileId: string }): Promise<InstallPlan>;
+  installApply(args: { provider: Provider; projectId: string; versionId?: string; profileId: string; include: string[] }): Promise<ContentItem[]>;
+  modpackPlan(args: { provider: Provider; projectId: string; versionId?: string }): Promise<ModpackPlan>;
+  modpackInstall(args: { provider: Provider; projectId: string; versionId?: string; name?: string }): Promise<ProfileView>;
   serversList(): Promise<ServerEntry[]>;
   serversPingAll(): Promise<void>;
   serversPing(args: { address: string }): Promise<ServerStatus>;
@@ -86,11 +91,15 @@ export const tauriApi: Api = {
   contentUninstall: (a) => invoke('content_uninstall', a),
   contentCheckUpdates: (a) => invoke('content_check_updates', a),
   contentOpenFolder: (a) => invoke('content_open_folder', a),
-  modrinthSearch: (a) => invoke('modrinth_search', a),
-  modrinthProject: (a) => invoke('modrinth_project', a),
-  modrinthVersions: (a) => invoke('modrinth_versions', a),
-  modrinthInstall: (a) => invoke('modrinth_install', a),
-  modrinthInstallModpack: (a) => invoke('modrinth_install_modpack', a),
+  providersStatus: () => invoke('providers_status'),
+  searchProjects: (a) => invoke('search_projects', a),
+  projectDetail: (a) => invoke('project_detail', a),
+  projectVersions: (a) => invoke('project_versions', a),
+  installTargets: (a) => invoke('install_targets', a),
+  installPlan: (a) => invoke('install_plan', a),
+  installApply: (a) => invoke('install_apply', a),
+  modpackPlan: (a) => invoke('modpack_plan', a),
+  modpackInstall: (a) => invoke('modpack_install', a),
   serversList: () => invoke('servers_list'),
   serversPingAll: () => invoke('servers_ping_all'),
   serversPing: (a) => invoke('servers_ping', a),

@@ -5,8 +5,8 @@
   import Modal from '../Modal.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import Seg from '../Seg.svelte';
-  import { fmtRam } from '../../lib/format';
-  import { actions, app, errorText, getApi, isBusy, t, toast } from '../../lib/stores.svelte';
+  import { fmtDuration, fmtRam, fmtRelative } from '../../lib/format';
+  import { actions, app, errorText, getApi, isBusy, lang, t, toast } from '../../lib/stores.svelte';
   import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -125,13 +125,21 @@
     <h2 id="ps-danger" class="eyebrow">{t('psettings.danger')}</h2>
     <div class="row">
       <div class="txt"><b>{t('psettings.deleteTitle')}</b><div class="hint">{t('psettings.deleteHint')}</div></div>
-      <button class="btn danger" type="button" disabled={locked} onclick={() => (confirmDelete = true)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('profile.delete')}</button>
+      <div class="delcol">
+        <button class="btn danger" type="button" disabled={locked} onclick={() => (confirmDelete = true)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('profile.delete')}</button>
+        {#if locked}<span class="hint">{t('psettings.lose.running')}</span>{/if}
+      </div>
     </div>
   </section>
 </div>
 
 {#if confirmDelete}
-  <ConfirmDialog danger busy={deleting} title={t('psettings.confirmTitle', { name: profile.name })} body={t('psettings.confirmBody')} confirmLabel={t('profile.delete')} onconfirm={remove} oncancel={() => (confirmDelete = false)} />
+  <ConfirmDialog danger busy={deleting} title={t('psettings.confirmTitle', { name: profile.name })} body={t('psettings.confirmBody')}
+    facts={[
+      { label: t('psettings.lose.playtime'), value: fmtDuration(profile.playTimeMs) },
+      { label: t('psettings.lose.mods'), value: String(profile.modCount) },
+      { label: t('psettings.lose.last'), value: fmtRelative(profile.lastPlayed, lang()) ?? t('home.never') },
+    ]} warn={t('psettings.lose.warn')} confirmLabel={t('profile.delete')} onconfirm={remove} oncancel={() => (confirmDelete = false)} />
 {/if}
 
 {#if changing}
@@ -155,6 +163,7 @@
 {/if}
 
 <style>
+  .delcol { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 260px; }
   .ps { max-width: 760px; display: grid; gap: 24px; }
   .status { height: 18px; font-size: 13px; }
   .ok { color: var(--leaf); }

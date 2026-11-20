@@ -9,7 +9,7 @@ describe('mockApi', () => {
   it('serves seed data', async () => {
     const api = createMockApi();
     const s = await api.appState();
-    expect(s.profiles).toHaveLength(4);
+    expect(s.profiles).toHaveLength(6);
     expect(s.accounts).toHaveLength(2);
     expect(s.profiles.some((p) => p.name === 'Iron Hollow' && p.mcVersion === '1.21.4' && p.loader === 'fabric')).toBe(true);
   });

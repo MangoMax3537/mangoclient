@@ -111,8 +111,8 @@
   .ob { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--ink-0); overflow: auto; }
   .bg { position: absolute; inset: 0; background: var(--bg) right 10% center / min(460px, 50%) no-repeat; opacity: 0.1; image-rendering: pixelated; }
   .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--ink-0) 0%, transparent 70%); }
-  .card { position: relative; width: min(540px, calc(100% - 48px)); display: grid; gap: 14px; padding: 28px 32px; background: var(--ink-2); border: 1px solid var(--line); border-left: 4px solid var(--mango); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6); margin: 24px; justify-self: start; margin-left: clamp(24px, 12vw, 160px); }
-  h1 { font-size: 34px; line-height: 1.05; }
+  .card { position: relative; width: min(540px, calc(100% - 48px)); display: grid; gap: 14px; padding: 28px 32px; background: var(--ink-2); border: 1px solid var(--line); border-left: 4px solid var(--accent-fill); border-radius: var(--r-l); box-shadow: var(--shadow-modal); margin: 24px; justify-self: start; margin-left: clamp(24px, 12vw, 160px); }
+  h1 { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -0.03em; line-height: 0.98; }
   h1:focus { outline: none; }
   .lead { margin: 0; color: var(--paper-dim); font-size: 15px; }
   .dots { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }

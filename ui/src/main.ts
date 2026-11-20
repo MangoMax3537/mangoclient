@@ -9,3 +9,8 @@ try {
 } catch { /* storage unavailable */ }
 
 mount(App, { target: document.getElementById('app')! });
+
+// Dev only: lets the browser console and the visual checks jump to any state (tree-shaken from production builds).
+if (import.meta.env.DEV) {
+  void import('./lib/stores.svelte').then((m) => { (window as unknown as { __dev: unknown }).__dev = m; });
+}

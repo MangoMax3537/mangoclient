@@ -50,18 +50,18 @@ describe('mockApi part 2', () => {
 
   it('search pages through 40+ mod hits and filters', async () => {
     const { api } = await setup();
-    const base = { query: '', projectType: 'mod' as const, sort: 'downloads' as const, limit: 20 };
-    const p1 = await settle(api.modrinthSearch({ params: { ...base, offset: 0 } }), 300);
-    const p2 = await settle(api.modrinthSearch({ params: { ...base, offset: 20 } }), 300);
-    const p3 = await settle(api.modrinthSearch({ params: { ...base, offset: 40 } }), 300);
+    const base = { provider: 'modrinth' as const, query: '', projectType: 'mod' as const, sort: 'downloads' as const, limit: 20 };
+    const p1 = await settle(api.searchProjects({ params: { ...base, offset: 0 } }), 300);
+    const p2 = await settle(api.searchProjects({ params: { ...base, offset: 20 } }), 300);
+    const p3 = await settle(api.searchProjects({ params: { ...base, offset: 40 } }), 300);
     expect(p1.total).toBeGreaterThanOrEqual(40);
     expect(p1.hits).toHaveLength(20);
     expect(p2.hits).toHaveLength(20);
     expect(p1.hits[0].downloads).toBeGreaterThanOrEqual(p1.hits[1].downloads);
     expect(new Set([...p1.hits, ...p2.hits, ...p3.hits].map((h) => h.projectId)).size).toBe(p1.hits.length + p2.hits.length + p3.hits.length);
-    const q = await settle(api.modrinthSearch({ params: { ...base, query: 'sodium', offset: 0 } }), 300);
+    const q = await settle(api.searchProjects({ params: { ...base, query: 'sodium', offset: 0 } }), 300);
     expect(q.hits.every((h) => /sodium/i.test(`${h.title} ${h.description}`))).toBe(true);
-    const sh = await settle(api.modrinthSearch({ params: { ...base, projectType: 'shader', offset: 0 } }), 300);
+    const sh = await settle(api.searchProjects({ params: { ...base, projectType: 'shader', offset: 0 } }), 300);
     expect(sh.hits.every((h) => h.type === 'shader')).toBe(true);
     expect(sh.hits[0].installedIn.length).toBeGreaterThan(0);
   });
@@ -70,22 +70,23 @@ describe('mockApi part 2', () => {
     const { api, iron, vanilla } = await setup();
     const ev: ApiEvents['install:progress'][] = [];
     await api.listen('install:progress', (e) => ev.push(e));
-    const p = api.modrinthInstall({ profileId: iron, projectId: 'create-fabric' });
-    await vi.advanceTimersByTimeAsync(200);
+    const p = api.installApply({ provider: 'modrinth', profileId: iron, projectId: 'create-fabric', include: [] });
+    await vi.advanceTimersByTimeAsync(300);
     expect(ev.length).toBeGreaterThan(0);
-    expect(ev.length).toBeLessThan(5);
+    expect(ev.length).toBeLessThan(4);
     const items = await settle(p, 2000);
-    expect(ev.at(-1)).toMatchObject({ profileId: iron, projectId: 'create-fabric', done: 5, total: 5 });
+    expect(ev.at(-1)).toMatchObject({ profileId: iron, projectId: 'create-fabric' });
+    expect(ev.at(-1)?.done).toBe(ev.at(-1)?.total);
     expect(items).toHaveLength(39);
     expect(items.find((i) => i.projectId === 'create-fabric')?.enabled).toBe(true);
-    const v = await settle(api.modrinthInstall({ profileId: vanilla, projectId: 'create-fabric' }), 2000);
+    const v = await settle(api.installApply({ provider: 'modrinth', profileId: vanilla, projectId: 'create-fabric', include: [] }), 2000);
     expect(v.map((i) => i.projectId)).toEqual(expect.arrayContaining(['create-fabric', 'fabric-api']));
     expect(v.find((i) => i.projectId === 'fabric-api')?.dependency).toBe(true);
   });
 
   it('modpack install creates a profile', async () => {
     const { api } = await setup();
-    const p = await settle(api.modrinthInstallModpack({ projectId: 'fabulously-optimized' }), 3000);
+    const p = await settle(api.modpackInstall({ provider: 'modrinth', projectId: 'fabulously-optimized' }), 3000);
     expect(p.name).toBe('Fabulously Optimized');
     expect((await api.appState()).profiles.some((x) => x.id === p.id)).toBe(true);
     expect((await settle(api.contentList({ profileId: p.id }), 200)).length).toBeGreaterThan(0);
@@ -93,7 +94,7 @@ describe('mockApi part 2', () => {
 
   it('versions mark compatibility per profile', async () => {
     const { api, iron } = await setup();
-    const v = await settle(api.modrinthVersions({ projectId: 'sodium', profileId: iron }), 300);
+    const v = await settle(api.projectVersions({ provider: 'modrinth', projectId: 'sodium', profileId: iron }), 300);
     expect(v.some((x) => x.compatible)).toBe(true);
     expect(v.some((x) => !x.compatible)).toBe(true);
   });

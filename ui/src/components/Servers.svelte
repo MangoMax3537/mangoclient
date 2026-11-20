@@ -5,6 +5,8 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import SealCheckIcon from 'phosphor-svelte/lib/SealCheckIcon';
   import Tile from './Tile.svelte';
+  import EmptyState from './EmptyState.svelte';
+  import NoAccountHint from './NoAccountHint.svelte';
   import { stripMotd } from '../lib/format';
   import { actions, app, isBusy, nav, selectedProfile, servers, t } from '../lib/stores.svelte';
   import type { ServerEntry } from '../lib/types';
@@ -27,7 +29,7 @@
 
 <div class="sv">
   <header>
-    <div><h1>{t('nav.servers')}</h1><div class="hint">{t('servers.hint')}</div></div>
+    <div><h1 class="display">{t('nav.servers')}</h1><div class="hint">{t('servers.hint')}</div></div>
     <div class="ctrl">
       <label class="f"><span class="hint">{t('servers.joinWith')}</span>
         <select class="field" bind:value={profileId}>{#each app.profiles as p (p.id)}<option value={p.id}>{p.name} ({p.mcVersion})</option>{/each}</select>
@@ -38,10 +40,14 @@
     </div>
   </header>
 
+  {#if !app.accounts.length}<NoAccountHint />{/if}
+
   {#if !servers.loaded}
     <ul class="grid">{#each Array(6) as _, i (i)}<li class="card sk"><span class="img"></span><span class="b"></span></li>{/each}</ul>
   {:else if sorted.length === 0}
-    <p class="hint">{t('servers.empty')}</p>
+    <EmptyState title={t('servers.emptyTitle')} hint={t('servers.empty')}>
+      <button class="btn" type="button" onclick={() => actions.loadServers(true)}><ArrowsClockwiseIcon weight="bold" size={16} aria-hidden="true" />{t('servers.refresh')}</button>
+    </EmptyState>
   {:else}
     <ul class="grid">
       {#each sorted as s (s.id)}
@@ -65,7 +71,7 @@
               {:else if st}<span>{t('servers.offline')}</span>{:else}<span>&hellip;</span>{/if}
             </div>
           </div>
-          <button class="btn accent join" type="button" disabled={!prof || (prof ? isBusy(prof.id) : true) || !app.accounts.length} onclick={() => join(s)}>
+          <button class="btn accent join" type="button" disabled={!prof || (prof ? isBusy(prof.id) : true) || !app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : prof && isBusy(prof.id) ? t('servers.busy') : ''} onclick={() => join(s)}>
             <PlayIcon weight="bold" size={14} aria-hidden="true" />{t('servers.join')}
           </button>
         </li>
@@ -75,9 +81,9 @@
 </div>
 
 <style>
-  .sv { height: 100%; overflow: auto; padding: 18px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .sv { height: 100%; overflow: auto; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-  h1 { font-size: 34px; }
+  h1 { font-size: var(--fs-3xl); }
   .ctrl { display: flex; gap: 10px; align-items: flex-end; }
   .f { display: grid; gap: 2px; font-size: 12px; }
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }

@@ -1,7 +1,6 @@
 <script lang="ts">
   import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
   import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
-  import CompassIcon from 'phosphor-svelte/lib/CompassIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
   import ArrowCircleUpIcon from 'phosphor-svelte/lib/ArrowCircleUpIcon';
   import LinkIcon from 'phosphor-svelte/lib/LinkIcon';
@@ -9,8 +8,11 @@
   import Seg from '../Seg.svelte';
   import VirtualList from '../VirtualList.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
+  import EmptyState from '../EmptyState.svelte';
+  import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import type { Key } from '../../lib/i18n';
-  import { contentRev, errorText, getApi, installs, openDiscover, t, toast, tp } from '../../lib/stores.svelte';
+  import { providerLabel } from '../../lib/install';
+  import { contentRev, errorText, getApi, installs, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
   import type { ContentItem, ContentType, ProfileView, UpdateInfo } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -23,6 +25,7 @@
   let pending = $state<Record<string, boolean>>({});
   let confirmItem = $state<ContentItem | null>(null);
   let blocked = $state<{ item: ContentItem; dependents: string[] } | null>(null);
+  let confirmOff = $state<ContentItem | null>(null);
   let working = $state(false);
   let loadError = $state('');
 
@@ -80,14 +83,22 @@
     if (it.requiredBy.length) uninstall(it); // the backend answers with the blocking dependents
     else confirmItem = it;
   }
-  async function update(it: ContentItem) {
+  /** Single update: straight to the dependency dialog for this instance (picker skipped), showing what the new version needs. */
+  function update(it: ContentItem) {
     const info = updateInfos.find((u) => u.projectId === it.projectId);
-    try {
-      items = await getApi().modrinthInstall({ profileId: profile.id, projectId: it.projectId, versionId: info?.versionId });
-      toast(t('content.updated', { name: it.title }), 'ok');
-    } catch (e) { toast(errorText(e), 'error'); }
+    if (!it.provider) return;
+    startInstall({
+      kind: 'content', update: true, scopeProfileId: profile.id, versionId: info?.versionId,
+      project: { provider: it.provider, projectId: it.projectId, title: it.title, type: it.type, iconUrl: it.iconUrl },
+    });
   }
-  async function updateAll() { for (const it of [...updatable]) await update(it); }
+  /** Update all: first a preview of versions and new dependencies, nothing is applied before the confirmation. */
+  function updateAll() { startInstall({ kind: 'updates', profileId: profile.id, infos: updateInfos.filter((u) => u.provider) }); }
+  /** Disabling something other content needs cascades; say so before it happens. */
+  function askToggle(it: ContentItem, enabled: boolean) {
+    const live = it.requiredBy.filter((id) => items?.find((i) => i.projectId === id)?.enabled);
+    if (!enabled && live.length) confirmOff = it; else toggle(it, enabled);
+  }
   async function openFolder() {
     try { toast(await getApi().contentOpenFolder({ profileId: profile.id, type: filter === 'all' ? 'mod' : filter }), 'info'); } catch (e) { toast(errorText(e), 'error'); }
   }
@@ -103,14 +114,14 @@
       <input class="field" type="search" placeholder={t('content.search')} bind:value={query} />
     </label>
     <button class="btn" type="button" onclick={openFolder}><FolderOpenIcon weight="bold" size={16} aria-hidden="true" />{t('content.openFolder')}</button>
-    <button class="btn accent" type="button" onclick={() => openDiscover(profile.id, browseType)}><CompassIcon weight="bold" size={16} aria-hidden="true" />{t('content.browse')}</button>
+    <button class="btn accent" type="button" onclick={() => openDiscover(profile.id, browseType)}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('content.add')}</button>
   </div>
 
   {#if updatable.length}
     <div class="note" role="status">
       <ArrowCircleUpIcon weight="bold" size={16} aria-hidden="true" />
       <span>{tp('content.updatesAvailable', updatable.length)}</span>
-      <button class="btn" type="button" onclick={updateAll}>{t('content.updateAll')}</button>
+      <button class="btn" type="button" disabled={!updateInfos.length} onclick={updateAll}>{t('content.updateAll')}</button>
     </div>
   {/if}
 
@@ -118,8 +129,14 @@
     <ul class="skel" aria-label={t('common.loading')}>{#each Array(8) as _, i (i)}<li><span class="img"></span><span class="bar1"></span></li>{/each}</ul>
   {:else if loadError}
     <p class="err">{loadError}</p>
+  {:else if items.length === 0}
+    <EmptyState title={t('content.emptyTitle')} hint={t('content.empty')}>
+      <button class="btn accent" type="button" onclick={() => openDiscover(profile.id, browseType)}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('content.add')}</button>
+    </EmptyState>
   {:else if shown.length === 0}
-    <p class="hint empty">{items.length === 0 ? t('content.empty') : t('content.noMatch')}</p>
+    <EmptyState title={t('content.noMatch')} hint={t('library.emptyHint')}>
+      <button class="btn" type="button" onclick={() => { query = ''; filter = 'all'; }}>{t('library.clearSearch')}</button>
+    </EmptyState>
   {:else}
     <div class="list">
       <VirtualList items={shown} rowHeight={62} key={(i) => i.projectId} label={t('profile.tab.content')}>
@@ -133,7 +150,7 @@
                 <span class="ver mono">{it.versionNumber ?? '?'}</span>
                 <span class="tag">{t(`content.type.${it.type}` as Key)}</span>
                 {#if it.dependency}<span class="tag dep">{t('content.dependency')}</span>{/if}
-                {#if it.local}<span class="tag">{t('content.local')}</span>{/if}
+                {#if it.provider}<span class="tag prov">{providerLabel(it.provider)}</span>{:else}<span class="tag">{t('content.local')}</span>{/if}
               </div>
               <div class="l2">
                 {#if it.requiredBy.length}
@@ -152,7 +169,7 @@
                 <ArrowCircleUpIcon weight="bold" size={14} aria-hidden="true" />{inst ? `${Math.round((inst.done / inst.total) * 100)}%` : it.updateAvailable}
               </button>
             {:else}<span></span>{/if}
-            <span class="switch"><input type="checkbox" checked={it.enabled} disabled={pending[it.projectId]} aria-label="{t('content.enabled')}: {it.title}" onchange={(e) => toggle(it, e.currentTarget.checked)} /><span></span></span>
+            <span class="switch"><input type="checkbox" checked={it.enabled} disabled={pending[it.projectId]} aria-label="{t('content.enabled')}: {it.title}" onchange={(e) => { const on = e.currentTarget.checked; if (!on && it.requiredBy.length) { e.currentTarget.checked = true; } askToggle(it, on); }} /><span></span></span>
             <button class="btn ghost ic" type="button" aria-label="{t('content.uninstall')}: {it.title}" title={t('content.uninstall')} onclick={() => askUninstall(it)}><TrashIcon weight="bold" size={16} aria-hidden="true" /></button>
           </div>
         {/snippet}
@@ -162,8 +179,12 @@
 </div>
 
 {#if confirmItem}
-  <ConfirmDialog title={t('content.uninstallTitle', { name: confirmItem.title })} body={t('content.uninstallBody', { file: confirmItem.filename })} confirmLabel={t('content.uninstall')} danger busy={working}
+  <ConfirmDialog title={t('content.uninstallTitle', { name: confirmItem.title })} body={t('content.uninstallBody', { file: confirmItem.filename })} facts={[{ label: t('col.version'), value: confirmItem.versionNumber ?? '?' }, { label: t('content.source'), value: confirmItem.provider ? providerLabel(confirmItem.provider) : t('content.local') }]} warn={confirmItem.dependency ? t('content.uninstallDepWarn') : ''} confirmLabel={t('content.uninstall')} danger busy={working}
     onconfirm={() => confirmItem && uninstall(confirmItem)} oncancel={() => (confirmItem = null)} />
+{/if}
+{#if confirmOff}
+  <ConfirmDialog title={t('content.disableTitle', { name: confirmOff.title })} body={t('content.disableBody')} items={confirmOff.requiredBy.map(title)} confirmLabel={t('content.disable')}
+    onconfirm={() => { const it = confirmOff; confirmOff = null; if (it) toggle(it, false); }} oncancel={() => (confirmOff = null)} />
 {/if}
 {#if blocked}
   <ConfirmDialog infoOnly title={t('content.blockedTitle', { name: blocked.item.title })} body={t('content.blockedBody')} items={blocked.dependents.map(title)} confirmLabel="" onconfirm={() => {}} oncancel={() => (blocked = null)} />
@@ -186,6 +207,7 @@
   .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ver { color: var(--paper-mute); font-size: 12.5px; white-space: nowrap; }
   .tag { font-size: 11.5px; padding: 1px 6px; border-radius: var(--r-s); background: var(--ink-4); color: var(--paper-dim); white-space: nowrap; }
+  .tag.prov { border: 1px solid var(--line); background: transparent; }
   .tag.dep { background: rgba(111, 168, 214, 0.16); color: #9cc4e6; }
   .l2 { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--paper-mute); font-size: 12.5px; overflow: hidden; }
   .rb { color: var(--paper-mute); }
@@ -194,7 +216,6 @@
   .upd { height: 28px; padding: 0 10px; border-color: var(--mango); color: var(--mango); font-size: 13px; }
   .ic { width: 34px; height: 34px; padding: 0; justify-content: center; }
   .ic:hover:not(:disabled) { color: var(--tomato); }
-  .empty { padding: 24px 4px; }
   .skel { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
   .skel li { display: flex; gap: 12px; align-items: center; height: 62px; }
   .skel .img, .skel .bar1 { background: var(--ink-2); border-radius: var(--r-m); animation: sh 1.4s ease-in-out infinite; }

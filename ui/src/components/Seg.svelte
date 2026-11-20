@@ -1,13 +1,16 @@
 <script lang="ts">
-  interface Opt { value: string; label: string; count?: number }
+  interface Opt { value: string; label: string; count?: number; /** Not selectable: stays visible, dark, with this text as tooltip and accessible description. */ disabledReason?: string }
   interface Props { options: Opt[]; value: string; label: string; onchange: (v: string) => void; role?: 'radiogroup' | 'tablist'; idPrefix?: string }
+  import { tip } from '../lib/tooltip';
   let { options, value, label, onchange, role = 'radiogroup', idPrefix = 'seg' }: Props = $props();
 
   function key(e: KeyboardEvent, i: number) {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!d) return;
     e.preventDefault();
-    const n = (i + d + options.length) % options.length;
+    let n = i;
+    for (let k = 0; k < options.length; k++) { n = (n + d + options.length) % options.length; if (!options[n].disabledReason) break; }
+    if (options[n].disabledReason) return;
     onchange(options[n].value);
     queueMicrotask(() => document.getElementById(`${idPrefix}-${options[n].value}`)?.focus());
   }
@@ -17,10 +20,10 @@
   {#each options as o, i (o.value)}
     {@const on = o.value === value}
     <button
-      id="{idPrefix}-{o.value}" type="button" class:on tabindex={on ? 0 : -1}
+      id="{idPrefix}-{o.value}" type="button" class:on class:off={!!o.disabledReason} tabindex={on ? 0 : -1} aria-disabled={o.disabledReason ? 'true' : undefined} use:tip={o.disabledReason ? { text: o.disabledReason, side: 'top' } : null}
       role={role === 'tablist' ? 'tab' : 'radio'} aria-selected={role === 'tablist' ? on : undefined} aria-checked={role === 'radiogroup' ? on : undefined}
-      onclick={() => onchange(o.value)} onkeydown={(e) => key(e, i)}
-    >{o.label}{#if o.count !== undefined}<span class="c mono">{o.count}</span>{/if}</button>
+      onclick={() => { if (!o.disabledReason) onchange(o.value); }} onkeydown={(e) => key(e, i)}
+    >{o.label}{#if o.disabledReason}<span class="sr-only">: {o.disabledReason}</span>{/if}{#if o.count !== undefined}<span class="c mono">{o.count}</span>{/if}</button>
   {/each}
 </div>
 
@@ -29,6 +32,8 @@
   button { position: relative; height: 34px; padding: 0 14px; color: var(--paper-dim); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border-right: 1px solid var(--line-soft); transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
   button:last-child { border-right: 0; }
   button:hover { color: var(--paper); background: var(--ink-3); }
+  button.off { color: var(--paper-mute); opacity: 0.55; cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
+  button.off:hover { color: var(--paper-mute); background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.on { background: var(--ink-4); color: var(--paper); }
   button.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--accent-fill); }
   button:focus-visible { outline-offset: -3px; border-radius: 0; }

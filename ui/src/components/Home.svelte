@@ -12,6 +12,7 @@
   import HeroArt from './HeroArt.svelte';
   import Spark from './Spark.svelte';
   import EmptyState from './EmptyState.svelte';
+  import NoAccountHint from './NoAccountHint.svelte';
   import { fmtDuration, fmtRam, fmtRelative } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
@@ -72,6 +73,7 @@
         <div class="actions">
           <PlayButton mode={running ? 'stop' : launching ? 'busy' : 'play'} {label} progress={prog} onclick={toggle} disabled={!app.accounts.length && !busy} />
           {#if launching}<button class="btn text" type="button" onclick={toggle}>{t('home.stop')}</button>{/if}
+          {#if !app.accounts.length && !busy}<NoAccountHint />{/if}
           <ProfileMenu currentId={p.id} disabled={busy} />
           <button class="btn text" type="button" onclick={() => openProfile(p.id)}><SlidersIcon weight="bold" size={16} aria-hidden="true" />{t('home.openProfile')}</button>
         </div>

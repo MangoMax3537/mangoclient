@@ -2,9 +2,11 @@
   import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import BroomIcon from 'phosphor-svelte/lib/BroomIcon';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import Seg from './Seg.svelte';
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
-  import { actions, anyGameActive, app, errorText, getApi, lang, t, toast, updates } from '../lib/stores.svelte';
+  import { sourceOptions } from '../lib/install';
+  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, loadProviders, providers, t, theme, toast, updates, type ThemeMode } from '../lib/stores.svelte';
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
@@ -23,6 +25,20 @@
     catch (e) { toast(errorText(e), 'error'); }
     clearing = null; confirmKey = null;
   }
+  const themeOpts = $derived((['system', 'dark', 'light'] as ThemeMode[]).map((m) => ({ value: m, label: t(`settings.theme.${m}` as Key) })));
+  let cfKey = $state('');
+  let cfErr = $state(false);
+  const cf = $derived(sourceOptions(providers.status).find((o) => o.provider === 'curseforge'));
+  $effect(() => { void loadProviders(); });
+  async function saveKey(clear = false) {
+    const k = clear ? '' : cfKey.trim();
+    if (!clear && !/^[A-Za-z0-9$./_+=-]{16,128}$/.test(k)) { cfErr = true; return; }
+    cfErr = false;
+    await actions.setConfig({ curseforgeApiKey: clear ? null : k });
+    cfKey = '';
+    await loadProviders();
+    toast(t(clear ? 'settings.cf.cleared' : 'settings.cf.saved'), 'ok');
+  }
   const us = $derived(updates.status);
   const usText = $derived(
     us.state === 'checking' ? t('update.status.checking')
@@ -40,8 +56,16 @@
 </script>
 
 {#if cfg}
-  <div class="settings">
-    <h1>{t('settings.title')}</h1>
+  <div class="scroller"><div class="settings">
+    <h1 class="display">{t('settings.title')}</h1>
+
+    <section aria-labelledby="s-look">
+      <h2 id="s-look" class="eyebrow">{t('settings.group.appearance')}</h2>
+      <div class="row">
+        <div class="txt"><span id="theme-l">{t('settings.theme')}</span><div class="hint">{t('settings.theme.hint')}</div></div>
+        <Seg options={themeOpts} value={theme.mode} label={t('settings.theme')} idPrefix="theme" onchange={(v) => applyTheme(v as ThemeMode)} />
+      </div>
+    </section>
 
     <section aria-labelledby="s-launcher">
       <h2 id="s-launcher" class="eyebrow">{t('settings.group.general')}</h2>
@@ -62,6 +86,21 @@
       <div class="row">
         <div class="txt"><label for="tele">{t('settings.telemetry')}</label><div class="hint">{t('settings.telemetryHint')}</div></div>
         <span class="switch"><input id="tele" type="checkbox" checked={cfg.telemetry} onchange={(e) => actions.setConfig({ telemetry: e.currentTarget.checked })} /><span></span></span>
+      </div>
+    </section>
+
+    <section aria-labelledby="s-src">
+      <h2 id="s-src" class="eyebrow">{t('settings.group.sources')}</h2>
+      <div class="row col">
+        <div class="txt"><label for="cfkey">{t('settings.cf.key')}</label><div class="hint">{t('settings.cf.hint')}</div></div>
+        <div class="keyrow">
+          <input id="cfkey" class="field mono" type="password" bind:value={cfKey} placeholder={t('settings.cf.placeholder')} autocomplete="off" spellcheck="false"
+            aria-invalid={cfErr} aria-describedby={cfErr ? 'cf-err' : undefined} onkeydown={(e) => e.key === 'Enter' && saveKey()} />
+          <button class="btn accent" type="button" disabled={!cfKey.trim()} onclick={() => saveKey()}>{t('settings.cf.save')}</button>
+          <button class="btn" type="button" disabled={cf?.reason === 'no_api_key'} onclick={() => saveKey(true)}>{t('settings.cf.clear')}</button>
+        </div>
+        {#if cfErr}<div id="cf-err" class="err" role="alert">{t('settings.cf.invalid')}</div>{/if}
+        <div class="hint" role="status"><span class="sq" class:ok={cf && !cf.disabled} class:warn={cf?.disabled}></span> {cf?.disabled ? t(`settings.cf.status.${cf.reason ?? 'offline'}` as Key) : t('settings.cf.status.ok')}</div>
       </div>
     </section>
 
@@ -119,7 +158,7 @@
     </section>
 
     <footer class="hint mono">{t('settings.version')} {app.version} &middot; {t('settings.dataDir')}: {app.rootDir}</footer>
-  </div>
+  </div></div>
 {/if}
 
 {#if confirmKey}
@@ -128,8 +167,11 @@
 {/if}
 
 <style>
-  .settings { padding: 20px 28px 32px; max-width: 760px; display: grid; gap: 24px; height: 100%; overflow: auto; align-content: start; }
-  h1 { font-size: 34px; }
+  .scroller { height: 100%; overflow: auto; }
+  .settings { padding: var(--s-5) 32px 40px; max-width: 800px; display: grid; gap: 24px; align-content: start; }
+  h1 { font-size: var(--fs-3xl); }
+  .keyrow { display: flex; gap: var(--s-2); }
+  .keyrow .field { flex: 1; }
   section { display: grid; border-top: 1px solid var(--line); }
   section h2 { padding: 14px 0 6px; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }

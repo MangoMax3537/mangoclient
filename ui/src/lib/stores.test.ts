@@ -33,7 +33,7 @@ describe('stores', () => {
     const api = createMockApi();
     await init(api);
     expect(app.ready).toBe(true);
-    expect(app.profiles).toHaveLength(4);
+    expect(app.profiles).toHaveLength(6);
     const id = app.profiles[0].id;
     void api.gameLaunch({ profileId: id });
     await vi.advanceTimersByTimeAsync(6500);

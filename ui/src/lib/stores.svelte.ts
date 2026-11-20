@@ -1,9 +1,10 @@
 import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
 import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from './auth';
+import { runSteps, type RunStep } from './install';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, PublicAccount,
-  ServerEntry, ServerStatus, UpdateStatus,
+  AppState, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
+  ProviderStatus, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
 export const CONSOLE_CAP = 800;
@@ -36,6 +37,8 @@ export type View = 'home' | 'library' | 'discover' | 'servers' | 'stats' | 'sett
 export type ProfileTab = 'overview' | 'content' | 'media' | 'logs' | 'settings';
 export const nav = $state({
   view: 'home' as View, newProfile: false, accounts: false,
+  /** "Create new instance for this": New profile opens with a compatible loader/version and starts the install afterwards. */
+  newProfilePrefill: null as { name?: string; loader?: ProfileView['loader']; mcVersion?: string; then?: FlowProject } | null,
   /** Profile page target and tab. */
   profileId: null as string | null, profileTab: 'overview' as ProfileTab,
   /** Discover scope: the profile content is installed into (null = no scope), and the initial project type. */
@@ -46,8 +49,68 @@ export function openProfile(id: string, tab: ProfileTab = 'overview'): void {
   nav.profileId = id; nav.profileTab = tab; nav.view = 'profile';
 }
 export function openDiscover(profileId: string | null = null, type: ProjectType = 'mod'): void {
-  nav.discoverProfile = profileId ?? selectedProfile()?.id ?? null;
+  nav.discoverProfile = profileId;
   nav.discoverType = type; nav.view = 'discover';
+}
+
+/* ---- install flow (picker, dependency dialog, modpack dialog, update preview) ---- */
+export interface FlowProject { provider: Provider; projectId: string; title: string; type: ProjectType; iconUrl: string | null; loaders?: string[]; gameVersions?: string[] }
+export type FlowRequest =
+  | { kind: 'content'; project: FlowProject; versionId?: string; /** Skips the instance picker. */ scopeProfileId?: string | null; update?: boolean }
+  | { kind: 'modpack'; project: FlowProject; versionId?: string }
+  | { kind: 'updates'; profileId: string; infos: UpdateInfo[] }
+  | { kind: 'run'; runId: number };
+export const flow = $state<{ req: FlowRequest | null }>({ req: null });
+export const startInstall = (req: FlowRequest): void => { flow.req = req; };
+export const closeFlow = (): void => {
+  const r = flow.req;
+  if (r?.kind === 'run') { const run = runs.find((x) => x.id === r.runId); if (run) run.watching = false; }
+  flow.req = null;
+};
+
+const LAST_KEY = 'mango.lastInstallProfile';
+export const prefs = $state({ lastInstallProfile: null as string | null });
+try { prefs.lastInstallProfile = globalThis.localStorage?.getItem(LAST_KEY) ?? null; } catch { /* storage may be unavailable */ }
+export function rememberInstallProfile(id: string): void {
+  prefs.lastInstallProfile = id;
+  try { globalThis.localStorage?.setItem(LAST_KEY, id); } catch { /* ignore */ }
+}
+
+/** A running or finished install job list. Lives in the store so it survives closing the dialog (background install). */
+export interface RunJob extends RunStep { status: 'queued' | 'running' | 'done' | 'error'; error?: string }
+export interface InstallRun {
+  id: number; kind: 'content' | 'update' | 'modpack'; title: string; iconUrl: string | null; jobs: RunJob[]; finished: boolean;
+  /** The run dialog is open (controls whether finishing navigates). */
+  watching: boolean;
+  /** Modpack result: the new profile. */
+  profileId?: string;
+}
+export const runs = $state<InstallRun[]>([]);
+let runId = 0;
+
+/** Content sources (providers_status). `null` until the first answer. */
+export const providers = $state({ status: null as ProviderStatus[] | null });
+export async function loadProviders(): Promise<void> {
+  try { providers.status = await currentApi.providersStatus(); } catch { providers.status = null; }
+}
+
+/* ---- theme ---- */
+export type ThemeMode = 'system' | 'dark' | 'light';
+/** Same key as the pre-paint snippet in main.ts. Absent = follow the system. */
+const THEME_KEY = 'mango-theme';
+export const theme = $state({ mode: 'system' as ThemeMode });
+export function applyTheme(mode: ThemeMode): void {
+  theme.mode = mode;
+  if (typeof document !== 'undefined') {
+    if (mode === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', mode);
+  }
+  try { if (mode === 'system') globalThis.localStorage?.removeItem(THEME_KEY); else globalThis.localStorage?.setItem(THEME_KEY, mode); } catch { /* ignore */ }
+}
+export function initTheme(): void {
+  let m: string | null = null;
+  try { m = globalThis.localStorage?.getItem(THEME_KEY) ?? null; } catch { /* ignore */ }
+  applyTheme(m === 'dark' || m === 'light' ? m : 'system');
 }
 
 /* ---- toasts ---- */
@@ -97,8 +160,9 @@ export const t = (key: Key, vars?: Vars): string => translate(lang(), key, vars)
 export const tp = (key: PluralKey, n: number, vars?: Vars): string => plural(lang(), key, n, vars);
 export function errorText(e: unknown): string {
   const code = toAppError(e).code;
-  const key = `err.${code}`;
-  return hasKey(lang(), key) ? translate(lang(), key) : translate(lang(), 'err.unknown');
+  // exact code, then its family (curseforge.unauthorized -> err.curseforge, net.request -> err.net)
+  for (const key of [`err.${code}`, `err.${code.split('.')[0]}`]) if (hasKey(lang(), key)) return translate(lang(), key);
+  return translate(lang(), 'err.unknown');
 }
 
 export const selectedProfile = (): ProfileView | null =>
@@ -200,15 +264,63 @@ export function applyPinged(s: ServerStatus): void {
 
 export const getApi = (): Api => currentApi;
 
+/** Starts sequential install_apply steps in the background; progress is read from `installs`, state from the returned run. */
+export function startContentRun(kind: 'content' | 'update', title: string, iconUrl: string | null, steps: RunStep[], watching = true): InstallRun {
+  const run: InstallRun = { id: ++runId, kind, title, iconUrl, jobs: steps.map((s) => ({ ...s, status: 'queued' as const })), finished: false, watching };
+  runs.push(run);
+  const live = runs[runs.length - 1];
+  void runSteps(currentApi, steps, {
+    onStart: (i) => { live.jobs[i].status = 'running'; },
+    onResult: (i, r) => { live.jobs[i].status = r.ok ? 'done' : 'error'; if (!r.ok) live.jobs[i].error = r.code; },
+  }).then(async (results) => {
+    live.finished = true;
+    for (const r of results) if (r.ok) contentRev[r.step.profileId] = (contentRev[r.step.profileId] ?? 0) + 1;
+    await refresh();
+    const ok = results.filter((r) => r.ok).length;
+    const bad = results.length - ok;
+    if (!bad) toast(kind === 'update' ? tp('flow.done.updated', ok, { name: title }) : tp('flow.done.installed', ok, { name: title }), 'ok');
+    else if (ok) toast(t('flow.done.partial', { ok, total: results.length, name: title }), 'error', 9000);
+    else toast(errorText({ code: results[0]?.code ?? 'unknown' }), 'error', 9000);
+  });
+  return live;
+}
+
+/** Creates a profile from a modpack in the background; resolves with the new profile (or null on failure). */
+export async function startModpackRun(
+  project: FlowProject, name: string, versionId: string | undefined, watching = true,
+): Promise<{ run: InstallRun; done: Promise<ProfileView | null> }> {
+  const step: RunStep = { profileId: '', provider: project.provider, projectId: project.projectId, versionId, include: [], title: name };
+  const run: InstallRun = { id: ++runId, kind: 'modpack', title: name, iconUrl: project.iconUrl, jobs: [{ ...step, status: 'running' as const }], finished: false, watching };
+  runs.push(run);
+  const live = runs[runs.length - 1];
+  const done = (async () => {
+    try {
+      const p = await currentApi.modpackInstall({ provider: project.provider, projectId: project.projectId, name, ...(versionId ? { versionId } : {}) });
+      live.jobs[0].status = 'done'; live.profileId = p.id; live.jobs[0].profileId = p.id;
+      await actions.addProfile(p);
+      live.finished = true;
+      toast(t('discover.packInstalled', { name: p.name }), 'ok');
+      if (live.watching) { flow.req = null; openProfile(p.id, 'content'); }
+      return p;
+    } catch (e) {
+      live.jobs[0].status = 'error'; live.jobs[0].error = toAppError(e).code; live.finished = true;
+      toast(errorText(e), 'error', 9000);
+      return null;
+    }
+  })();
+  return { run: live, done };
+}
+
 export function resetStores(): void {
   app.ready = false; app.config = null; app.profiles = []; app.accounts = []; app.error = null;
   for (const k of Object.keys(launches)) delete launches[k];
   for (const k of Object.keys(consoles)) delete consoles[k];
-  nav.view = 'home'; nav.newProfile = false; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
+  nav.view = 'home'; nav.newProfile = false; nav.newProfilePrefill = null; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
   nav.discoverProfile = null; nav.discoverType = 'mod';
   toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
+  runs.length = 0; flow.req = null; providers.status = null;
   updates.status = { state: 'idle' }; updates.overlay = false; updates.installing = false;
   auth.signingIn = false; auth.error = null; auth.relogin = null; auth.noticeDismissed = false;
   for (const k of Object.keys(auth.refreshing)) delete auth.refreshing[k];

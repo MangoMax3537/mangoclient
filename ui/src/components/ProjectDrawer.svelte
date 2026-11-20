@@ -8,6 +8,7 @@
   import { fmtCompact, fmtDate } from '../lib/format';
   import { markdownLite } from '../lib/markdown';
   import type { Key } from '../lib/i18n';
+  import { providerLabel } from '../lib/install';
   import { errorText, getApi, lang, t, toast } from '../lib/stores.svelte';
   import type { ContentItem, ProfileView, ProjectDetail, ProjectHit, ProjectVersion } from '../lib/types';
 
@@ -31,20 +32,20 @@
     let dead = false;
     detail = null; versions = null; shot = 0; failed = false;
     const api = getApi();
-    api.modrinthProject({ projectId: id }).then((d) => { if (!dead) detail = d; }, (e) => { if (!dead) { failed = true; toast(errorText(e), 'error'); } });
-    api.modrinthVersions({ projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }).then((v) => { if (!dead) versions = v; }, () => { if (!dead) versions = []; });
+    api.projectDetail({ provider: hit.provider, projectId: id }).then((d) => { if (!dead) detail = d; }, (e) => { if (!dead) { failed = true; toast(errorText(e), 'error'); } });
+    api.projectVersions({ provider: hit.provider, projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }).then((v) => { if (!dead) versions = v; }, () => { if (!dead) versions = []; });
     return () => { dead = true; };
   });
 
   const blocks = $derived(detail ? markdownLite(detail.body) : []);
-  const canInstall = $derived(hit.type === 'modpack' || !!scope);
+  const canInstall = true;
 </script>
 
 <Modal variant="drawer" title={hit.title} {onclose}>
   <div class="top">
     <Tile kind="mod" id={hit.projectId} src={hit.iconUrl} size={72} radius={10} />
     <div class="meta">
-      <div class="hint">{t('discover.by', { author: hit.author })}</div>
+      <div class="hint">{providerLabel(hit.provider)} &middot; {t('discover.by', { author: hit.author })}</div>
       <p class="d">{hit.description}</p>
       <div class="stats mono">
         <span><DownloadSimpleIcon weight="bold" size={14} aria-hidden="true" />{fmtCompact(hit.downloads, lang())}</span>
@@ -57,7 +58,7 @@
     <button class="btn accent" type="button" disabled={busy || !canInstall || (!!installed && !installed.updateAvailable && hit.type !== 'modpack')} onclick={() => oninstall()}>
       {busy ? `${t('discover.btn.installing')} ${progress}%` : installed ? (installed.updateAvailable ? t('discover.btn.update') : t('discover.btn.installed')) : hit.type === 'modpack' ? t('drawer.installPack') : t('discover.btn.install')}
     </button>
-    {#if hit.type !== 'modpack' && scope}<span class="hint">{t('discover.installingTo')} <b>{scope.name}</b></span>{/if}
+    {#if hit.type !== 'modpack' && scope}<span class="hint">{t('discover.installingTo')} <b>{scope.name}</b></span>{:else if hit.type !== 'modpack'}<span class="hint">{t('drawer.pickNext')}</span>{/if}
   </div>
 
   {#if detail}

@@ -4,10 +4,12 @@
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
+  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import EmptyState from '../EmptyState.svelte';
   import Modal from '../Modal.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
-  import { errorText, getApi, lang, t, toast, tp } from '../../lib/stores.svelte';
+  import { actions, app, errorText, getApi, isBusy, lang, t, toast, tp } from '../../lib/stores.svelte';
   import type { ProfileView, Screenshot } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -61,7 +63,9 @@
   {#if shots === null}
     <ul class="grid">{#each Array(8) as _, i (i)}<li class="sk"></li>{/each}</ul>
   {:else if shots.length === 0}
-    <p class="hint">{t('media.empty')}</p>
+    <EmptyState title={t('media.emptyTitle')} hint={t('media.empty')}>
+      <button class="btn accent" type="button" disabled={!app.accounts.length || isBusy(profile.id)} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
+    </EmptyState>
   {:else}
     <ul class="grid">
       {#each shots as s, i (s.name)}

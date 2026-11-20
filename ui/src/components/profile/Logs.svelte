@@ -3,11 +3,13 @@
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
+  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import EmptyState from '../EmptyState.svelte';
   import VirtualList from '../VirtualList.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import { fmtBytes, fmtRelative } from '../../lib/format';
   import { logLevel } from '../../lib/logs';
-  import { errorText, getApi, lang, t, toast } from '../../lib/stores.svelte';
+  import { actions, app, errorText, getApi, isBusy, lang, t, toast } from '../../lib/stores.svelte';
   import type { LogEntry, ProfileView } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -71,7 +73,9 @@
   {#if list === null}
     <p class="hint">{t('common.loading')}</p>
   {:else if list.length === 0}
-    <p class="hint">{t('logs.empty')}</p>
+    <EmptyState title={t('logs.emptyTitle')} hint={t('logs.empty')}>
+      <button class="btn accent" type="button" disabled={!app.accounts.length || isBusy(profile.id)} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
+    </EmptyState>
   {:else}
     <ul class="files" aria-label={t('profile.tab.logs')}>
       {#each list as l (l.id)}

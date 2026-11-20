@@ -7,7 +7,7 @@
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
   import { fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
-  import { actions, app, errorText, getApi, nav, t } from '../lib/stores.svelte';
+  import { actions, app, errorText, getApi, nav, startInstall, t } from '../lib/stores.svelte';
   import type { Loader, LoaderVersion, VersionManifest } from '../lib/types';
 
   const LOADERS: Loader[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'];
@@ -16,7 +16,8 @@
 
   let dlg: HTMLDialogElement | undefined = $state();
   let step = $state(0);
-  let name = $state('');
+  const prefill = nav.newProfilePrefill;
+  let name = $state(prefill?.name ?? '');
   let color = $state(COLORS[0]);
   let touched = $state(false);
   let manifest = $state<VersionManifest | null>(null);
@@ -24,7 +25,7 @@
   let q = $state('');
   let limit = $state(PAGE);
   let mcVersion = $state('');
-  let loader = $state<Loader>('vanilla');
+  let loader = $state<Loader>(prefill?.loader ?? 'vanilla');
   let loaderVersions = $state<LoaderVersion[]>([]);
   let loaderVersion = $state('');
   let loaderLoading = $state(false);
@@ -45,11 +46,11 @@
     dlg?.showModal();
     getApi().versionsManifest().then((m) => {
       manifest = m;
-      mcVersion = m.latest.release;
+      mcVersion = prefill?.mcVersion && m.versions.some((v) => v.id === prefill.mcVersion) ? prefill.mcVersion : m.latest.release;
     }).catch((e) => (error = errorText(e)));
   });
 
-  function close() { nav.newProfile = false; }
+  function close() { nav.newProfile = false; nav.newProfilePrefill = null; }
 
   let loadSeq = 0;
   async function loadLoader() {
@@ -76,11 +77,13 @@
   async function create() {
     creating = true; error = '';
     try {
-      await actions.createProfile(
+      const p = await actions.createProfile(
         { name: name.trim(), mcVersion, loader, loaderVersion: loader === 'vanilla' ? null : loaderVersion },
         { color, ram },
       );
       close();
+      // "Create new instance for this": continue with the dependency dialog for the new instance
+      if (prefill?.then) startInstall({ kind: 'content', project: prefill.then, scopeProfileId: p.id });
     } catch (e) { error = errorText(e); creating = false; }
   }
 </script>

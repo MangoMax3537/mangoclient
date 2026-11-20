@@ -12,6 +12,7 @@
   import Logs from './profile/Logs.svelte';
   import ProfileSettings from './profile/ProfileSettings.svelte';
   import HeroArt from './HeroArt.svelte';
+  import NoAccountHint from './NoAccountHint.svelte';
   import { fmtDuration, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { actions, app, isBusy, nav, t, type ProfileTab } from '../lib/stores.svelte';
@@ -49,7 +50,10 @@
               <li class="chip mono"><ClockIcon weight="bold" size={14} aria-hidden="true" />{fmtDuration(p.playTimeMs)}</li>
             </ul>
           </div>
-          <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
+          <div class="playcol">
+            <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
+            {#if !app.accounts.length && !busy}<NoAccountHint />{/if}
+          </div>
         </div>
       </div>
     </section>
@@ -81,6 +85,7 @@
   .hero.compact .back, .hero.compact .chips { display: none; }
   .hero.compact .inner { padding: 14px 20px 14px 28px; }
   .hero.compact h1 { font-size: 26px; }
+  .playcol { display: grid; gap: var(--s-2); justify-items: end; }
   .tabs { flex: none; }
   .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; }
 </style>

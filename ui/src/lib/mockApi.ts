@@ -20,6 +20,8 @@ export interface MockOptions {
   needsRelogin?: boolean;
   /** The seeded Microsoft account has a locked credential store. */
   locked?: boolean;
+  /** No CurseForge API key: providers_status reports it unavailable and every CurseForge command fails. */
+  noCurseforge?: boolean;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -29,7 +31,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -39,6 +41,7 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     noKeystore: q.has('mockNoKeystore'),
     needsRelogin: q.has('mockRelogin'),
     locked: q.has('mockLocked'),
+    noCurseforge: q.has('mockNoCurseforge'),
   };
 }
 
@@ -52,12 +55,16 @@ function seedProfiles(now: number): ProfileView[] {
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
-    { ...base, id: '8a4be9d0-2f6c-4f3e-8b0c-7d1e93a4c5f2', name: 'Vanilla Survival', mcVersion: '1.21.1', loader: 'vanilla', loaderVersion: null,
+    { ...base, id: '8a4be9d0-2f6c-4f3e-8b0c-7d1e93a4c5f2', name: 'Vanilla Survival', mcVersion: '1.21.4', loader: 'vanilla', loaderVersion: null,
       color: '#86b86b', lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
     { ...base, id: 'c27d11f4-91a8-4e22-b3a6-4c8f0e9d6b37', name: 'Bedwars Practice', mcVersion: '1.8.9', loader: 'forge', loaderVersion: '11.15.1.2318',
       color: '#ed665c', ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
     { ...base, id: 'e90a6b35-17c4-4d8f-a2e1-5b3c7f4d8a09', name: 'Shader Showcase', mcVersion: '1.20.6', loader: 'quilt', loaderVersion: '0.26.1',
       color: '#6fa8d6', ram: 8192, lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
+    { ...base, id: '1b9d4c68-6e0f-4a35-8c27-d3f5a7e91b40', name: 'Create Expedition', mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172',
+      color: '#d6c27a', ram: 8192, lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
+    { ...base, id: '6e2a85f1-0b7d-4d94-9a13-c48e2f6b7d05', name: 'Classic Forge 1.20.1', mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0',
+      color: '#e6a3b8', ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
   ];
 }
 
@@ -107,6 +114,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
   let accounts = seedAccounts(now, opts);
   config.selectedProfile = profiles[0].id;
   config.selectedAccount = accounts[0].uuid;
+  let cfOn = !opts.noCurseforge;
   const running = new Set<string>();
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
@@ -133,7 +141,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
 
   const part2 = createContentApi({
     now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; }, find,
-    gameActive: () => running.size > 0 || timers.size > 0,
+    gameActive: () => running.size > 0 || timers.size > 0, get curseforge() { return cfOn; },
   });
   const api: Api = {
     ...part2,
@@ -143,7 +151,12 @@ export function createMockApi(opts: MockOptions = {}): Api {
         totalRamMb: 16384, running: [...running], rootDir: '~/.mangoclient',
       };
     },
-    async configSet({ patch }) { Object.assign(config, patch); return { ...config }; },
+    async configSet({ patch }) {
+      const { curseforgeApiKey, ...rest } = patch;
+      Object.assign(config, rest);
+      if (curseforgeApiKey !== undefined) cfOn = !!curseforgeApiKey; // write-only, never returned
+      return { ...config };
+    },
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,

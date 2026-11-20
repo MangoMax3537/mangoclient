@@ -30,7 +30,7 @@
 
 <div class="st">
   <header>
-    <h1>{t('nav.stats')}</h1>
+    <h1 class="display">{t('nav.stats')}</h1>
     <Seg label={t('stats.range')} idPrefix="sr" value={range} onchange={(v) => (range = v)} options={RANGES.map((r) => ({ value: r, label: t('stats.days', { n: r }) }))} />
   </header>
 
@@ -82,9 +82,9 @@
 </div>
 
 <style>
-  .st { height: 100%; overflow: auto; padding: 18px 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+  .st { height: 100%; overflow: auto; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: 34px; }
+  h1 { font-size: var(--fs-3xl); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
   .tiles > div { padding: 12px 16px; background: var(--ink-1); border-right: 1px solid var(--line-soft); }
   .tiles > div:last-child { border-right: 0; }
@@ -98,7 +98,7 @@
   .bars { display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 50%; }
   .col { flex: 1; min-width: 0; display: flex; align-items: flex-end; }
   .col:hover { background: rgba(255, 173, 50, 0.07); }
-  .bar { width: 100%; background: var(--mango); border-radius: 2px 2px 0 0; min-height: 1px; }
+  .bar { width: 100%; background: var(--accent-fill); border-radius: 2px 2px 0 0; min-height: 1px; }
   .bar.zero { background: var(--ink-4); }
   .tip { grid-column: 2; font-size: 12.5px; color: var(--paper-dim); padding-top: 4px; }
   .xl { grid-column: 2; display: flex; justify-content: space-between; font-size: 12px; color: var(--paper-mute); }
@@ -108,7 +108,7 @@
   .nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nm .hint { font-size: 12px; }
   .meter { height: 8px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
-  .meter span { display: block; height: 100%; background: var(--mango); transform-origin: left; }
+  .meter span { display: block; height: 100%; background: var(--accent-fill); transform-origin: left; }
   .val, .pct { text-align: right; font-size: 13.5px; }
   .pct { color: var(--paper-mute); }
   @keyframes sh { 50% { opacity: 0.5; } }
