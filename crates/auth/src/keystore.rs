@@ -127,41 +127,68 @@ fn map_kr(e: keyring::Error) -> StoreError {
     }
 }
 
+/// Runs `f` on a fresh plain thread and waits for it.
+///
+/// The Secret Service backend of the `keyring` crate blocks on its own
+/// executor, which panics ("Cannot start a runtime from within a runtime") when
+/// it is reached from a thread that already drives a tokio runtime. Every
+/// keyring call goes through here, so it works from async code and from sync
+/// code alike. The calls are short, blocking the caller briefly is fine.
+#[cfg(feature = "keyring")]
+pub(crate) fn off_runtime<T, F>(f: F) -> Result<T, StoreError>
+where
+    T: Send,
+    F: FnOnce() -> Result<T, StoreError> + Send,
+{
+    std::thread::scope(|scope| {
+        scope
+            .spawn(f)
+            .join()
+            .unwrap_or_else(|_| Err(StoreError::Unavailable("keystore call failed".into())))
+    })
+}
+
+#[cfg(feature = "keyring")]
+fn load_or_create_in_keyring() -> Result<DeviceKey, StoreError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let entry =
+        keyring::Entry::new(KeyringDeviceKey::SERVICE, KeyringDeviceKey::USER).map_err(map_kr)?;
+    match entry.get_password() {
+        Ok(text) => {
+            let text = Zeroizing::new(text);
+            let mut raw = Zeroizing::new([0u8; KEY_LEN + 3]);
+            let n = STANDARD
+                .decode_slice(text.trim().as_bytes(), raw.as_mut_slice())
+                .map_err(|_| StoreError::Corrupt("device key".into()))?;
+            if n != KEY_LEN {
+                // Never overwrite an unreadable key: that would orphan
+                // every existing envelope.
+                return Err(StoreError::Corrupt("device key".into()));
+            }
+            let mut bytes = [0u8; KEY_LEN];
+            bytes.copy_from_slice(&raw[..KEY_LEN]);
+            let k = DeviceKey::from_bytes(bytes);
+            zeroize::Zeroize::zeroize(&mut bytes);
+            Ok(k)
+        }
+        Err(keyring::Error::NoEntry) => {
+            let k = DeviceKey::generate()?;
+            let text = Zeroizing::new(STANDARD.encode(k.as_bytes()));
+            entry.set_password(&text).map_err(map_kr)?;
+            Ok(k)
+        }
+        Err(e) => Err(map_kr(e)),
+    }
+}
+
 #[cfg(feature = "keyring")]
 impl DeviceKeyStore for KeyringDeviceKey {
     fn get_or_create(&self) -> Result<DeviceKey, StoreError> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
         let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(k) = cache.as_ref() {
             return Ok(k.clone());
         }
-        let entry = keyring::Entry::new(Self::SERVICE, Self::USER).map_err(map_kr)?;
-        let key = match entry.get_password() {
-            Ok(text) => {
-                let text = Zeroizing::new(text);
-                let mut raw = Zeroizing::new([0u8; KEY_LEN + 3]);
-                let n = STANDARD
-                    .decode_slice(text.trim().as_bytes(), raw.as_mut_slice())
-                    .map_err(|_| StoreError::Corrupt("device key".into()))?;
-                if n != KEY_LEN {
-                    // Never overwrite an unreadable key: that would orphan
-                    // every existing envelope.
-                    return Err(StoreError::Corrupt("device key".into()));
-                }
-                let mut bytes = [0u8; KEY_LEN];
-                bytes.copy_from_slice(&raw[..KEY_LEN]);
-                let k = DeviceKey::from_bytes(bytes);
-                zeroize::Zeroize::zeroize(&mut bytes);
-                k
-            }
-            Err(keyring::Error::NoEntry) => {
-                let k = DeviceKey::generate()?;
-                let text = Zeroizing::new(STANDARD.encode(k.as_bytes()));
-                entry.set_password(&text).map_err(map_kr)?;
-                k
-            }
-            Err(e) => return Err(map_kr(e)),
-        };
+        let key = off_runtime(load_or_create_in_keyring)?;
         *cache = Some(key.clone());
         Ok(key)
     }

@@ -29,18 +29,24 @@ fn map_err(e: keyring::Error) -> StoreError {
 #[cfg(feature = "keyring")]
 impl CredentialStore for KeyringStore {
     fn get(&self, key: &str) -> Result<Option<String>, StoreError> {
-        let entry = keyring::Entry::new(SERVICE, key).map_err(map_err)?;
-        match entry.get_password() {
-            Ok(v) => Ok(Some(v)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(map_err(e)),
-        }
+        let key = key.to_string();
+        crate::keystore::off_runtime(move || {
+            let entry = keyring::Entry::new(SERVICE, &key).map_err(map_err)?;
+            match entry.get_password() {
+                Ok(v) => Ok(Some(v)),
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(e) => Err(map_err(e)),
+            }
+        })
     }
 
     fn delete(&self, key: &str) -> Result<(), StoreError> {
-        match keyring::Entry::new(SERVICE, key).and_then(|e| e.delete_credential()) {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(map_err(e)),
-        }
+        let key = key.to_string();
+        crate::keystore::off_runtime(move || {
+            match keyring::Entry::new(SERVICE, &key).and_then(|e| e.delete_credential()) {
+                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+                Err(e) => Err(map_err(e)),
+            }
+        })
     }
 }

@@ -949,3 +949,22 @@ async fn upload_skin_sends_multipart_and_rejects_offline() {
         .unwrap_err();
     assert!(matches!(err, AuthError::SkinUpload(400)));
 }
+
+/// Regression: the Secret Service backend panics when it is called from a
+/// thread that drives a tokio runtime ("Cannot start a runtime from within a
+/// runtime"). Keyring calls must run on a plain thread without runtime context.
+#[cfg(feature = "keyring")]
+#[tokio::test]
+async fn keyring_calls_run_outside_the_tokio_runtime() {
+    assert!(tokio::runtime::Handle::try_current().is_ok());
+    let inside =
+        crate::keystore::off_runtime(|| Ok(tokio::runtime::Handle::try_current().is_ok())).unwrap();
+    assert!(!inside, "the closure must not see a tokio runtime");
+}
+
+#[cfg(feature = "keyring")]
+#[test]
+fn a_panicking_keystore_call_becomes_an_error() {
+    let r: Result<(), _> = crate::keystore::off_runtime(|| panic!("boom"));
+    assert!(matches!(r, Err(StoreError::Unavailable(_))));
+}
