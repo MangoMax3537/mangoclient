@@ -59,6 +59,8 @@ pub enum AuthError {
     Request(#[from] reqwest::Error),
     #[error("request timed out")]
     Timeout,
+    #[error("texture URL is not on an allowed host")]
+    TextureHost,
     #[error("rate limited, retry in {0} s")]
     RateLimited(u64),
     #[error("the service did not apply the requested cape")]
@@ -95,6 +97,7 @@ impl AuthError {
             Self::SkinUpload(_) => "auth.skin_upload",
             Self::Request(_) => "auth.request",
             Self::Timeout => "auth.timeout",
+            Self::TextureHost => "auth.texture_host",
             Self::RateLimited(_) => "auth.rate_limited",
             Self::CapeNotApplied => "auth.cape_not_applied",
             Self::Net(e) => e.code(),

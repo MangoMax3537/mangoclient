@@ -508,6 +508,7 @@ fn skin_error_code_table() {
         (AuthError::SkinUpload(500), "skin.upload_failed"),
         (AuthError::RateLimited(7), "skin.rate_limited"),
         (AuthError::CapeNotApplied, "skin.cape_not_applied"),
+        (AuthError::TextureHost, "skin.texture_host"),
         (AuthError::Timeout, "skin.timeout"),
         (AuthError::NeedsRelogin, "auth.needs_relogin"),
         (AuthError::NoProfile, "auth.no_profile"),

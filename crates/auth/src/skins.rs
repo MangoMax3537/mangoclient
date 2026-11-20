@@ -1,7 +1,7 @@
 use crate::account::{Account, AccountType, Texture};
 use crate::endpoints::Endpoints;
 use crate::error::AuthError;
-use crate::http::{send_json, send_raw};
+use crate::http::{send_json, send_raw_on};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -338,7 +338,16 @@ pub fn cape_applied(t: &ProfileTextures, wanted: Option<&str>) -> bool {
 pub async fn fetch_texture_bytes(ep: &Endpoints, url: &str) -> Result<Vec<u8>, AuthError> {
     /// A skin or cape PNG is far smaller; anything bigger is not one.
     const MAX_TEXTURE_BYTES: usize = 2 * 1024 * 1024;
-    let (status, bytes) = send_raw(ep, |c| c.get(url)).await?;
+    // The URL comes from profile data: only the texture host over https,
+    // and every redirect hop must stay on it.
+    if !ep.texture_policy.allows(url) {
+        return Err(AuthError::TextureHost);
+    }
+    let client = mango_net::restricted_client(&ep.texture_policy)?;
+    let (status, bytes) = match send_raw_on(client, ep, |c| c.get(url)).await {
+        Err(AuthError::Request(e)) if e.is_redirect() => return Err(AuthError::TextureHost),
+        other => other?,
+    };
     if !(200..300).contains(&status) {
         return Err(AuthError::ProfileHttp(status));
     }

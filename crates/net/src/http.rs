@@ -108,7 +108,7 @@ fn client() -> Result<Client, NetError> {
 }
 
 /// A client whose redirect policy re-checks every hop against `policy`.
-fn restricted_client(policy: &HostPolicy) -> Result<Client, NetError> {
+pub fn restricted_client(policy: &HostPolicy) -> Result<Client, NetError> {
     let policy = policy.clone();
     Client::builder()
         .user_agent(UA)

@@ -1,7 +1,10 @@
+use mango_net::HostPolicy;
 use std::time::Duration;
 use url::Url;
 
 pub const DEFAULT_CLIENT_ID: &str = "00000000402b5328";
+/// The only host Mojang serves skin and cape textures from.
+pub const TEXTURE_HOST: &str = "textures.minecraft.net";
 pub const REDIRECT_URI: &str = "https://login.live.com/oauth20_desktop.srf";
 pub const SCOPE: &str = "service::user.auth.xboxlive.com::MBI_SSL";
 pub const XBL_RELYING_PARTY: &str = "http://auth.xboxlive.com";
@@ -39,6 +42,10 @@ pub struct Endpoints {
     /// Longest `Retry-After` that is waited out; a longer one is reported
     /// as `AuthError::RateLimited` instead.
     pub retry_after_cap: Duration,
+    /// Which URLs a skin or cape texture may be downloaded from (the URLs
+    /// come from profile data). Every redirect hop is checked too. Tests
+    /// with a local mock server widen it.
+    pub texture_policy: HostPolicy,
 }
 
 impl Default for Endpoints {
@@ -66,6 +73,7 @@ impl Default for Endpoints {
             backoff: Duration::from_millis(400),
             request_timeout: Duration::from_secs(12),
             retry_after_cap: Duration::from_secs(10),
+            texture_policy: HostPolicy::https_hosts(&[TEXTURE_HOST]),
         }
     }
 }

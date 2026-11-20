@@ -534,8 +534,14 @@ async fn serve(handler: Handler) -> String {
                     body: buf[head_end..].to_vec(),
                 };
                 let (status, body) = handler(&req);
+                // For a 3xx the body is the `Location` target.
+                let location = if (300..400).contains(&status) {
+                    format!("Location: {}\r\n", String::from_utf8_lossy(&body))
+                } else {
+                    String::new()
+                };
                 let out = format!(
-                    "HTTP/1.1 {status} X\r\nConnection: close\r\nContent-Length: {}\r\n\r\n",
+                    "HTTP/1.1 {status} X\r\nConnection: close\r\n{location}Content-Length: {}\r\n\r\n",
                     body.len()
                 );
                 let _ = sock.write_all(out.as_bytes()).await;
@@ -562,6 +568,7 @@ fn test_endpoints(base: &str) -> Endpoints {
         session_profile: format!("{base}/session"),
         retries: 0,
         backoff: Duration::from_millis(1),
+        texture_policy: mango_net::HostPolicy::allow_all(),
         ..Endpoints::default()
     }
 }
@@ -967,4 +974,105 @@ async fn keyring_calls_run_outside_the_tokio_runtime() {
 fn a_panicking_keystore_call_becomes_an_error() {
     let r: Result<(), _> = crate::keystore::off_runtime(|| panic!("boom"));
     assert!(matches!(r, Err(StoreError::Unavailable(_))));
+}
+
+// ---- texture host allow-list ---------------------------------------------
+
+#[test]
+fn default_texture_policy_is_https_on_the_mojang_texture_host_only() {
+    let p = Endpoints::default().texture_policy;
+    let ok = "https://textures.minecraft.net/texture/abc123";
+    assert!(p.allows(ok));
+    assert!(p.allows("https://TEXTURES.minecraft.net/texture/abc"));
+    for bad in [
+        "http://textures.minecraft.net/texture/abc",
+        "ftp://textures.minecraft.net/texture/abc",
+        "https://example.com/texture/abc",
+        "https://textures.minecraft.net.evil.com/texture/abc",
+        "https://evil-textures.minecraft.net/texture/abc",
+        "https://eviltextures.minecraft.net/texture/abc",
+        "https://minecraft.net/texture/abc",
+        "https://sub.textures.minecraft.net/texture/abc",
+        "https://textures.minecraft.net@evil.com/texture/abc",
+        "https://evil.com@textures.minecraft.net/texture/abc",
+        "https://textures.minecraft.net:pw@textures.minecraft.net/x",
+        "https://evil.com\\@textures.minecraft.net/x",
+        "https://textures.minecraft.net./texture/abc",
+        "https://127.0.0.1/texture/abc",
+        "//textures.minecraft.net/texture/abc",
+        "textures.minecraft.net/texture/abc",
+        "data:image/png;base64,AAAA",
+        "file:///etc/passwd",
+        "",
+    ] {
+        assert!(!p.allows(bad), "{bad} must be rejected");
+    }
+}
+
+#[tokio::test]
+async fn texture_downloads_refuse_other_hosts_without_any_request() {
+    let hits = Arc::new(Mutex::new(0u32));
+    let h = hits.clone();
+    let base = serve(Arc::new(move |_| {
+        *h.lock().unwrap() += 1;
+        (200, b"PNG".to_vec())
+    }))
+    .await;
+    let ep = Endpoints {
+        retries: 0,
+        ..Endpoints::default()
+    };
+    // The mock is plain http on 127.0.0.1: refused before connecting.
+    for url in [
+        format!("{base}/tex/skin"),
+        "http://textures.minecraft.net/texture/a".to_string(),
+        "https://textures.minecraft.net.evil.com/texture/a".to_string(),
+        "https://user@textures.minecraft.net/texture/a".to_string(),
+    ] {
+        let err = fetch_texture_bytes(&ep, &url).await.unwrap_err();
+        assert!(matches!(err, AuthError::TextureHost), "{url}");
+        assert_eq!(err.code(), "auth.texture_host");
+    }
+    assert_eq!(*hits.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn a_texture_redirect_to_another_host_is_refused_and_not_retried() {
+    // The allowed host (here the mock under the name `localhost`) redirects
+    // to the same server under another name, which the policy does not list.
+    let hits = Arc::new(Mutex::new(Vec::<String>::new()));
+    let h = hits.clone();
+    let base = Arc::new(Mutex::new(String::new()));
+    let b = base.clone();
+    let url = serve(Arc::new(move |r| {
+        h.lock().unwrap().push(r.path.clone());
+        if r.path == "/tex/redirect" {
+            let target = b.lock().unwrap().replace("localhost", "127.0.0.1");
+            (302, format!("{target}/tex/final").into_bytes())
+        } else {
+            (200, b"PNG".to_vec())
+        }
+    }))
+    .await;
+    let port = url.rsplit(':').next().unwrap().to_string();
+    let local = format!("http://localhost:{port}");
+    *base.lock().unwrap() = local.clone();
+    let ep = Endpoints {
+        retries: 3,
+        backoff: Duration::from_millis(1),
+        texture_policy: mango_net::HostPolicy::https_hosts(&[]).with_http_host("localhost"),
+        ..Endpoints::default()
+    };
+    let err = fetch_texture_bytes(&ep, &format!("{local}/tex/redirect"))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, AuthError::TextureHost), "{err:?}");
+    assert_eq!(*hits.lock().unwrap(), vec!["/tex/redirect".to_string()]);
+    // Without the redirect the same host works.
+    assert_eq!(
+        fetch_texture_bytes(&ep, &format!("{local}/tex/ok"))
+            .await
+            .unwrap(),
+        b"PNG"
+    );
 }

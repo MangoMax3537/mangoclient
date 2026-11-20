@@ -52,15 +52,25 @@ pub(crate) async fn send_raw(
     ep: &Endpoints,
     build: impl Fn(&Client) -> RequestBuilder,
 ) -> Result<(u16, Vec<u8>), AuthError> {
-    let client = client()?;
+    send_raw_on(client()?, ep, build).await
+}
+
+/// [`send_raw`] on a given client (one with a restricted redirect policy).
+/// A redirect the policy refused is final: it is never retried.
+pub(crate) async fn send_raw_on(
+    client: Client,
+    ep: &Endpoints,
+    build: impl Fn(&Client) -> RequestBuilder,
+) -> Result<(u16, Vec<u8>), AuthError> {
     let started = std::time::Instant::now();
     let mut n: u32 = 0;
     loop {
         let sent = build(&client).timeout(ep.request_timeout).send().await;
         let wait = match sent {
             Err(e) => {
+                let blocked = e.is_redirect();
                 let e = map_send_error(e);
-                if n >= ep.retries {
+                if n >= ep.retries || blocked {
                     tracing::debug!(
                         attempts = n + 1,
                         ms = elapsed_ms(started),

@@ -224,6 +224,7 @@ pub(crate) fn endpoints(base: &str) -> mango_auth::Endpoints {
         session_profile: format!("{base}/session"),
         retries: 0,
         backoff: Duration::from_millis(1),
+        texture_policy: mango_net::HostPolicy::allow_all(),
         ..mango_auth::Endpoints::default()
     }
 }
@@ -802,6 +803,58 @@ async fn library_add_list_save_apply_remove() {
     assert!(contains(&up[0].1, b"name=\"variant\"\r\n\r\nslim\r\n"));
     assert!(contains(&up[0].1, &skin_png(64, 64, 11)));
     assert!(info.can_edit);
+
+    // Rename: trimmed, persisted, validated, unknown ids refused.
+    let renamed = f
+        .svc
+        .skin_library_rename(a.id.clone(), "  Renamed  ".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        (renamed.id.as_str(), renamed.name.as_str()),
+        (a.id.as_str(), "Renamed")
+    );
+    let listed = f.svc.skin_library_list().await.unwrap();
+    assert_eq!(
+        listed.iter().find(|s| s.id == a.id).unwrap().name,
+        "Renamed"
+    );
+    for bad in ["", "   ", "a\nb", &"x".repeat(49)] {
+        assert_eq!(
+            f.svc
+                .skin_library_rename(a.id.clone(), bad.into())
+                .await
+                .unwrap_err()
+                .code,
+            "skin.invalid_name"
+        );
+    }
+    for bad in [
+        "x".to_string(),
+        "../index".into(),
+        "A".repeat(32),
+        "0".repeat(32),
+    ] {
+        assert_eq!(
+            f.svc
+                .skin_library_rename(bad, "Ok".into())
+                .await
+                .unwrap_err()
+                .code,
+            "skin.not_found"
+        );
+    }
+    assert_eq!(
+        f.svc
+            .skin_library_list()
+            .await
+            .unwrap()
+            .iter()
+            .find(|s| s.id == a.id)
+            .unwrap()
+            .name,
+        "Renamed"
+    );
 
     // Remove: file and index entry go; unknown / malformed ids are refused.
     let rest = f.svc.skin_library_remove(b.id.clone()).await.unwrap();
