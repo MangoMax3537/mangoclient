@@ -120,3 +120,24 @@ interface UpdateStatus { state: UpdateStateName; percent?: number; version?: str
 - `servers:pinged` `ServerStatus`
 - `update:status` `UpdateStatus`
 - `content:changed` `{ profileId }` (the `mods/` folder changed on disk)
+
+---
+
+# Part 3: Microsoft login
+
+## Changes to existing types
+`PublicAccount` gains `credentialsPersisted: boolean` (false = memory-only session because the OS keystore is unavailable; the UI shows a notice that the login will not survive a restart), `credentialsLocked: boolean` (keystore locked or envelope undecryptable; account needs unlock or re-login) and `needsRelogin: boolean` (no usable refresh token). Tokens still never cross this boundary.
+
+## Commands
+| command | args | returns |
+|---|---|---|
+| `account_sign_in_microsoft` | none | `PublicAccount \| null` (`null` = user cancelled the login window; replaces the `not_implemented` stub) |
+| `account_refresh` | `{ uuid }` | `PublicAccount` (refreshes the access token in memory; persists the rotated refresh token through the Vault) |
+
+`game_launch` with a Microsoft account refreshes the token first. If that needs a new login it fails with `AppError { needsRelogin: true }`; the UI then offers `account_sign_in_microsoft` again.
+
+## Events
+- `accounts:changed` `{ uuid }` after any background refresh or credential-state change.
+
+## Rust-side host trait (not a command)
+`mango_app::host::LoginWindow` — `async fn authorize(&self, authorize_url: &str, redirect_prefix: &str) -> LoginOutcome` with `LoginOutcome = Code(String) | Cancelled | Error(String)`. src-tauri implements it with an isolated, non-persistent webview window (incognito/in-memory data store, all permissions denied, navigation allow-list limited to login.live.com / microsoftonline / live.com hosts, intercepting the redirect to `https://login.live.com/oauth20_desktop.srf`). The CLI implements it by printing the URL and reading the pasted redirect URL from stdin.
