@@ -223,6 +223,22 @@ async fn placeholder_public_key_fails_closed() {
         srv.port,
         dir.path(),
         "1.3.4",
+        "REPLACE_WITH_BASE64_ED25519_PUBLIC_KEY".into(),
+        Arc::new(NoopInstaller),
+    );
+    assert_eq!(error_code(&u.check(false).await), ErrorCode::Other);
+    assert!(dir_is_empty(dir.path()));
+}
+
+#[tokio::test]
+async fn update_signed_by_a_foreign_key_is_refused_with_the_compiled_in_key() {
+    let k = key(1);
+    let srv = Server::start(routes_for("1.4.0", k, None)).await;
+    let dir = tempfile::tempdir().unwrap();
+    let u = updater(
+        srv.port,
+        dir.path(),
+        "1.3.4",
         UPDATE_PUBLIC_KEY_B64.into(),
         Arc::new(NoopInstaller),
     );

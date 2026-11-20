@@ -12,7 +12,7 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use std::path::Path;
 
 /// Base64 of the 32-byte Ed25519 public key. PLACEHOLDER, replace before release.
-pub const UPDATE_PUBLIC_KEY_B64: &str = "REPLACE_WITH_BASE64_ED25519_PUBLIC_KEY";
+pub const UPDATE_PUBLIC_KEY_B64: &str = "AyaIbka9P2+y4lEja49+7WBPbxiciTudYXqT9c9BTT8=";
 
 fn b64(s: &str) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD
