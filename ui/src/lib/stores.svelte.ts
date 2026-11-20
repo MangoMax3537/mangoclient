@@ -34,7 +34,7 @@ export const app = $state({
 export const launches = $state<Record<string, LaunchInfo>>({});
 export const consoles = $state<Record<string, ConsoleLine[]>>({});
 export type View = 'home' | 'library' | 'discover' | 'servers' | 'stats' | 'settings' | 'profile';
-export type ProfileTab = 'overview' | 'content' | 'media' | 'logs' | 'settings';
+export type ProfileTab = 'overview' | 'content' | 'media' | 'backups' | 'logs' | 'settings';
 export const nav = $state({
   view: 'home' as View, newProfile: false, accounts: false,
   /** "Create new instance for this": New profile opens with a compatible loader/version and starts the install afterwards. */

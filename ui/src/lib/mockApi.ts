@@ -4,6 +4,7 @@ import type {
 import { createContentApi } from './mockContent';
 import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
 import { createBlockedMock, type BlockedDev } from './mockBlocked';
+import { createWorldsMock } from './mockWorlds';
 import { fallbackImage } from './fallbackImage';
 import type {
   ApiEvents, AppState, Config, LaunchState, LoaderVersion, ProfileView, PublicAccount, VersionManifest, VersionEntry, Loader,
@@ -30,6 +31,10 @@ export interface MockOptions {
   blocks?: MockBlocksMode;
   /** Part 7: `off` = no panorama is ever extracted. */
   panorama?: MockPanoramaMode;
+  /** Part 9: the first instance's game is running from the start (`?mockRunning`): deleting worlds and restoring fail with game_running. */
+  running?: boolean;
+  /** Part 9: every changing world/backup call fails with this code (`?mockBackupError=<code>`). */
+  backupError?: string;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -39,7 +44,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off ?mockRunning ?mockBackupError=<code> */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -53,6 +58,8 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     blockedAuto: q.has('mockBlockedAuto'),
     blocks: ((['off', 'preparing', 'error'] as const).find((m) => m === q.get('mockBlocks')) ?? 'default') as MockBlocksMode,
     panorama: q.get('mockPanorama') === 'off' ? 'off' : 'default',
+    running: q.has('mockRunning'),
+    backupError: q.get('mockBackupError') || undefined,
   };
 }
 
@@ -62,7 +69,7 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' } };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
@@ -123,14 +130,14 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
     blockedModsModrinthFallback: true, blockedModsWatchDirs: ['/home/mango/Downloads'], blockedModsCheckSubfolders: false,
-    autoSnapshot: false, backupKeep: 5,
+    autoSnapshot: true, backupKeep: 5,
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now, opts);
   config.selectedProfile = profiles[0].id;
   config.selectedAccount = accounts[0].uuid;
   let cfOn = !opts.noCurseforge;
-  const running = new Set<string>();
+  const running = new Set<string>(opts.running ? [profiles[0].id] : []);
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
@@ -157,6 +164,10 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
 
   const iconsMock = createIconsMock({ scale, emit, profiles: () => profiles, find, blocks: opts.blocks, panorama: opts.panorama });
   const icons = iconsMock;
+  const worldsMock = createWorldsMock({
+    scale, now, config: () => config, profiles: () => profiles, find, errorCode: opts.backupError,
+    gameActive: (id) => running.has(id) || timers.has(id),
+  });
   const blockedMock = createBlockedMock({
     scale, emit, auto: !!opts.blockedAuto, dirs: () => config.blockedModsWatchDirs,
     setPending: (id, n) => { const p = profiles.find((x) => x.id === id); if (p) p.pendingBlocked = n; },
@@ -170,6 +181,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     ...part2,
     ...blockedMock.api,
     ...iconsMock.api,
+    ...worldsMock,
     dev: blockedMock.dev,
     async appState(): Promise<AppState> {
       return {
@@ -181,6 +193,9 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       // like the Rust dispatch: unknown keys are rejected, not ignored
       const unknown = Object.keys(patch).find((k) => k !== 'curseforgeApiKey' && !(k in config));
       if (unknown) throw { code: 'validation', message: `Unknown configuration setting: ${unknown}`, needsRelogin: false };
+      if (patch.backupKeep !== undefined && !(Number.isInteger(patch.backupKeep) && patch.backupKeep >= 1 && patch.backupKeep <= 50)) {
+        throw { code: 'validation', message: 'backupKeep must be 1..50', needsRelogin: false };
+      }
       const { curseforgeApiKey, ...rest } = patch;
       Object.assign(config, rest);
       if (curseforgeApiKey !== undefined) cfOn = !!curseforgeApiKey; // write-only, never returned
@@ -190,7 +205,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
-        icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' },
+        icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [],
       };
       profiles = [...profiles, p];
       icons.sync();
@@ -303,16 +318,14 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     async gameRunning() { return [...running]; },
     async pickImageFile() { return null; }, // no native dialog in the browser: the UI uses <input type=file> there
     async pickFolder() { return null; },
+    async pickImportFile() { return null; },
     async pickSaveFile() { return null; },
-    // worlds and backups have no UI yet: the mock only answers the list calls
-    async worldsList() { return []; },
-    async backupsList() { return []; },
-    async worldOpenFolder({ profileId }) { return `~/.mangoclient/instances/${profileId}/saves`; },
-    async worldBackup() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
-    async worldDelete() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
-    async backupRestore() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
-    async backupDelete() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
-    async snapshotCreate() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
+    // Part 9 (import/export, crash analysis, diagnostics): typed pass-throughs, their UI comes later
+    async instanceExport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
+    async instanceImportPlan() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
+    async instanceImport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
+    async crashAnalyze() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
+    async diagnosticsExport() { throw { code: 'not_implemented', message: 'not mocked yet', needsRelogin: false }; },
     async openFolder({ target }) { return `~/.mangoclient/${target}`; },
     async openExternal({ url }) {
       if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');

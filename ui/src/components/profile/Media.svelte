@@ -8,6 +8,7 @@
   import EmptyState from '../EmptyState.svelte';
   import Modal from '../Modal.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
+  import Worlds from './Worlds.svelte';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
   import { actions, app, errorText, getApi, isBusy, lang, t, toast, tp } from '../../lib/stores.svelte';
   import type { ProfileView, Screenshot } from '../../lib/types';
@@ -56,8 +57,9 @@
 
 <svelte:window onkeydown={onKey} />
 <div class="md">
+  <Worlds {profile} />
   <header>
-    <h2 class="eyebrow">{t('profile.tab.media')}</h2>
+    <h2 class="eyebrow">{t('media.title')}</h2>
     {#if shots}<span class="hint mono">{tp('media.count', shots.length)}</span>{/if}
   </header>
   {#if shots === null}

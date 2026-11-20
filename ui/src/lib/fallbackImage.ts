@@ -1,7 +1,7 @@
 // Single entry point for every bundled fallback image (CLAUDE.md image-first rule).
 // The only bundled fallback is the real MangoClient icon (src/assets/brand/). Real art can be
 // dropped in later by swapping the lookup here; no caller needs to change.
-export type FallbackKind = 'profile' | 'mod' | 'server' | 'account';
+export type FallbackKind = 'profile' | 'mod' | 'server' | 'account' | 'world';
 
 const icons = import.meta.glob('../assets/brand/*x*.png', {
   eager: true, query: '?url', import: 'default',

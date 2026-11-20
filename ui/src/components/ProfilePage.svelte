@@ -9,6 +9,7 @@
   import Overview from './profile/Overview.svelte';
   import Content from './profile/Content.svelte';
   import Media from './profile/Media.svelte';
+  import Backups from './profile/Backups.svelte';
   import Logs from './profile/Logs.svelte';
   import ProfileSettings from './profile/ProfileSettings.svelte';
   import PanoramaBackground from './PanoramaBackground.svelte';
@@ -25,7 +26,7 @@
   const p = $derived(app.profiles.find((x) => x.id === id) ?? null);
   const busy = $derived(isBusy(id));
   const compact = $derived(nav.profileTab !== 'overview');
-  const TABS: ProfileTab[] = ['overview', 'content', 'media', 'logs', 'settings'];
+  const TABS: ProfileTab[] = ['overview', 'content', 'media', 'backups', 'logs', 'settings'];
   const opts = $derived(TABS.map((k) => ({ value: k, label: t(`profile.tab.${k}` as Key) })));
   const ram = $derived(p ? (p.ram ?? app.config?.ram ?? 0) : 0);
   const loaderLabel = $derived(p ? (p.loader === 'vanilla' ? t('profile.vanilla') : `${p.loader} ${p.loaderVersion ?? ''}`.trim()) : '');
@@ -75,6 +76,7 @@
         {#if nav.profileTab === 'overview'}<Overview profile={p} />
         {:else if nav.profileTab === 'content'}<Content profile={p} />
         {:else if nav.profileTab === 'media'}<Media profile={p} />
+        {:else if nav.profileTab === 'backups'}<Backups profile={p} />
         {:else if nav.profileTab === 'logs'}<Logs profile={p} />
         {:else}<ProfileSettings profile={p} />{/if}
       {/key}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
+  import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
   import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
@@ -68,6 +69,7 @@
       {/each}
     </ul>
     <p class="hint note">{t('flow.upd.removedNote')}</p>
+    {#if app.config?.autoSnapshot}<p class="hint note snap"><ClockCounterClockwiseIcon weight="bold" size={14} aria-hidden="true" />{t('flow.snapshotFirst')}</p>{/if}
   {/if}
 
   {#snippet footer()}
@@ -103,6 +105,8 @@
   .w :global(svg) { margin-top: 3px; flex: none; }
   .sz { font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; }
   .note { margin: 10px 0 0; }
+  .note.snap { display: flex; gap: 6px; align-items: flex-start; margin-top: 4px; }
+  .note.snap :global(svg) { flex: none; margin-top: 3px; }
   .tot { margin-right: auto; align-self: center; font-size: var(--fs-sm); color: var(--paper-dim); }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }

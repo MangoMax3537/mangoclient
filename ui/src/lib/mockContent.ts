@@ -449,7 +449,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
-        icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, // the pack logo becomes the image icon
+        icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, group: null, tags: [], // the pack logo becomes the image icon
       };
       if (provider === 'curseforge' && ctx.seedBlocked) p.pendingBlocked = ctx.seedBlocked(id, blockedFilesFor(hit.slug));
       ctx.addProfile(p);

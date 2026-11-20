@@ -7,7 +7,7 @@ export const en2 = {
   'err.log_not_found': 'Log file not found.', 'err.invalid_project_type': 'This project type cannot be installed that way.',
   'err.profile_not_found': 'Profile not found.', 'err.already_running': 'This profile is already running.',
 
-  'profile.tab.overview': 'Overview', 'profile.tab.content': 'Content', 'profile.tab.media': 'Screenshots', 'profile.tab.logs': 'Logs', 'profile.tab.settings': 'Settings',
+  'profile.tab.overview': 'Overview', 'profile.tab.content': 'Content', 'profile.tab.media': 'Worlds & Screenshots', 'profile.tab.logs': 'Logs', 'profile.tab.settings': 'Settings',
   'overview.created': 'Created', 'overview.screenshots': 'Recent screenshots', 'overview.all': 'All screenshots', 'overview.lastLog': 'Last log',
   'overview.openLogs': 'Open logs', 'overview.quick': 'Quick links', 'overview.openFolder': 'Open folder',
 
@@ -91,7 +91,7 @@ export const de2: Record<keyof typeof en2, string> = {
   'err.log_not_found': 'Logdatei nicht gefunden.', 'err.invalid_project_type': 'Dieser Projekttyp lässt sich so nicht installieren.',
   'err.profile_not_found': 'Profil nicht gefunden.', 'err.already_running': 'Dieses Profil läuft bereits.',
 
-  'profile.tab.overview': 'Übersicht', 'profile.tab.content': 'Inhalte', 'profile.tab.media': 'Screenshots', 'profile.tab.logs': 'Logs', 'profile.tab.settings': 'Einstellungen',
+  'profile.tab.overview': 'Übersicht', 'profile.tab.content': 'Inhalte', 'profile.tab.media': 'Welten & Screenshots', 'profile.tab.logs': 'Logs', 'profile.tab.settings': 'Einstellungen',
   'overview.created': 'Erstellt', 'overview.screenshots': 'Neueste Screenshots', 'overview.all': 'Alle Screenshots', 'overview.lastLog': 'Letztes Log',
   'overview.openLogs': 'Logs öffnen', 'overview.quick': 'Schnellzugriff', 'overview.openFolder': 'Ordner öffnen',
 

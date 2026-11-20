@@ -80,6 +80,7 @@ export const COMMANDS = {
   pickImageFile: 'pick_image_file',
   pickFolder: 'pick_folder',
   pickSaveFile: 'pick_save_file',
+  pickImportFile: 'pick_import_file',
   worldsList: 'worlds_list',
   worldOpenFolder: 'world_open_folder',
   worldBackup: 'world_backup',
@@ -88,6 +89,11 @@ export const COMMANDS = {
   backupRestore: 'backup_restore',
   backupDelete: 'backup_delete',
   snapshotCreate: 'snapshot_create',
+  instanceExport: 'instance_export',
+  instanceImportPlan: 'instance_import_plan',
+  instanceImport: 'instance_import',
+  crashAnalyze: 'crash_analyze',
+  diagnosticsExport: 'diagnostics_export',
 } as const satisfies Record<string, CommandName>;
 
 /**

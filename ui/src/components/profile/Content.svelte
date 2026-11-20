@@ -13,7 +13,7 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import type { Key } from '../../lib/i18n';
   import { providerLabel } from '../../lib/install';
-  import { contentRev, errorText, getApi, installs, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
+  import { app, contentRev, errorText, getApi, installs, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
   import type { ContentItem, ContentType, ProfileView, UpdateInfo } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -181,7 +181,7 @@
 </div>
 
 {#if confirmItem}
-  <ConfirmDialog title={t('content.uninstallTitle', { name: confirmItem.title })} body={t('content.uninstallBody', { file: confirmItem.filename })} facts={[{ label: t('col.version'), value: confirmItem.versionNumber ?? '?' }, { label: t('content.source'), value: confirmItem.provider ? providerLabel(confirmItem.provider) : t('content.local') }]} warn={confirmItem.dependency ? t('content.uninstallDepWarn') : ''} confirmLabel={t('content.uninstall')} danger busy={working}
+  <ConfirmDialog title={t('content.uninstallTitle', { name: confirmItem.title })} body={t('content.uninstallBody', { file: confirmItem.filename })} facts={[{ label: t('col.version'), value: confirmItem.versionNumber ?? '?' }, { label: t('content.source'), value: confirmItem.provider ? providerLabel(confirmItem.provider) : t('content.local') }]} warn={confirmItem.dependency ? t('content.uninstallDepWarn') : ''} note={app.config?.autoSnapshot ? t('flow.snapshotFirst') : ''} confirmLabel={t('content.uninstall')} danger busy={working}
     onconfirm={() => confirmItem && uninstall(confirmItem)} oncancel={() => (confirmItem = null)} />
 {/if}
 {#if confirmOff}

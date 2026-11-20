@@ -2,11 +2,13 @@
   import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import BroomIcon from 'phosphor-svelte/lib/BroomIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
+  import MinusIcon from 'phosphor-svelte/lib/MinusIcon';
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Seg from './Seg.svelte';
   import { inTauri } from '../lib/api';
   import { cleanDir, validateWatchDir } from '../lib/blocked';
+  import { BACKUP_KEEP_MAX, BACKUP_KEEP_MIN, clampKeep, parseKeep } from '../lib/backups';
   import { pickFolder } from '../lib/pickImage';
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
@@ -75,6 +77,19 @@
       : us.state === 'disabled' ? t(`update.disabled.${us.disabledReason ?? 'dev'}` as Key)
       : t('update.status.idle'),
   );
+  let keepText = $state(String(app.config?.backupKeep ?? 5));
+  const keepBad = $derived(parseKeep(keepText) === null);
+  /** Saves the field when it holds a valid whole number (1..50); an invalid one stays visible with its error and is never sent. */
+  function commitKeep(final: boolean) {
+    const n = parseKeep(keepText);
+    if (n !== null && n !== cfg?.backupKeep) void actions.setConfig({ backupKeep: n });
+    if (final && n !== null) keepText = String(n);
+  }
+  function stepKeep(d: number) {
+    const n = clampKeep((parseKeep(keepText) ?? cfg?.backupKeep ?? 5) + d);
+    keepText = String(n);
+    commitKeep(true);
+  }
   function onArgs() {
     clearTimeout(argTimer);
     argTimer = setTimeout(() => actions.setConfig({ javaArgs: args }), 400);
@@ -188,6 +203,26 @@
       </div>
     </section>
 
+    <section aria-labelledby="s-backups">
+      <h2 id="s-backups" class="eyebrow">{t('settings.group.backups')}</h2>
+      <div class="row">
+        <div class="txt"><label for="asnap">{t('settings.autoSnapshot')}</label><div class="hint">{t('settings.autoSnapshotHint')}</div></div>
+        <span class="switch"><input id="asnap" type="checkbox" checked={cfg.autoSnapshot} onchange={(e) => actions.setConfig({ autoSnapshot: e.currentTarget.checked })} /><span></span></span>
+      </div>
+      <div class="row">
+        <div class="txt"><label for="bkeep">{t('settings.backupKeep')}</label><div class="hint">{t('settings.backupKeepHint')}</div></div>
+        <div class="step">
+          <div class="ctl">
+            <button class="btn small" type="button" aria-label={t('settings.backupKeepLess')} disabled={cfg.backupKeep <= BACKUP_KEEP_MIN} onclick={() => stepKeep(-1)}><MinusIcon weight="bold" size={14} aria-hidden="true" /></button>
+            <input id="bkeep" class="field mono" inputmode="numeric" autocomplete="off" value={keepText} aria-invalid={keepBad} aria-describedby={keepBad ? 'bkeep-err' : undefined}
+              oninput={(e) => { keepText = e.currentTarget.value; commitKeep(false); }} onblur={() => commitKeep(true)} onkeydown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); stepKeep(1); } else if (e.key === 'ArrowDown') { e.preventDefault(); stepKeep(-1); } }} />
+            <button class="btn small" type="button" aria-label={t('settings.backupKeepMore')} disabled={cfg.backupKeep >= BACKUP_KEEP_MAX} onclick={() => stepKeep(1)}><PlusIcon weight="bold" size={14} aria-hidden="true" /></button>
+          </div>
+          {#if keepBad}<div id="bkeep-err" class="bad" role="alert">{t('settings.backupKeepInvalid')}</div>{/if}
+        </div>
+      </div>
+    </section>
+
     <section aria-labelledby="s-storage">
       <h2 id="s-storage" class="eyebrow">{t('storage.title')}</h2>
       {#if !usage}
@@ -237,6 +272,10 @@
   .settings { padding: var(--s-5) 32px 40px; max-width: 800px; display: grid; gap: 24px; align-content: start; }
   h1 { font-size: var(--fs-3xl); }
   .keyrow { display: flex; gap: var(--s-2); }
+  .step { display: grid; gap: 4px; justify-items: end; }
+  .ctl { display: flex; gap: 6px; align-items: center; }
+  .ctl .field { width: 64px; text-align: center; }
+  .bad { color: var(--tomato); font-size: var(--fs-sm); width: 280px; text-align: right; }
   .dirs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); }
   .dirs li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 12px; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-sm); }
   .dirs li:last-child { border-bottom: 0; }
