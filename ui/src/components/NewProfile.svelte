@@ -269,9 +269,10 @@
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
   .vlist { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-m); }
-  .vlist button { display: flex; justify-content: space-between; width: 100%; padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--line-soft); }
+  .vlist button { display: flex; justify-content: space-between; width: 100%; padding: 7px 12px; text-align: left; }
+  .vlist li + li button { border-top: 1px solid var(--line-soft); }
   .vlist button:hover { background: var(--ink-3); }
-  .vlist button.on { background: rgba(255, 173, 50, 0.14); box-shadow: inset 3px 0 var(--mango); }
+  .vlist button.on { background: rgba(255, 173, 50, 0.14); }
   .more { color: var(--mango); justify-content: center !important; }
   .tags { display: flex; gap: 6px; }
   em { font-style: normal; font-size: 12px; padding: 0 6px; border-radius: 3px; background: var(--ink-4); color: var(--paper-dim); }

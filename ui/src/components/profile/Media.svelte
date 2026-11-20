@@ -13,6 +13,7 @@
   import LoadError from '../LoadError.svelte';
   import ScreenshotGridSkeleton from '../skeleton/ScreenshotGridSkeleton.svelte';
   import { createLoadState } from '../../lib/loadState.svelte';
+  import { wb } from '../../lib/worlds.svelte';
   import { fallbackImage } from '../../lib/fallbackImage';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
   import { actions, app, errorText, getApi, isBusy, lang, t, toast, tp } from '../../lib/stores.svelte';
@@ -32,6 +33,8 @@
   });
   $effect(() => { if (shotsLoad.data) shots = shotsLoad.data; });
 
+  const noWorlds = $derived(wb.worlds[profile.id]?.length === 0);
+  const noShots = $derived(shots !== null && shots.length === 0);
   const cur = $derived(shots && open !== null ? shots[open] ?? null : null);
   function step(d: number) {
     if (!shots?.length || open === null) return;
@@ -63,19 +66,23 @@
 
 <svelte:window onkeydown={onKey} />
 <div class="md">
-  <Worlds {profile} />
-  <header>
-    <h2 class="eyebrow">{t('media.title')}</h2>
-    {#if shots}<span class="hint mono">{tp('media.count', shots.length)}</span>{/if}
-  </header>
-  {#if shots === null}
-    {#if shotsLoad.phase === 'error'}<LoadError error={shotsLoad.error} onretry={() => shotsLoad.retry()} />
-    {:else if shotsLoad.showSkeleton}<ScreenshotGridSkeleton count={8} />{/if}
-  {:else if shots.length === 0}
-    <EmptyState title={t('media.emptyTitle')} hint={t('media.empty')}>
+  {#if noWorlds && noShots}
+    <!-- neither worlds nor screenshots: one empty state, not two stacked empty sections -->
+    <EmptyState title={t('media.bothEmptyTitle')} hint={t('media.bothEmpty')}>
       <button class="btn accent" type="button" disabled={!app.accounts.length || isBusy(profile.id)} onclick={() => actions.play(profile.id)}><PlayIcon weight="bold" size={16} aria-hidden="true" />{t('home.play')}</button>
     </EmptyState>
   {:else}
+    <Worlds {profile} hideWhenEmpty />
+    {#if !noShots}
+      <header>
+        <h2 class="eyebrow">{t('media.title')}</h2>
+        {#if shots}<span class="hint mono">{tp('media.count', shots.length)}</span>{/if}
+      </header>
+    {/if}
+    {#if shots === null}
+      {#if shotsLoad.phase === 'error'}<LoadError error={shotsLoad.error} onretry={() => shotsLoad.retry()} />
+      {:else if shotsLoad.showSkeleton}<ScreenshotGridSkeleton count={8} />{/if}
+    {:else if shots.length > 0}
     <ul class="grid">
       {#each shots as s, i (s.name)}
         <li>
@@ -86,6 +93,7 @@
         </li>
       {/each}
     </ul>
+    {/if}
   {/if}
 </div>
 

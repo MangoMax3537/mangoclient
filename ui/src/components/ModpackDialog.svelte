@@ -6,10 +6,8 @@
   import LoadError from './LoadError.svelte';
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
-  import BlockedPlanNote from './BlockedPlanNote.svelte';
   import PlanRam from './PlanRam.svelte';
   import { fmtBytes } from '../lib/format';
-  import { providerLabel } from '../lib/install';
   import { errorText, getApi, installs, lang, startModpackRun, t, tp, type FlowProject, type InstallRun } from '../lib/stores.svelte';
   import type { ModpackPlan } from '../lib/types';
 
@@ -24,7 +22,7 @@
   $effect(() => {
     void project.projectId; void versionId;
     untrack(() => { name = project.title; });
-    pLoad.run(() => getApi().modpackPlan({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
+    pLoad.run(() => getApi().modpackPlan({ projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
     return () => pLoad.cancel();
   });
   $effect(() => { const p = pLoad.data; if (p) untrack(() => { name = p.name; }); });
@@ -45,7 +43,6 @@
   <div class="top">
     <Tile kind="mod" id={project.projectId} src={plan?.iconUrl ?? project.iconUrl} size={64} radius={10} />
     <div class="hd">
-      <span class="eyebrow">{providerLabel(project.provider)}</span>
       <h3>{project.title}</h3>
       <p class="hint">{t('flow.pack.logoHint')}</p>
     </div>
@@ -68,7 +65,6 @@
     </dl>
 
     <PlanRam {plan} />
-    <BlockedPlanNote files={plan.blockedFiles} id="mp-blocked" />
 
     {#if run}
       <div class="prog" role="status">

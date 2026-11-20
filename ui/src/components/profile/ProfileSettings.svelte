@@ -10,6 +10,11 @@
   import InstanceIcon from '../InstanceIcon.svelte';
   import RamControl from '../RamControl.svelte';
   import GroupTagsEditor from '../GroupTagsEditor.svelte';
+  import SettingRow from '../SettingRow.svelte';
+  import SettingSection from '../SettingSection.svelte';
+  import SettingsSearch from '../SettingsSearch.svelte';
+  import { entriesFor } from '../../lib/settingsIndex';
+  import { jumpTo } from '../../lib/settingsJump';
   import PanoramaBackground from '../PanoramaBackground.svelte';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
@@ -19,6 +24,10 @@
   import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
+  let matches = $state<Set<string> | null>(null);
+  const show = (id: string) => matches === null || matches.has(id);
+  const instEntries = entriesFor('instance');
+  const sec = (id: string) => matches === null || instEntries.some((e) => e.section === id && matches?.has(e.id));
   let name = $state(untrack(() => profile.name));
   let args = $state(untrack(() => profile.javaArgs));
   let saved = $state(false);
@@ -88,66 +97,88 @@
 </script>
 
 <div class="ps">
-  <div class="status" role="status" aria-live="polite">{#if saved}<span class="ok">{t('settings.saved')}</span>{/if}</div>
+  <div class="top">
+    <SettingsSearch scope="instance" bind:matches onpick={(e) => jumpTo(e)} />
+    <div class="status" role="status" aria-live="polite">{#if saved}<span class="ok">{t('settings.saved')}</span>{/if}</div>
+  </div>
 
-  <section>
-    <div class="row col">
-      <label for="ps-name">{t('new.name')}</label>
-      <input id="ps-name" class="field" bind:value={name} maxlength="48" autocomplete="off" aria-invalid={nameErr} onblur={saveName} onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
-      {#if nameErr}<div class="err" role="alert">{t('new.nameRequired')}</div>{/if}
-    </div>
+  <div class="set-sections">
+    {#if sec('general')}
+      <SettingSection id="p-general" title={t('psettings.group.general')}>
+        {#if show('name')}
+          <SettingRow id="name" stack label={t('new.name')} forId="ps-name">
+            <input id="ps-name" class="field" bind:value={name} maxlength="48" autocomplete="off" aria-invalid={nameErr} onblur={saveName} onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+            {#snippet extra()}{#if nameErr}<div class="err" role="alert">{t('new.nameRequired')}</div>{/if}{/snippet}
+          </SettingRow>
+        {/if}
 
-    <GroupTagsEditor {profile} onsaved={() => { saved = true; clearTimeout(savedTimer); savedTimer = setTimeout(() => (saved = false), 1600); }} />
+        {#if show('grouptags')}
+          <GroupTagsEditor {profile} onsaved={() => { saved = true; clearTimeout(savedTimer); savedTimer = setTimeout(() => (saved = false), 1600); }} />
+        {/if}
 
-    <div class="row">
-      <div class="who"><InstanceIcon profile={profile} size={56} notch={10} />
-        <div class="txt"><b>{t('psettings.icon')}</b><div class="hint">{t('psettings.iconHint')}</div></div></div>
-      <button class="btn" type="button" onclick={() => openIconPicker(profile.id)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.iconChange')}</button>
-    </div>
+        {#if show('icon')}
+          <div class="set-row" id="set-icon">
+            <div class="who"><InstanceIcon profile={profile} size={56} notch={10} />
+              <div class="txt"><span class="lbl">{t('psettings.icon')}</span><span class="hint">{t('psettings.iconHint')}</span></div></div>
+            <button class="btn" type="button" onclick={() => openIconPicker(profile.id)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.iconChange')}</button>
+          </div>
+        {/if}
 
-    <div class="row">
-      <div class="who"><span class="bgthumb on-stage"><PanoramaBackground profileId={profile.id} mcVersion={profile.mcVersion} background={profile.background} tint={profile.color} /></span>
-        <div class="txt"><b>{t('psettings.background')}</b><div class="hint">{t(`psettings.bg.${profile.background.kind}` as Key)}</div></div></div>
-      <button class="btn" type="button" onclick={() => openBackgroundPicker(profile.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.backgroundChange')}</button>
-    </div>
+        {#if show('background')}
+          <div class="set-row" id="set-background">
+            <div class="who"><span class="bgthumb on-stage"><PanoramaBackground profileId={profile.id} mcVersion={profile.mcVersion} background={profile.background} tint={profile.color} /></span>
+              <div class="txt"><span class="lbl">{t('psettings.background')}</span><span class="hint">{t(`psettings.bg.${profile.background.kind}` as Key)}</span></div></div>
+            <button class="btn" type="button" onclick={() => openBackgroundPicker(profile.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.backgroundChange')}</button>
+          </div>
+        {/if}
+      </SettingSection>
+    {/if}
 
-    <div class="row">
-      <div class="txt"><b>{t('psettings.version')}</b>
-        <div class="hint mono">{profile.mcVersion} &middot; {profile.loader === 'vanilla' ? t('profile.vanilla') : `${profile.loader} ${profile.loaderVersion ?? ''}`}</div>
-      </div>
-      <button class="btn" type="button" disabled={locked} onclick={() => (changing = true)}><SwapIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.change')}</button>
-    </div>
+    {#if sec('game')}
+      <SettingSection id="p-game" title={t('settings.group.game')}>
+        {#if show('version')}
+          <SettingRow id="version" label={t('psettings.version')} hint={`${profile.mcVersion} · ${profile.loader === 'vanilla' ? t('profile.vanilla') : `${profile.loader} ${profile.loaderVersion ?? ''}`.trim()}`}>
+            <button class="btn" type="button" disabled={locked} onclick={() => (changing = true)}><SwapIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.change')}</button>
+          </SettingRow>
+        {/if}
 
-    <div class="row col">
-      <div class="txt"><b id="ps-ram-l">{t('new.ram')}</b><div class="hint">{t('ram.hint.instance')}</div></div>
-      <RamControl id="ps-ram" value={profile.effectiveRamMb} source={profile.ramSource} hint={profile.ramHint} limits={app.ramLimits} defaultMb={app.defaultRamMb}
-        onsave={(ram) => save({ ram })} />
-    </div>
+        {#if show('ram')}
+          <SettingRow id="ram" stack label={t('new.ram')} hint={t('ram.hint.instance')}>
+            <RamControl id="ps-ram" value={profile.effectiveRamMb} source={profile.ramSource} hint={profile.ramHint} limits={app.ramLimits} defaultMb={app.defaultRamMb}
+              onsave={(ram) => save({ ram })} />
+          </SettingRow>
+        {/if}
 
-    <div class="row col">
-      <label for="ps-args">{t('settings.javaArgs')}</label>
-      <input id="ps-args" class="field mono" bind:value={args} oninput={onArgs} spellcheck="false" autocomplete="off" placeholder={app.config?.javaArgs ?? ''} />
-      <div class="hint">{t('psettings.argsHint')}</div>
-    </div>
+        {#if show('javaArgs')}
+          <SettingRow id="javaArgs" stack label={t('settings.javaArgs')} hint={t('psettings.argsHint')} forId="ps-args">
+            <input id="ps-args" class="field mono" bind:value={args} oninput={onArgs} spellcheck="false" autocomplete="off" placeholder={app.config?.javaArgs ?? ''} />
+          </SettingRow>
+        {/if}
 
-    <div class="row">
-      <div class="txt"><b id="ps-mc">{t('psettings.mango')}</b><div class="hint">{t('psettings.mangoHint', { state: app.config?.mangoConfig ? t('psettings.on') : t('psettings.off') })}</div></div>
-      <Seg label={t('psettings.mango')} value={mc3} idPrefix="psmc"
-        options={[{ value: 'default', label: t('psettings.default') }, { value: 'on', label: t('psettings.on') }, { value: 'off', label: t('psettings.off') }]}
-        onchange={(v) => save({ mangoConfig: v === 'default' ? null : v === 'on' })} />
-    </div>
-  </section>
+        {#if show('mango')}
+          <SettingRow id="mango" label={t('psettings.mango')} hint={t('psettings.mangoHint', { state: app.config?.mangoConfig ? t('psettings.on') : t('psettings.off') })}>
+            <Seg label={t('psettings.mango')} value={mc3} idPrefix="psmc"
+              options={[{ value: 'default', label: t('psettings.default') }, { value: 'on', label: t('psettings.on') }, { value: 'off', label: t('psettings.off') }]}
+              onchange={(v) => save({ mangoConfig: v === 'default' ? null : v === 'on' })} />
+          </SettingRow>
+        {/if}
+      </SettingSection>
+    {/if}
 
-  <section class="danger" aria-labelledby="ps-danger">
-    <h2 id="ps-danger" class="eyebrow">{t('psettings.danger')}</h2>
-    <div class="row">
-      <div class="txt"><b>{t('psettings.deleteTitle')}</b><div class="hint">{t('psettings.deleteHint')}</div></div>
-      <div class="delcol">
-        <button class="btn danger" type="button" disabled={locked} onclick={() => (confirmDelete = true)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('profile.delete')}</button>
-        {#if locked}<span class="hint">{t('psettings.lose.running')}</span>{/if}
-      </div>
-    </div>
-  </section>
+    {#if sec('danger')}
+      <SettingSection id="p-danger" danger title={t('psettings.danger')}>
+        {#if show('delete')}
+          <div class="set-row" id="set-delete">
+            <div class="txt"><span class="lbl">{t('psettings.deleteTitle')}</span><span class="hint">{t('psettings.deleteHint')}</span></div>
+            <div class="delcol">
+              <button class="btn danger" type="button" disabled={locked} onclick={() => (confirmDelete = true)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('profile.delete')}</button>
+              {#if locked}<span class="hint">{t('psettings.lose.running')}</span>{/if}
+            </div>
+          </div>
+        {/if}
+      </SettingSection>
+    {/if}
+  </div>
 </div>
 
 {#if confirmDelete}
@@ -183,15 +214,10 @@
   .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
   .bgthumb { position: relative; flex: none; width: 100px; height: 56px; border-radius: var(--r-s); overflow: hidden; border: 1px solid var(--line); }
   .delcol { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 260px; }
-  .ps { max-width: 760px; display: grid; gap: 24px; }
+  .ps { max-width: 760px; display: grid; gap: 14px; }
+  .top { display: grid; gap: 4px; }
   .status { height: 18px; font-size: 13px; }
   .ok { color: var(--leaf); }
-  section { display: grid; border-top: 1px solid var(--line); }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
-  .row.col { flex-direction: column; align-items: stretch; gap: 8px; }
-  label { font-weight: 500; }
-  .danger { border-top-color: rgba(237, 102, 92, 0.4); }
-  .danger h2 { padding: 14px 0 6px; color: var(--tomato); }
   .chg { display: grid; gap: 6px; }
-  .chg label { margin-top: 8px; }
+  .chg label { margin-top: 8px; font-weight: 500; }
 </style>

@@ -63,11 +63,11 @@ describe('background + icon commands (Part 8)', () => {
 
   it('"use modpack logo" restores the pack image after a custom one and tracks iconSource', async () => {
     const { api } = await boot();
-    const search = api.searchProjects({ params: { provider: 'modrinth', projectType: 'modpack', sort: 'relevance', offset: 0, limit: 5 } });
+    const search = api.searchProjects({ params: { projectType: 'modpack', sort: 'relevance', offset: 0, limit: 5 } });
     await vi.advanceTimersByTimeAsync(500);
     const hit = (await search).hits[0];
     expect(hit).toBeTruthy();
-    const install = api.modpackInstall({ provider: 'modrinth', projectId: hit.projectId });
+    const install = api.modpackInstall({ projectId: hit.projectId });
     await vi.advanceTimersByTimeAsync(3000);
     const pack = await install;
     expect(pack.iconSource).toBe('modpack');

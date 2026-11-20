@@ -9,7 +9,6 @@
   import DotsThreeIcon from 'phosphor-svelte/lib/DotsThreeIcon';
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
-  import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
   import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
   import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
@@ -148,7 +147,7 @@
 {#snippet card(p: ProfileView)}
   <li class="cell">
     <button class="card notch" style:--n="16px" type="button" onclick={() => open(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
-      <span class="cover"><InstanceIcon profile={p} fill radius={0} /><span class="bar3"></span>{#if p.pendingBlocked > 0}<span class="miss" title={tp('blocked.badge', p.pendingBlocked)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</span>{/if}</span>
+      <span class="cover"><InstanceIcon profile={p} fill radius={0} /></span>
       <span class="info">
         <b>{p.name}</b>
         <span class="mono sub">{p.mcVersion}<span class="sep">/</span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}{#if p.modCount}<span class="sep">/</span>{tp('profile.mods', p.modCount)}{/if}</span>
@@ -173,7 +172,7 @@
   <li>
     <button class="row" type="button" onclick={() => open(p.id)}>
       <InstanceIcon profile={p} size={36} notch={6} />
-      <span class="nmc"><b class="nm">{p.name}{#if p.pendingBlocked > 0}<span class="miss inl" title={tp('blocked.badge', p.pendingBlocked)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</span>{/if}</b>{@render tagChips(p, 4)}</span>
+      <span class="nmc"><b class="nm">{p.name}</b>{@render tagChips(p, 4)}</span>
       <span class="mono">{p.mcVersion}</span>
       <span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}</span>
       <span class="mono r dim">{fmtRelative(p.lastPlayed, lang()) ?? t('home.never')}</span>
@@ -215,14 +214,10 @@
   .cell:hover .kebab, .cell:focus-within .kebab, .kebab[aria-expanded='true'] { opacity: 1; }
   .kebab:hover { background: rgba(11, 12, 14, 0.85); }
   .cm .pop { position: absolute; right: 0; top: 34px; min-width: 190px; }
-  .miss { right: 46px; }
   .card { display: grid; grid-template-rows: auto 1fr; width: 100%; text-align: left; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
-  .miss { position: absolute; right: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; background: var(--accent-fill); color: var(--on-fill); font-size: var(--fs-xs); font-weight: 700; border-radius: var(--r-s); }
-  .miss.inl { position: static; margin-left: 10px; height: 18px; padding: 0 6px; vertical-align: 2px; font-family: var(--font-ui); }
-  .bar3 { position: absolute; left: 0; bottom: 0; width: 48px; height: 3px; background: var(--tint); }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 14px 14px; min-width: 0; }
   .info b { font: 700 var(--fs-xl)/1.15 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
   .sub { font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

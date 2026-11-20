@@ -16,6 +16,7 @@
   $effect(() => { gate.update(!servers.loaded); return () => gate.destroy(); });
 </script>
 
+{#if !servers.loaded || top.length > 0}
 <section class="qj" aria-labelledby="qj-h">
   <header>
     <h2 id="qj-h">{t('servers.quickJoin')}</h2>
@@ -23,8 +24,6 @@
   </header>
   {#if !servers.loaded}
     {#if gate.show}<ListRowSkeleton count={4} img={32} rowHeight={50} padding="0" gap={12} bars={[{ w: '36%', h: 13 }, { w: '22%', h: 10 }]} tail={32} />{/if}
-  {:else if top.length === 0}
-    <p class="hint">{t('servers.empty')}</p>
   {:else}
     <ul>
       {#each top as s (s.id)}
@@ -44,6 +43,7 @@
     </ul>
   {/if}
 </section>
+{/if}
 
 <style>
   .qj { min-width: 0; }

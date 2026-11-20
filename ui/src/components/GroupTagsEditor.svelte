@@ -45,7 +45,7 @@
   const full = $derived(tags.length >= TAGS_MAX);
 </script>
 
-<div class="row col">
+<div class="set-row stack" id="set-grouptags">
   <label for="gt-group">{t('group.label')}</label>
   <input id="gt-group" class="field" list="gt-groups" bind:value={group} maxlength={GROUP_MAX + 8} placeholder={t('group.placeholder')} autocomplete="off" aria-invalid={!!groupErr}
     aria-describedby="gt-group-h" onblur={saveGroup} onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
@@ -54,7 +54,7 @@
   {#if groupErr}<div class="err" role="alert">{t(groupErr)}</div>{/if}
 </div>
 
-<div class="row col">
+<div class="set-row stack" id="set-tags">
   <div class="head"><label for="gt-tag">{t('tags.label')}</label><span class="hint mono" aria-live="polite">{t('tags.count', { n: tags.length })}</span></div>
   {#if tags.length}
     <ul class="chips" aria-label={t('tags.label')}>
@@ -80,7 +80,6 @@
 </div>
 
 <style>
-  .row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
   label { font-weight: 500; }
   .head { display: flex; justify-content: space-between; gap: 12px; }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }

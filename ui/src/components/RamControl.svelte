@@ -139,8 +139,8 @@
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   .warns { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .warns li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 3px solid var(--mango); background: var(--ink-1); font-size: 13.5px; line-height: 1.4; }
+  .warns li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: var(--ink-1); font-size: 13.5px; line-height: 1.4; }
   .warns li :global(svg) { flex: none; margin-top: 1px; color: var(--mango); }
-  .warns li.w-cap, .warns li.w-min { border-left-color: var(--tomato); }
+  .warns li.w-cap, .warns li.w-min { border-color: var(--tomato); }
   .warns li.w-cap :global(svg), .warns li.w-min :global(svg) { color: var(--tomato); }
 </style>

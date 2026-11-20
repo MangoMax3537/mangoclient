@@ -65,7 +65,6 @@
   {/if}
   {#if waiting}<div class="wait skel"></div>{/if}
   <div class="scrim" class:plain={res.kind === 'plain' || res.kind === 'watermark'}></div>
-  <div class="bar"></div>
 </div>
 
 <style>
@@ -97,7 +96,6 @@
   /* --sc = overlay strength (0.3-0.9, default 0.6): left text side gets sc*1.5, the middle sc*1.2, the right sc*0.3 */
   .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(var(--scrim), calc(var(--sc) * 1.5)) 0%, rgba(var(--scrim), calc(var(--sc) * 1.2)) 42%, rgba(var(--scrim), calc(var(--sc) * 0.3)) 100%), linear-gradient(0deg, rgba(var(--scrim), calc(var(--sc) * 1.08)), transparent 55%); }
   .scrim.plain { background: linear-gradient(90deg, rgba(var(--scrim), 0.35), transparent 70%); }
-  .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tint); }
   @keyframes spin { from { transform: translateZ(var(--p)) rotateX(-5deg) rotateY(0deg); } to { transform: translateZ(var(--p)) rotateX(-5deg) rotateY(360deg); } }
   @keyframes kb { to { transform: scale(1.08) translate3d(-1%, -1%, 0); } }
   @keyframes drift { to { transform: translateY(-50%) scale(1.04); } }

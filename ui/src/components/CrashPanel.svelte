@@ -161,9 +161,9 @@
   .meta .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 22px; }
   .sum { margin: 6px 0 0; font-size: var(--fs-lg); line-height: 1.4; }
   .causes { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
-  .cause { padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-left: 4px solid var(--paper-mute); border-radius: var(--r-m); display: grid; gap: 8px; }
-  .cause.high { border-left-color: var(--tomato); }
-  .cause.medium { border-left-color: var(--mango); }
+  .cause { padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); display: grid; gap: 8px; }
+  .cause.high { border-color: var(--tomato); }
+  .cause.medium { border-color: var(--mango); }
   .ch { display: flex; align-items: center; gap: 10px; }
   .rank { flex: none; width: 24px; height: 24px; display: grid; place-items: center; background: var(--ink-4); color: var(--paper); font-weight: 700; font-size: var(--fs-sm); border-radius: var(--r-s); }
   h4 { flex: 1; font: 700 var(--fs-lg) var(--font-display); min-width: 0; }
@@ -180,7 +180,7 @@
   .tog { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--paper-dim); height: 32px; }
   .tog:hover { color: var(--paper); }
   .ex { margin: 6px 0 0; padding: 10px 12px; max-height: 260px; overflow: auto; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; user-select: text; }
-  .box { padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
+  .box { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
   :global(.skl-crash) { display: grid; gap: 12px; }
   .res { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); border-radius: var(--r-m); }
   .res .field { flex: 1; height: 32px; }

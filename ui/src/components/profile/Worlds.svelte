@@ -23,7 +23,8 @@
   import { actions, app, errorText, getApi, isBusy, lang, t, toast, tp } from '../../lib/stores.svelte';
   import type { Backup, GameMode, ProfileView, World } from '../../lib/types';
 
-  let { profile }: { profile: ProfileView } = $props();
+  /** Nothing to show: render nothing at all (the Media tab then shows one shared empty state instead). */
+  let { profile, hideWhenEmpty = false }: { profile: ProfileView; hideWhenEmpty?: boolean } = $props();
   let failed = $state(false);
   let backupOf = $state<World | null>(null);
   let deleteOf = $state<World | null>(null);
@@ -56,6 +57,7 @@
   }
 </script>
 
+{#if !(hideWhenEmpty && worlds !== undefined && worlds.length === 0)}
 <section class="ws" aria-labelledby="ws-h">
   <header>
     <h2 id="ws-h" class="eyebrow">{t('worlds.title')}</h2>
@@ -100,6 +102,7 @@
     </ul>
   {/if}
 </section>
+{/if}
 
 {#if backupOf}
   <BackupDialog profileId={profile.id} world={backupOf} onclose={() => (backupOf = null)} ondone={backedUp} />
@@ -112,7 +115,7 @@
 <style>
   .ws { margin-bottom: var(--s-6); }
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
-  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
   .note :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
   .pend { margin-bottom: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }

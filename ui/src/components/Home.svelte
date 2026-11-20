@@ -3,7 +3,6 @@
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import SlidersIcon from 'phosphor-svelte/lib/SlidersIcon';
-  import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import InstanceIcon from './InstanceIcon.svelte';
@@ -20,7 +19,7 @@
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
   import {
-    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openBlocked, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
+    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
   } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
   import Loadable from './Loadable.svelte';
@@ -78,7 +77,6 @@
           <li>{t('chip.java')} {t('chip.auto')}</li>
           <li>{ram ? fmtRam(ram) : t('chip.default')}</li>
           {#if p.modCount}<li>{tp('profile.mods', p.modCount)}</li>{/if}
-          {#if p.pendingBlocked > 0}<li><button class="miss" type="button" onclick={() => openBlocked(p.id)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</button></li>{/if}
         </ul>
           </div>
         </div>
@@ -95,7 +93,6 @@
         <span class="n display">{fmtDuration(p.playTimeMs)}</span>
         <span class="eyebrow">{t('home.playtime')}</span>
       </div>
-      <div class="edge step-edge" aria-hidden="true"></div>
     </section>
 
     {#if showConsole}<div class="pad"><Console profileId={p.id} /></div>{/if}
@@ -127,6 +124,7 @@
 
       <div class="split">
         <QuickJoin />
+        {#if stats.phase !== 'ready' || (stats.data?.totalMs ?? 0) > 0}
         <section class="pt" aria-labelledby="pt-h">
           <header><h2 id="pt-h">{t('home.last14')}</h2></header>
           <Loadable state={stats} compactError>
@@ -144,6 +142,7 @@
             {/snippet}
           </Loadable>
         </section>
+        {/if}
       </div>
     </div>
   {:else}
@@ -173,12 +172,9 @@
   .live { animation: pulse 1.6s ease-in-out infinite; }
   h1 { font-size: var(--fs-hero); max-width: 14ch; text-wrap: balance; color: var(--paper); }
   .facts { color: var(--paper-dim); }
-  .miss { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; background: var(--accent-fill); color: var(--on-fill); font: 700 var(--fs-xs) var(--font-ui); border-radius: var(--r-s); }
-  .miss:hover { background: var(--accent-fill-hover); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 6px; }
   .total { position: absolute; right: 40px; bottom: 44px; display: grid; justify-items: end; gap: 4px; }
   .total .n { font-size: var(--fs-2xl); color: var(--paper); letter-spacing: -0.02em; font-feature-settings: 'tnum'; }
-  .edge { position: absolute; left: 0; right: 0; bottom: -1px; background: var(--ink-0); }
   .pad { padding: var(--s-4) 32px 0; }
 
   .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); padding: var(--s-5) 32px 32px 44px; }
@@ -187,7 +183,7 @@
   .strip { list-style: none; margin: 0 -32px 0 -4px; padding: 4px 32px 8px 4px; display: flex; gap: var(--s-3); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
   .card { position: relative; flex: none; width: 212px; scroll-snap-align: start; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
-  .card.sel::before { content: ''; position: absolute; left: 0; right: 14px; top: 0; height: 3px; background: var(--accent-fill); z-index: 1; }
+  .card.sel { background: var(--ink-3); }
   .open { display: grid; width: 100%; text-align: left; gap: 2px; padding-bottom: 12px; }
   .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: 0; }
   .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }
@@ -200,6 +196,7 @@
   .card:hover .go, .go:focus-visible, .card:focus-within .go { opacity: 1; transform: none; }
   .go:disabled { display: none; }
 
+  .split:empty { display: none; }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-7); align-items: start; }
   .pt { min-width: 0; display: grid; gap: var(--s-2); }
   .pt header { margin-bottom: 0; }

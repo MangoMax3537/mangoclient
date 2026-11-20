@@ -33,9 +33,9 @@
   let bad = $state(false);
   let shots = $state<Screenshot[] | null>(null);
 
-  $effect(() => { if (tab === 'panorama') void loadPanorama(profileId); });
+  $effect(() => { void loadPanorama(profileId); });
   $effect(() => {
-    if (tab !== 'screenshot' || shots) return;
+    if (shots) return;
     let dead = false;
     getApi().screenshotsList({ profileId }).then((l) => { if (!dead) shots = l; }, () => { if (!dead) shots = []; });
     return () => { dead = true; };
@@ -63,8 +63,9 @@
   const tabs = $derived([
     { value: 'auto', label: t('bg.tab.auto') },
     ...(all.length ? [{ value: 'wallpapers', label: t('bg.tab.wallpapers') }] : []),
-    { value: 'panorama', label: t('bg.tab.panorama') },
-    { value: 'screenshot', label: t('bg.tab.screenshot') },
+    // a tab with nothing behind it is not rendered: no panorama extracted, no screenshots taken
+    ...(pano || tab === 'panorama' || draft.kind === 'panorama' ? [{ value: 'panorama', label: t('bg.tab.panorama') }] : []),
+    ...(shots?.length || tab === 'screenshot' || draft.kind === 'screenshot' ? [{ value: 'screenshot', label: t('bg.tab.screenshot') }] : []),
     { value: 'upload', label: t('bg.tab.upload') },
     { value: 'none', label: t('bg.tab.none') },
   ]);
@@ -103,7 +104,7 @@
       <span class="mt"><b class="display">{profile?.name}</b><span class="mono">{profile?.mcVersion}</span></span>
     </div>
 
-    <div class="tabscroll"><Seg options={tabs} value={tab} label={t('bg.title', { name: '' })} role="tablist" idPrefix="bpick" onchange={setTab} /></div>
+    <div class="tabscroll"><Seg options={tabs} value={tab} label={t('bg.title', { name: '' })} role="tablist" idPrefix="bpick" fill onchange={setTab} /></div>
 
     <div class="panel" role="tabpanel" aria-labelledby="bpick-{tab}">
       {#if tab === 'auto'}

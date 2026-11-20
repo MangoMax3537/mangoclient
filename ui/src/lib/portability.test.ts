@@ -7,7 +7,7 @@ import {
 import { dictionaries, hasKey, translate } from './i18n';
 import type { CrashCause, CrashReport, ImportPlan } from './types';
 
-const plan: ImportPlan = { kind: 'mrpack', name: 'Pack', mcVersion: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', fileCount: 3, sizeBytes: 1000, blockedFiles: [], ram: null, appliedRamMb: null };
+const plan: ImportPlan = { kind: 'mrpack', name: 'Pack', mcVersion: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', fileCount: 3, sizeBytes: 1000, ram: null, appliedRamMb: null };
 
 describe('tags and group validation (mirrors the service)', () => {
   it('trims, rejects empty, control characters, long values', () => {
@@ -122,7 +122,7 @@ describe('import state machine', () => {
 describe('error mapping', () => {
   it('maps the documented codes to messages that exist in both languages', () => {
     const codes = ['path.not_granted', 'path.unsupported', 'net.host_not_allowed', 'loaders.installer_unverified', 'import.not_found', 'import.not_a_file', 'import.too_large',
-      'import.not_an_archive', 'import.unsupported_format', 'import.invalid_pack', 'import.unsafe_archive', 'curseforge.no_api_key'];
+      'import.not_an_archive', 'import.unsupported_format', 'import.invalid_pack', 'import.unsafe_archive', 'import.unsupported_curseforge'];
     for (const c of codes) {
       const k = importErrorKey(c);
       expect(k, c).not.toBeNull();

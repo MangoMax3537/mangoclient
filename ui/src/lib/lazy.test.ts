@@ -30,8 +30,8 @@ describe('memo', () => {
 describe('lazy-load boundaries', () => {
   const HEAVY_SCREENS = ['Discover', 'Servers', 'Stats', 'Settings', 'Onboarding', 'NewProfile'];
   const HEAVY_DIALOGS = ['InstallFlow', 'IconPicker', 'BackgroundPicker', 'ImportDialog', 'ExportDialog', 'DiagnosticsDialog', 'CrashPanel', 'ReloginDialog', 'UpdateOverlay',
-    'ProjectDrawer', 'BlockedDialog', 'InstancePicker', 'DependencyDialog', 'ModpackDialog', 'UpdatePreview', 'RunDialog'];
-  const TABS = ['Content', 'Media', 'Backups', 'Logs', 'ProfileSettings'];
+    'ProjectDrawer', 'InstancePicker', 'DependencyDialog', 'ModpackDialog', 'UpdatePreview', 'RunDialog'];
+  const TABS = ['ContentTab', 'Media', 'Backups', 'Logs', 'ProfileSettings'];
   const all = [...HEAVY_SCREENS, ...HEAVY_DIALOGS, ...TABS];
 
   it('the entry graph (App, Library, Home, ProfilePage, InstallFlow, Discover) never imports a heavy part statically', () => {

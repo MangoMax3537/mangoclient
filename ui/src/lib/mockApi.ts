@@ -5,7 +5,6 @@ import type {
 import { createContentApi } from './mockContent';
 import { mockDevFromSearch, withDevControls, type MockDevOptions } from './mockDev';
 import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
-import { createBlockedMock, type BlockedDev } from './mockBlocked';
 import { createWorldsMock } from './mockWorlds';
 import { createPortabilityMock, MOCK_CRASHES, type MockCrash, type PortabilityDev } from './mockPortability';
 import { checkGroup, checkTag } from './portability';
@@ -27,10 +26,6 @@ export interface MockOptions {
   needsRelogin?: boolean;
   /** The seeded Microsoft account has a locked credential store. */
   locked?: boolean;
-  /** No CurseForge API key: providers_status reports it unavailable and every CurseForge command fails. */
-  noCurseforge?: boolean;
-  /** Blocked files appear in the Downloads folder by themselves, one per watcher tick. */
-  blockedAuto?: boolean;
   /** Part 6: how the block gallery behaves (see mockIcons). */
   blocks?: MockBlocksMode;
   /** Part 7: `off` = no panorama is ever extracted. */
@@ -44,7 +39,7 @@ export interface MockOptions {
   /** Part 9: every import plan / import fails with this code (`?mockImportError=<code>`), exports with `exportError`. */
   importError?: string;
   exportError?: string;
-  /** Part 9: simulate `files:dropped` shortly after the app listens (`?mockDrop=mrpack|curseforge|prism|bad`). */
+  /** Part 9: simulate `files:dropped` shortly after the app listens (`?mockDrop=mrpack|curseforge|prism|bad`; a CurseForge zip is rejected with import.unsupported_curseforge). */
   drop?: string;
   /** Latency / slow / fail controls (`?mockLatency`, `?mockDelay`, `?mockSlow`, `?mockFail`). Absent = no wrapping (unit tests). */
   dev?: MockDevOptions;
@@ -57,7 +52,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off ?mockRunning ?mockBackupError=<code> ?mockCrash=java|oom|dependency|none ?mockImportError=<code> ?mockExportError=<code> ?mockDrop=mrpack|curseforge|prism|bad */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockBlocks=off|preparing|error ?mockPanorama=off ?mockRunning ?mockBackupError=<code> ?mockCrash=java|oom|dependency|none ?mockImportError=<code> ?mockExportError=<code> ?mockDrop=mrpack|curseforge|prism|bad */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -67,8 +62,6 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     noKeystore: q.has('mockNoKeystore'),
     needsRelogin: q.has('mockRelogin'),
     locked: q.has('mockLocked'),
-    noCurseforge: q.has('mockNoCurseforge'),
-    blockedAuto: q.has('mockBlockedAuto'),
     blocks: ((['off', 'preparing', 'error'] as const).find((m) => m === q.get('mockBlocks')) ?? 'default') as MockBlocksMode,
     panorama: q.get('mockPanorama') === 'off' ? 'off' : 'default',
     running: q.has('mockRunning'),
@@ -82,12 +75,13 @@ export function mockOptionsFromSearch(search: string): MockOptions {
 }
 
 const DAY = 86400000;
+const nope = (): Promise<never> => Promise.reject({ code: 'not_implemented', message: 'not available in the browser mock', needsRelogin: false });
 const uuid = () =>
   globalThis.crypto?.randomUUID?.() ??
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'ramSource' | 'ramHint' | 'effectiveRamMb' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: 4096, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'ramSource' | 'ramHint' | 'effectiveRamMb' | 'javaArgs' | 'mangoConfig' | 'javaPath' | 'window' | 'icon' | 'iconSource' | 'autoBlock' | 'background' | 'group' | 'tags'> = { coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: 4096, javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [] };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, ramSource: 'user', effectiveRamMb: 6144, group: 'Survival', tags: ['main', 'fabric'], lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
@@ -98,7 +92,7 @@ function seedProfiles(now: number): ProfileView[] {
     { ...base, id: 'e90a6b35-17c4-4d8f-a2e1-5b3c7f4d8a09', name: 'Shader Showcase', mcVersion: '1.20.6', loader: 'quilt', loaderVersion: '0.26.1',
       color: '#6fa8d6', ram: 8192, ramSource: 'user', effectiveRamMb: 8192, tags: ['shaders'], lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
     { ...base, id: '1b9d4c68-6e0f-4a35-8c27-d3f5a7e91b40', name: 'Create Expedition', mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172',
-      color: '#d6c27a', ram: 4096, ramSource: 'modpack', effectiveRamMb: 4096, ramHint: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' }, group: 'Modpacks', tags: ['create', 'tech'], lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
+      color: '#d6c27a', ram: 4096, ramSource: 'modpack', effectiveRamMb: 4096, ramHint: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'modrinth' }, group: 'Modpacks', tags: ['create', 'tech'], lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
     { ...base, id: '6e2a85f1-0b7d-4d94-9a13-c48e2f6b7d05', name: 'Classic Forge 1.20.1', mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0',
       color: '#e6a3b8', background: { kind: 'none' }, group: 'Modpacks', ram: 6144, ramSource: 'user', effectiveRamMb: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
   ];
@@ -137,7 +131,7 @@ const LOADER_VERSIONS: Record<Exclude<Loader, 'vanilla'>, LoaderVersion[]> = {
   neoforge: [{ version: '21.4.100', stable: true }, { version: '21.4.40-beta', stable: false }],
 };
 
-export type MockApi = Api & { dev: BlockedDev & PortabilityDev };
+export type MockApi = Api & { dev: PortabilityDev };
 
 export function createMockApi(opts: MockOptions = {}): MockApi {
   const scale = opts.timeScale ?? 1;
@@ -147,20 +141,18 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     keepLauncherOpen: true, hideOnLaunch: false, showSnapshots: false, mangoConfig: true, performanceMods: true,
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
-    blockedModsModrinthFallback: true, blockedModsWatchDirs: ['/home/mango/Downloads'], blockedModsCheckSubfolders: false,
     autoSnapshot: true, backupKeep: 5,
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now, opts);
   config.selectedProfile = profiles[0].id;
   config.selectedAccount = accounts[0].uuid;
-  let cfOn = !opts.noCurseforge;
   const running = new Set<string>(opts.running ? [profiles[0].id] : []);
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
-    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(), 'blocked:changed': new Set(),
-    'blocks:status': new Set(), 'panorama:ready': new Set(), 'files:dropped': new Set(),
+    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(),
+    'blocks:status': new Set(), 'panorama:ready': new Set(), 'files:dropped': new Set(), 'skin:updated': new Set(), 'java:progress': new Set(), 'window:state': new Set(),
   };
   const emitDrop = (paths: string[]) => emit('files:dropped', { paths });
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
@@ -189,24 +181,18 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   });
   const portabilityMock = createPortabilityMock({
     scale, emit, emitDrop, profiles: () => profiles, find, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); },
-    seedBlocked: (id, files) => blockedMock.seed(id, files), crash: opts.crash, importError: opts.importError, exportError: opts.exportError,
-  });
-  const blockedMock = createBlockedMock({
-    scale, emit, auto: !!opts.blockedAuto, dirs: () => config.blockedModsWatchDirs,
-    setPending: (id, n) => { const p = profiles.find((x) => x.id === id); if (p) p.pendingBlocked = n; },
+    crash: opts.crash, importError: opts.importError, exportError: opts.exportError,
   });
   const part2 = createContentApi({
-    seedBlocked: blockedMock.seed,
     now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); }, find,
-    gameActive: () => running.size > 0 || timers.size > 0, get curseforge() { return cfOn; },
+    gameActive: () => running.size > 0 || timers.size > 0,
   });
   const api: MockApi = {
     ...part2,
-    ...blockedMock.api,
     ...iconsMock.api,
     ...worldsMock,
     ...portabilityMock.api,
-    dev: { ...blockedMock.dev, ...portabilityMock.dev },
+    dev: { ...portabilityMock.dev },
     async appState(): Promise<AppState> {
       return {
         version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram) })), accounts: structuredClone(accounts),
@@ -215,20 +201,18 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     },
     async configSet({ patch }) {
       // like the Rust dispatch: unknown keys are rejected, not ignored
-      const unknown = Object.keys(patch).find((k) => k !== 'curseforgeApiKey' && !(k in config));
+      const unknown = Object.keys(patch).find((k) => !(k in config));
       if (unknown) throw { code: 'validation', message: `Unknown configuration setting: ${unknown}`, needsRelogin: false };
       if (patch.backupKeep !== undefined && !(Number.isInteger(patch.backupKeep) && patch.backupKeep >= 1 && patch.backupKeep <= 50)) {
         throw { code: 'validation', message: 'backupKeep must be 1..50', needsRelogin: false };
       }
-      const { curseforgeApiKey, ...rest } = patch;
-      Object.assign(config, rest);
-      if (curseforgeApiKey !== undefined) cfOn = !!curseforgeApiKey; // write-only, never returned
+      Object.assign(config, patch);
       return { ...config };
     },
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null, ramSource: 'default', ramHint: null, effectiveRamMb: config.ram,
-        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
+        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
         icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' }, group: null, tags: [],
       };
       profiles = [...profiles, p];
@@ -373,6 +357,14 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       return true;
     },
     async gameRunning() { return [...running]; },
+    // Commands of features the browser mock does not simulate (skins, Java installs, the frameless window): they answer like the service
+    // does before the feature exists, so the UI never hangs on them in a plain browser.
+    async skinGet() { return nope(); }, async skinUpload() { return nope(); }, async skinUseUsername() { return nope(); }, async skinSetCape() { return nope(); },
+    async skinLibraryList() { return []; }, async skinLibraryAdd() { return nope(); }, async skinLibrarySaveCurrent() { return nope(); },
+    async skinLibraryRemove() { return []; }, async skinLibraryApply() { return nope(); },
+    async javaList() { return []; }, async javaInstall() { return nope(); }, async panoramaPool() { return []; },
+    async windowMinimize() {}, async windowToggleMaximize() {}, async windowClose() {}, async windowIsMaximized() { return false; },
+    async windowStartDrag() {}, async windowStartResize() {},
     async pickImageFile() { return null; }, // no native dialog in the browser: the UI uses <input type=file> there
     async pickFolder() { return null; },
     async openFolder({ target }) { return `~/.mangoclient/${target}`; },

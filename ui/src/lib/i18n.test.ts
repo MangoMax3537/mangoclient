@@ -33,7 +33,7 @@ describe('i18n', () => {
   });
   it('the Part 8 strings exist in both languages', () => {
     const keys = ['bg.look', 'bg.dim', 'bg.blur', 'psettings.bg.wallpaper', 'icons.logo.use', 'icons.logo.restored', 'icons.upload.dialogTitle',
-      'settings.blocked.browse', 'settings.blocked.dialogTitle', 'err.background', 'err.icon.no_modpack_logo', 'err.backend_unreachable', 'err.validation', 'err.bad_args'];
+      'err.background', 'err.icon.no_modpack_logo', 'err.backend_unreachable', 'err.validation', 'err.bad_args'];
     for (const k of keys) { expect(hasKey('en', k), k).toBe(true); expect(hasKey('de', k), k).toBe(true); expect(dictionaries.de[k]).not.toBe(dictionaries.en[k]); }
   });
   it('the Part 9 portability strings exist in both languages and differ between them', () => {

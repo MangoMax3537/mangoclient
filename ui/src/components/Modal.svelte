@@ -58,7 +58,6 @@
 <style>
   dialog { padding: 0; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-modal); max-height: min(86vh, 760px); overflow: hidden; }
   dialog[open] { display: flex; flex-direction: column; animation: pop var(--dur-slow) var(--ease); }
-  dialog::before { content: ''; flex: none; height: 3px; background: linear-gradient(90deg, var(--accent-fill) 0 56px, transparent 56px); }
   dialog::backdrop { background: var(--backdrop); }
   dialog.dialog { width: min(480px, calc(100vw - 48px)); }
   dialog.dialog.lg { width: min(640px, calc(100vw - 48px)); }

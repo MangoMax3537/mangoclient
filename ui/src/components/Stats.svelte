@@ -5,9 +5,10 @@
   import StatTileSkeleton from './skeleton/StatTileSkeleton.svelte';
   import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
   import LoadError from './LoadError.svelte';
+  import EmptyState from './EmptyState.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { fmtDuration } from '../lib/format';
-  import { app, errorText, getApi, lang, t, toast } from '../lib/stores.svelte';
+  import { app, errorText, getApi, lang, nav, t, toast } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
 
   const RANGES = ['14', '30', '90'];
@@ -25,6 +26,8 @@
 
   const max = $derived(Math.max(1, ...(data?.days ?? []).map((d) => d.ms)));
   const activeDays = $derived((data?.days ?? []).filter((d) => d.ms > 0).length);
+  // nothing played in the range: one empty state instead of zero tiles, a flat chart and a list of zeros
+  const empty = $derived(!!data && data.totalMs === 0);
   const avg = $derived(data && data.days.length ? data.totalMs / data.days.length : 0);
   const top = $derived(data?.perProfile[0] ?? null);
   const ticks = $derived([max, max / 2].map((v) => Math.round(v / 3600000 * 10) / 10));
@@ -39,6 +42,11 @@
     <Seg label={t('stats.range')} idPrefix="sr" value={range} onchange={(v) => (range = v)} options={RANGES.map((r) => ({ value: r, label: t('stats.days', { n: r }) }))} />
   </header>
 
+  {#if empty}
+    <EmptyState title={t('stats.emptyTitle', { n: range })} hint={t('stats.empty')}>
+      <button class="btn" type="button" onclick={() => (nav.view = 'library')}>{t('home.continue')}</button>
+    </EmptyState>
+  {:else}
   {#if data}
     <dl class="tiles">
       <div><dt>{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
@@ -98,6 +106,7 @@
       </ul>
     {/if}
   </section>
+  {/if}
 </div>
 
 <style>

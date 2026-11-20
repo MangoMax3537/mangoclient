@@ -3,11 +3,11 @@ import type { Api } from './api';
 import { fallbackImage } from './fallbackImage';
 import { CONTENT, DEPS, FULL_PROFILE, rng } from './mockData';
 import {
-  accepts, blockedFilesFor, CF_BLOCKED, catalogFor, compat, hash, idFor, metaOf, onProvider, packMeta, rowOfSlug, sizeOf, slugOf, typeOfSlug, UPDATE_NEW_DEPS, websiteOf,
+  accepts, catalogFor, compat, hash, metaOf, packMeta, rowOfSlug, sizeOf, typeOfSlug, UPDATE_NEW_DEPS,
 } from './mockCatalog';
 import type {
-  ApiEvents, BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, RamHint, ProjectDetail, ProjectHit,
-  ProjectType, ProjectVersion, Provider, Screenshot, ServerEntry, ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
+  ApiEvents, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry, ProfileView, ProjectDetail, ProjectHit,
+  ProjectType, ProjectVersion, Screenshot, ServerEntry, ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
 
 export interface MockCtx {
@@ -18,14 +18,10 @@ export interface MockCtx {
   addProfile: (p: ProfileView) => void;
   find: (id: string) => ProfileView;
   gameActive: () => boolean;
-  /** false = no CurseForge API key (every CurseForge command fails with curseforge.no_api_key). */
-  curseforge?: boolean;
-  /** Part 5: modpack_install seeds the blocked files of the new instance; returns how many are pending. */
-  seedBlocked?: (profileId: string, files: BlockedFile[]) => number;
 }
 
 export type Part2 = Pick<Api,
-  'contentList' | 'contentToggle' | 'contentUninstall' | 'contentCheckUpdates' | 'contentOpenFolder' | 'providersStatus' | 'searchProjects'
+  'contentList' | 'contentToggle' | 'contentUninstall' | 'contentCheckUpdates' | 'contentOpenFolder' | 'searchProjects'
   | 'projectDetail' | 'projectVersions' | 'installTargets' | 'installPlan' | 'installApply' | 'modpackPlan' | 'modpackInstall'
   | 'serversList' | 'serversPingAll' | 'serversPing' | 'screenshotsList'
   | 'screenshotAction' | 'logsList' | 'logsRead' | 'logsUpload' | 'logsDelete' | 'statsSummary' | 'storageUsage' | 'storageClear'
@@ -34,19 +30,19 @@ export type Part2 = Pick<Api,
 const DAY = 86400000;
 const fail = (code: string, message = code) => ({ code, message, needsRelogin: false });
 
-/** Catalogue entry -> ProjectHit for one provider (deterministic metadata). */
-function toHit(provider: Provider, projectId: string, now: number): ProjectHit {
-  const slug = slugOf(projectId);
+/** Catalogue entry -> ProjectHit (deterministic metadata). */
+function toHit(projectId: string, now: number): ProjectHit {
+  const slug = projectId;
   const row = rowOfSlug(slug);
-  if (!row || !onProvider(provider, slug)) throw fail('project_not_found', `no project ${projectId}`);
+  if (!row) throw fail('project_not_found', `no project ${projectId}`);
   const [, title, author, description, cats] = row;
   const h = hash(slug);
   const type = typeOfSlug(slug);
-  const idx = Math.max(0, catalogFor(provider, type).findIndex((r) => r[0] === slug));
-  const downloads = Math.floor(48_000_000 / Math.pow(idx + 1, 0.95) + (h % 9000)) * (provider === 'curseforge' ? 3 : 1);
+  const idx = Math.max(0, catalogFor(type).findIndex((r) => r[0] === slug));
+  const downloads = Math.floor(48_000_000 / Math.pow(idx + 1, 0.95) + (h % 9000));
   const m = metaOf(slug);
   return {
-    provider, projectId: idFor(provider, slug), slug, title, author, description, type, iconUrl: null, downloads, follows: Math.floor(downloads / 38),
+    projectId: slug, slug, title, author, description, type, iconUrl: null, downloads, follows: Math.floor(downloads / 38),
     categories: cats.split(','), gameVersions: m.gameVersions, loaders: m.loaders,
     dateModified: new Date(now - (1 + (h % 160)) * DAY).toISOString(), installedIn: [],
   };
@@ -61,12 +57,12 @@ const SERVERS: ServerEntry[] = [
   { id: 'srv-old', name: 'Old Survival 1.8', address: '192.168.1.40', partner: false, starred: false, iconUrl: null },
 ];
 const STATUS: Record<string, ServerStatus> = {
-  'srv-mango': { id: 'srv-mango', online: true, ping: 38, motd: '§6§lMangoMC §r§7Bedwars, Skyblock, Survival', players: { online: 1284, max: 5000 }, version: '1.21.4' },
-  'srv-bedwars': { id: 'srv-bedwars', online: true, ping: 61, motd: '§aSeason 14 started! Queue now.', players: { online: 342, max: 1000 }, version: '1.8.9 - 1.21.4' },
-  'srv-hollow': { id: 'srv-hollow', online: true, ping: 14, motd: 'Iron Hollow, whitelisted friends only', players: { online: 3, max: 12 }, version: '1.21.4' },
-  'srv-skyblock': { id: 'srv-skyblock', online: false, ping: null, motd: '', players: null, version: null },
-  'srv-creative': { id: 'srv-creative', online: true, ping: 112, motd: 'Free plots, no ranks needed.', players: { online: 57, max: 200 }, version: '1.21.1' },
-  'srv-old': { id: 'srv-old', online: false, ping: null, motd: '', players: null, version: null },
+  'srv-mango': { id: 'srv-mango', online: true, ping: 38, motd: '§6§lMangoMC §r§7Bedwars, Skyblock, Survival', players: { online: 1284, max: 5000 }, version: '1.21.4', iconUrl: null },
+  'srv-bedwars': { id: 'srv-bedwars', online: true, ping: 61, motd: '§aSeason 14 started! Queue now.', players: { online: 342, max: 1000 }, version: '1.8.9 - 1.21.4', iconUrl: null },
+  'srv-hollow': { id: 'srv-hollow', online: true, ping: 14, motd: 'Iron Hollow, whitelisted friends only', players: { online: 3, max: 12 }, version: '1.21.4', iconUrl: null },
+  'srv-skyblock': { id: 'srv-skyblock', online: false, ping: null, motd: '', players: null, version: null, iconUrl: null },
+  'srv-creative': { id: 'srv-creative', online: true, ping: 112, motd: 'Free plots, no ranks needed.', players: { online: 57, max: 200 }, version: '1.21.1', iconUrl: null },
+  'srv-old': { id: 'srv-old', online: false, ping: null, motd: '', players: null, version: null, iconUrl: null },
 };
 
 const LOG_LINES = [
@@ -114,9 +110,6 @@ Fabric Mods:
 \tsodium: Sodium 0.6.9
 `;
 
-/** A CurseForge pack's memory wish, as the plan dialog and the instance settings show it. */
-const CF_RAM: RamHint = { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' };
-
 export function createContentApi(ctx: MockCtx): Part2 {
   const { now } = ctx;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * ctx.scale));
@@ -129,18 +122,18 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const type: ContentType = m?.type ?? 'mod';
       const jar = type === 'mod' ? '.jar' : '.zip';
       return {
-        provider: 'modrinth', projectId: pid, slug: pid, title: titleOf(pid), type, versionId: `${pid}-v1`, versionNumber: m?.ver ?? '1.0.0',
+        projectId: pid, slug: pid, title: titleOf(pid), type, versionId: `${pid}-v1`, versionNumber: m?.ver ?? '1.0.0',
         filename: `${pid}-${m?.ver ?? '1.0.0'}${jar}`, enabled: pid !== 'dynamic-fps',
         local: false, iconUrl: null, requiredBy: [], dependency: !!m?.dep, updateAvailable: m?.upd ?? null,
         installedAt: now - (i * 3 + 1) * DAY,
       } satisfies ContentItem;
     }));
   }
-  /** Slugs of the required dependencies of an installed item (any provider). */
-  const depsOf = (it: ContentItem): string[] => DEPS[slugOf(it.projectId)] ?? [];
-  const titleOf = (id: string): string => rowOfSlug(slugOf(id))?.[1] ?? id;
+  /** Slugs of the required dependencies of an installed item . */
+  const depsOf = (it: ContentItem): string[] => DEPS[it.projectId] ?? [];
+  const titleOf = (id: string): string => rowOfSlug(id)?.[1] ?? id;
   function recompute(list: ContentItem[]): ContentItem[] {
-    for (const it of list) it.requiredBy = list.filter((o) => depsOf(o).includes(slugOf(it.projectId))).map((o) => o.projectId);
+    for (const it of list) it.requiredBy = list.filter((o) => depsOf(o).includes(it.projectId)).map((o) => o.projectId);
     return list;
   }
   function listFor(profileId: string): ContentItem[] {
@@ -198,7 +191,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
   /* ---------- servers ---------- */
   const pingStatus = (id: string): ServerStatus => {
     const s = STATUS[id];
-    if (!s) return { id, online: false, ping: null, motd: '', players: null, version: null };
+    if (!s) return { id, online: false, ping: null, motd: '', players: null, version: null, iconUrl: null };
     return s.online ? { ...s, ping: (s.ping ?? 40) + Math.floor(Math.random() * 6) } : { ...s };
   };
 
@@ -216,7 +209,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
 
   /* ---------- install ---------- */
   const versionsOf = (projectIdIn: string): { id: string; number: string; gv: string[]; type: ProjectVersion['type'] }[] => {
-    const projectId = slugOf(projectIdIn);
+    const projectId = projectIdIn;
     const base = CONTENT[projectId]?.ver ?? '1.4.0';
     const upd = CONTENT[projectId]?.upd;
     const [maj, min] = (/^\D*(\d+)\.(\d+)/.exec(base) ?? [, '1', '4']).slice(1).map(Number);
@@ -230,9 +223,6 @@ export function createContentApi(ctx: MockCtx): Part2 {
     ];
   };
 
-  const needProvider = (provider: Provider) => {
-    if (provider === 'curseforge' && ctx.curseforge === false) throw fail('curseforge.no_api_key');
-  };
   /** Transitive required dependencies (slugs), nearest first. */
   const requiredChain = (slug: string, seen = new Set<string>()): string[] => {
     const out: string[] = [];
@@ -242,37 +232,35 @@ export function createContentApi(ctx: MockCtx): Part2 {
     }
     return out;
   };
-  function planFor(provider: Provider, projectId: string, versionId: string | undefined, profileId: string): InstallPlan {
-    const slug = slugOf(projectId);
-    const hit = toHit(provider, projectId, now);
+  function planFor(projectId: string, versionId: string | undefined, profileId: string): InstallPlan {
+    const slug = projectId;
+    const hit = toHit(projectId, now);
     const p = ctx.find(profileId);
     const l = listFor(profileId);
-    const installedOf = (s: string) => l.find((i) => slugOf(i.projectId) === s && i.provider === provider);
-    const blocked = (s: string) => provider === 'curseforge' && CF_BLOCKED.has(s);
+    const installedOf = (s: string) => l.find((i) => i.projectId === s);
     const vid = versionId ?? versionsOf(projectId)[0].id;
     const mk = (s: string, role: InstallPlanItem['role'], version: string): InstallPlanItem => {
       const row = rowOfSlug(s);
       const type = typeOfSlug(s) as ContentType;
       const inst = installedOf(s);
-      const isBlocked = blocked(s);
       return {
-        provider, projectId: idFor(provider, s), versionId: version, title: row?.[1] ?? s, type, iconUrl: null, role,
+        projectId: s, versionId: version, title: row?.[1] ?? s, type, iconUrl: null, role,
         alreadyInstalled: !!inst && (role !== 'requested' || inst.versionId === version), installedVersion: inst?.versionNumber ?? null,
-        distributionBlocked: isBlocked, sizeBytes: isBlocked ? null : sizeOf(s), downloadUrl: isBlocked ? websiteOf('curseforge', s, type) : null,
+        sizeBytes: sizeOf(s),
       };
     };
     const requested = mk(slug, 'requested', vid);
     const isUpdate = vid.endsWith('-vu');
-    const reqSlugs = [...requiredChain(slug), ...(isUpdate ? UPDATE_NEW_DEPS[slug] ?? [] : [])].filter((s) => onProvider(provider, s));
+    const reqSlugs = [...requiredChain(slug), ...(isUpdate ? UPDATE_NEW_DEPS[slug] ?? [] : [])];
     const required = [...new Set(reqSlugs)].map((s) => mk(s, 'required', `${s}-v1`));
     const optional = metaOf(slug).optional
-      .filter((s) => onProvider(provider, s) && compat(s, typeOfSlug(s) as ContentType, p.mcVersion, p.loader).ok)
+      .filter((s) => compat(s, typeOfSlug(s) as ContentType, p.mcVersion, p.loader).ok)
       .map((s) => mk(s, 'optional', `${s}-v1`));
     const items = [requested, ...required, ...optional];
     const conflicts = metaOf(slug).conflicts
       .map((c) => installedOf(c)).filter((x): x is ContentItem => !!x)
       .map((x) => ({ projectId: x.projectId, title: x.title, with: hit.title }));
-    const totalBytes = items.filter((i) => (i.role === 'requested' || i.role === 'required') && !i.alreadyInstalled && !i.distributionBlocked)
+    const totalBytes = items.filter((i) => (i.role === 'requested' || i.role === 'required') && !i.alreadyInstalled)
       .reduce((a, i) => a + (i.sizeBytes ?? 0), 0);
     return { profileId, items, totalBytes, conflicts };
   }
@@ -284,7 +272,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const it = l.find((i) => i.projectId === projectId);
       if (!it) throw fail('content_not_found');
       const affected: string[] = [];
-      const bySlug = (slug: string) => l.find((i) => slugOf(i.projectId) === slug);
+      const bySlug = (slug: string) => l.find((i) => i.projectId === slug);
       const visit = (x: ContentItem | undefined) => {
         if (!x || x.enabled === enabled) return;
         x.enabled = enabled;
@@ -292,14 +280,14 @@ export function createContentApi(ctx: MockCtx): Part2 {
         if (x.projectId !== projectId) affected.push(x.projectId);
         // disabling cascades to dependents, enabling cascades to required dependencies
         if (enabled) for (const d of depsOf(x)) visit(bySlug(d));
-        else for (const o of l) if (depsOf(o).includes(slugOf(x.projectId))) visit(o);
+        else for (const o of l) if (depsOf(o).includes(x.projectId)) visit(o);
       };
       visit(it);
       return { items: snap(l), affected };
     },
     async contentUninstall({ profileId, projectId }) {
       const l = listFor(profileId);
-      const dependents = l.filter((o) => depsOf(o).includes(slugOf(projectId))).map((o) => o.projectId);
+      const dependents = l.filter((o) => depsOf(o).includes(projectId)).map((o) => o.projectId);
       if (dependents.length) return { blocked: true, dependents, items: snap(l) };
       const next = recompute(l.filter((i) => i.projectId !== projectId));
       lists.set(profileId, next);
@@ -310,110 +298,90 @@ export function createContentApi(ctx: MockCtx): Part2 {
       await sleep(250);
       const l = listFor(profileId);
       return l.filter((i) => i.updateAvailable).map((i): UpdateInfo => ({
-        provider: i.provider, projectId: i.projectId, title: i.title, type: i.type, from: i.versionNumber, to: i.updateAvailable as string,
-        versionId: `${slugOf(i.projectId)}-vu`, compatibility: true, conflict: false, requiredBy: i.requiredBy,
+        projectId: i.projectId, title: i.title, type: i.type, from: i.versionNumber, to: i.updateAvailable as string,
+        versionId: `${i.projectId}-vu`, compatibility: true, conflict: false, requiredBy: i.requiredBy,
       }));
     },
     async contentOpenFolder({ profileId, type }) { return `~/.mangoclient/instances/${profileId}/${type === 'mod' ? 'mods' : type === 'shader' ? 'shaderpacks' : type === 'resourcepack' ? 'resourcepacks' : 'datapacks'}`; },
 
-    async providersStatus() {
-      return [
-        { provider: 'modrinth', available: true },
-        ctx.curseforge === false ? { provider: 'curseforge', available: false, reason: 'no_api_key' } : { provider: 'curseforge', available: true },
-      ];
-    },
     async searchProjects({ params }) {
-      const provider = params.provider ?? 'modrinth';
-      needProvider(provider);
       await sleep(220);
       const q = (params.query ?? '').trim().toLowerCase();
-      let hits = catalogFor(provider, params.projectType).map((r) => toHit(provider, idFor(provider, r[0]), now));
+      let hits = catalogFor(params.projectType).map((r) => toHit(r[0], now));
       if (q) hits = hits.filter((h) => `${h.title} ${h.description} ${h.author}`.toLowerCase().includes(q));
       if (params.loader && (params.projectType === 'mod' || params.projectType === 'modpack')) {
-        // CurseForge filters the loader exactly, Modrinth also lists Fabric builds for Quilt
-        const want = provider === 'modrinth' ? accepts(params.loader) : [params.loader];
+        // Modrinth also lists Fabric builds for Quilt
+        const want = accepts(params.loader);
         hits = hits.filter((h) => want.some((l) => h.loaders.includes(l)));
       }
       if (params.mcVersion) hits = hits.filter((h) => h.gameVersions.includes(params.mcVersion as string));
-      if (params.categories?.length && provider === 'modrinth') hits = hits.filter((h) => params.categories?.some((c) => h.categories.includes(c)));
+      if (params.categories?.length) hits = hits.filter((h) => params.categories?.some((c) => h.categories.includes(c)));
       const key = { downloads: (h: ProjectHit) => -h.downloads, follows: (h: ProjectHit) => -h.follows, newest: (h: ProjectHit) => -hash(h.slug), updated: (h: ProjectHit) => -Date.parse(h.dateModified) }[params.sort as string];
       if (key) hits = [...hits].sort((a, b) => key(a) - key(b));
       const total = hits.length;
       const offset = params.offset ?? 0;
       const page = hits.slice(offset, offset + (params.limit ?? 20));
-      for (const h of page) h.installedIn = ctx.profiles().filter((p) => listFor(p.id).some((i) => slugOf(i.projectId) === h.slug && i.provider === provider)).map((p) => p.id);
+      for (const h of page) h.installedIn = ctx.profiles().filter((p) => listFor(p.id).some((i) => i.projectId === h.slug)).map((p) => p.id);
       return { hits: page, total, offset };
     },
-    async projectDetail({ provider, projectId }): Promise<ProjectDetail> {
-      needProvider(provider);
+    async projectDetail({ projectId }): Promise<ProjectDetail> {
       await sleep(180);
-      const hit = toHit(provider, projectId, now);
+      const hit = toHit(projectId, now);
       const body = `# ${hit.title}\n\n${hit.description}\n\n## Features\n\n- Works with **Fabric** and Quilt\n- Tuned for \`${hit.gameVersions[0]}\`\n- Configurable in game\n\n## Notes\n\nThis is mock data. HTML such as <script>alert(1)</script> or <img src=x onerror=alert(1)> and [links](https://example.com) are shown as plain text.\n\n\`\`\`\nrequires: java >= 21\n\`\`\`\n`;
       return {
         ...hit, body, gallery: [fallbackImage('profile', `${projectId}-g`, 256), fallbackImage('profile', `${projectId}-a`), fallbackImage('profile', `${projectId}-b`)],
         license: hit.type === 'shader' ? 'Custom' : 'LGPL-3.0-only', sourceUrl: `https://github.com/example/${hit.slug}`, issuesUrl: `https://github.com/example/${hit.slug}/issues`,
       };
     },
-    async projectVersions({ provider, projectId, profileId }): Promise<ProjectVersion[]> {
-      needProvider(provider);
+    async projectVersions({ projectId, profileId }): Promise<ProjectVersion[]> {
       await sleep(120);
-      const hit = toHit(provider, projectId, now);
+      const hit = toHit(projectId, now);
       const p = profileId ? ctx.find(profileId) : null;
       return versionsOf(projectId).map((v, i) => ({
-        provider, versionId: v.id, versionNumber: v.number, name: `${hit.title} ${v.number}`, type: v.type, gameVersions: v.gv,
+        versionId: v.id, versionNumber: v.number, name: `${hit.title} ${v.number}`, type: v.type, gameVersions: v.gv,
         loaders: hit.type === 'resourcepack' ? ['minecraft'] : hit.type === 'shader' ? ['iris'] : hit.loaders,
         datePublished: new Date(now - (4 + i * 31) * DAY).toISOString(), downloads: Math.floor(900_000 / (i + 1.4)),
         compatible: p ? v.gv.includes(p.mcVersion) && compat(hit.slug, hit.type as ContentType, p.mcVersion, p.loader).ok : true,
       }));
     },
 
-    async installTargets({ provider, projectId }): Promise<InstallTarget[]> {
-      needProvider(provider);
+    async installTargets({ projectId }): Promise<InstallTarget[]> {
       await sleep(140);
-      const hit = toHit(provider, projectId, now);
+      const hit = toHit(projectId, now);
       const slug = hit.slug;
       return ctx.profiles().map((p): InstallTarget => {
         const base = { profileId: p.id, installedVersion: null, detail: null, requiredDeps: 0 };
         if (hit.type === 'modpack') return { ...base, state: 'incompatible', reason: 'content_type', detail: 'modpacks create a new instance' };
-        const inst = listFor(p.id).find((i) => slugOf(i.projectId) === slug && i.provider === provider);
+        const inst = listFor(p.id).find((i) => i.projectId === slug);
         if (inst) return { ...base, state: 'installed', reason: null, installedVersion: inst.versionNumber };
-        if (provider === 'curseforge' && CF_BLOCKED.has(slug)) return { ...base, state: 'incompatible', reason: 'distribution_blocked', detail: 'the author blocks third-party downloads' };
         const c = compat(slug, hit.type as ContentType, p.mcVersion, p.loader);
         if (!c.ok) {
           const detail = c.reason === 'loader' ? `needs ${hit.loaders.join(' or ')}, instance uses ${p.loader}`
             : c.reason === 'mc_version' ? `supports ${hit.gameVersions.slice(0, 3).join(', ')}, instance uses ${p.mcVersion}` : 'no build for this version and loader';
           return { ...base, state: 'incompatible', reason: c.reason, detail };
         }
-        return { ...base, state: 'available', reason: null, requiredDeps: requiredChain(slug).filter((d) => !listFor(p.id).some((i) => slugOf(i.projectId) === d)).length };
+        return { ...base, state: 'available', reason: null, requiredDeps: requiredChain(slug).filter((d) => !listFor(p.id).some((i) => i.projectId === d)).length };
       });
     },
-    async installPlan({ provider, projectId, versionId, profileId }): Promise<InstallPlan> {
-      needProvider(provider);
+    async installPlan({ projectId, versionId, profileId }): Promise<InstallPlan> {
       await sleep(160);
-      return planFor(provider, projectId, versionId ?? undefined, profileId);
+      return planFor(projectId, versionId ?? undefined, profileId);
     },
-    async installApply({ provider, projectId, versionId, profileId, include }) {
-      needProvider(provider);
-      const plan = planFor(provider, projectId, versionId ?? undefined, profileId);
+    async installApply({ projectId, versionId, profileId, include }) {
+      const plan = planFor(projectId, versionId ?? undefined, profileId);
       const req = plan.items.find((i) => i.role === 'requested');
       if (!req) throw fail('project_not_found');
-      if (req.distributionBlocked) throw fail('distribution_blocked');
       const l = listFor(profileId);
       const todo = plan.items.filter((i) => i.role === 'requested' || ((i.role === 'required' || (i.role === 'optional' && include.includes(i.projectId))) && !i.alreadyInstalled));
       const total = todo.length;
       let done = 0;
       for (const it of todo) {
-        if (it.distributionBlocked) {
-          ctx.emit('launch:log', { profileId, line: `[launcher] ${it.title} is not distributed through the API and was skipped. Add it manually.`, level: 'warn' });
-          done++;
-          continue;
-        }
         await sleep(240);
         done++;
-        const number = it.role === 'requested' ? (versionsOf(projectId).find((v) => v.id === versionId) ?? versionsOf(projectId)[0]).number : CONTENT[slugOf(it.projectId)]?.ver ?? '1.0.0';
+        const number = it.role === 'requested' ? (versionsOf(projectId).find((v) => v.id === versionId) ?? versionsOf(projectId)[0]).number : CONTENT[it.projectId]?.ver ?? '1.0.0';
         const made: ContentItem = {
-          provider, projectId: it.projectId, slug: slugOf(it.projectId), title: it.title, type: it.type, versionId: it.versionId, versionNumber: number,
-          filename: `${slugOf(it.projectId)}-${number}${it.type === 'mod' ? '.jar' : '.zip'}`, enabled: true, local: false, iconUrl: null,
+          projectId: it.projectId, slug: it.projectId, title: it.title, type: it.type, versionId: it.versionId, versionNumber: number,
+          filename: `${it.projectId}-${number}${it.type === 'mod' ? '.jar' : '.zip'}`, enabled: true, local: false, iconUrl: null,
           requiredBy: [], dependency: it.role !== 'requested', updateAvailable: null, installedAt: Date.now(),
         };
         const ex = l.findIndex((x) => x.projectId === it.projectId);
@@ -427,22 +395,19 @@ export function createContentApi(ctx: MockCtx): Part2 {
       ctx.emit('install:progress', { profileId, projectId, done: total + 1, total: total + 1, label: req.title });
       return snap(l);
     },
-    async modpackPlan({ provider, projectId, versionId }) {
+    async modpackPlan({ projectId, versionId }) {
       await sleep(300);
-      needProvider(provider);
-      const hit = toHit(provider, projectId, now);
+      const hit = toHit(projectId, now);
       if (hit.type !== 'modpack') throw fail('invalid_project_type');
       const m = packMeta(hit.slug);
       return {
-        provider, projectId, versionId: versionId ?? `${hit.slug}-v1`, name: hit.title, mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion,
+        projectId, versionId: versionId ?? `${hit.slug}-v1`, name: hit.title, mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion,
         fileCount: m.files, sizeBytes: m.bytes, iconUrl: null,
-        blockedFiles: provider === 'curseforge' ? blockedFilesFor(hit.slug) : [],
-        ...(provider === 'curseforge' ? { ram: CF_RAM, appliedRamMb: 4096 } : { ram: null, appliedRamMb: null }),
+        ram: null, appliedRamMb: null,
       };
     },
-    async modpackInstall({ provider, projectId, name }) {
-      needProvider(provider);
-      const hit = toHit(provider, projectId, now);
+    async modpackInstall({ projectId, name }) {
+      const hit = toHit(projectId, now);
       if (hit.type !== 'modpack') throw fail('invalid_project_type');
       const m = packMeta(hit.slug);
       const id = 'mp-' + Math.floor(Math.random() * 1e9).toString(16).padStart(8, '0') + '-0000-4000-8000-000000000000';
@@ -452,13 +417,12 @@ export function createContentApi(ctx: MockCtx): Part2 {
       }
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
-        ...(provider === 'curseforge' ? { ramSource: 'modpack' as const, ramHint: CF_RAM } : { ramSource: 'user' as const, ramHint: null }), effectiveRamMb: 4096,
-        javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
+        ramSource: 'user' as const, ramHint: null, effectiveRamMb: 4096,
+        javaArgs: '', javaPath: null, window: { mode: 'default', width: null, height: null }, mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0,
         icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, group: null, tags: [], // the pack logo becomes the image icon
       };
-      if (provider === 'curseforge' && ctx.seedBlocked) p.pendingBlocked = ctx.seedBlocked(id, blockedFilesFor(hit.slug));
       ctx.addProfile(p);
-      lists.set(id, build(id, ['fabric-api', 'sodium', 'lithium', 'ferrite-core', 'modmenu', 'entityculling', 'immediatelyfast', 'moreculling']).map((i) => ({ ...i, provider })));
+      lists.set(id, build(id, ['fabric-api', 'sodium', 'lithium', 'ferrite-core', 'modmenu', 'entityculling', 'immediatelyfast', 'moreculling']));
       syncCount(id);
       ctx.emit('install:progress', { profileId: id, projectId, done: 9, total: 9, label: hit.title });
       return structuredClone(p);
@@ -471,7 +435,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
     async serversPing({ address }) {
       await sleep(300);
       const s = SERVERS.find((x) => x.address === address);
-      return s ? pingStatus(s.id) : { id: address, online: false, ping: null, motd: '', players: null, version: null };
+      return s ? pingStatus(s.id) : { id: address, online: false, ping: null, motd: '', players: null, version: null, iconUrl: null };
     },
 
     async screenshotsList({ profileId }) { return structuredClone(shotsFor(profileId)); },

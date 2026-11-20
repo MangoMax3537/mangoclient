@@ -50,7 +50,7 @@
   .facts div:last-child { border-bottom: 0; }
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
-  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
+  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; color: var(--tomato); }
   .note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; }
   .note :global(svg) { flex: none; margin-top: 3px; color: var(--paper-mute); }

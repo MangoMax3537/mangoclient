@@ -6,6 +6,8 @@ import {
 } from './portability.svelte';
 import { actions, app, flow, init, installs, launches, nav, resetStores, runs, toasts } from './stores.svelte';
 import { activityItems } from './activity';
+import { importErrorKey } from './portability';
+import { translate } from './i18n';
 
 const tick = async (ms = 0) => { await vi.advanceTimersByTimeAsync(ms); };
 
@@ -32,18 +34,24 @@ describe('part 9 flows against the mock', () => {
     expect(toasts).toHaveLength(1);
   });
 
-  it('the three kinds produce their plans; CurseForge carries blocked files', async () => {
+  it('Modrinth and Prism files produce their plans; a CurseForge pack is rejected with a clear code and a localized message', async () => {
     const api = createMockApi({ timeScale: 0.01 });
     await init(api);
     const kinds: string[] = [];
-    for (const path of SAMPLES) {
+    for (const path of [SAMPLES[0], SAMPLES[2]]) {
       resetPortability();
       handleDropped([path]);
       await tick(50);
       expect(pf.imp?.s).toBe('plan');
-      if (pf.imp?.s === 'plan') kinds.push(`${pf.imp.plan.kind}:${pf.imp.plan.blockedFiles.length}`);
+      if (pf.imp?.s === 'plan') { kinds.push(pf.imp.plan.kind); expect(pf.imp.plan).not.toHaveProperty('blockedFiles'); }
     }
-    expect(kinds).toEqual(['mrpack:0', 'curseforge:5', 'prism:0']);
+    expect(kinds).toEqual(['mrpack', 'prism']);
+    resetPortability();
+    handleDropped([SAMPLES[1]]);
+    await tick(50);
+    expect(pf.imp).toMatchObject({ s: 'error', code: 'import.unsupported_curseforge', during: 'plan' });
+    expect(translate('en', importErrorKey('import.unsupported_curseforge') as string)).toMatch(/CurseForge packs are not supported/);
+    expect(translate('de', importErrorKey('import.unsupported_curseforge') as string)).toMatch(/CurseForge-Packs werden nicht unterstützt/);
   });
 
   it('imports with progress, adds and selects the instance and navigates to it', async () => {
@@ -66,18 +74,6 @@ describe('part 9 flows against the mock', () => {
     expect(nav.view).toBe('profile');
     expect(pf.imp).toBeNull();
     expect(installs['import']).toBeUndefined();
-  });
-
-  it('a CurseForge import with pending files opens the blocked-files dialog', async () => {
-    const api = createMockApi({ timeScale: 0.01 });
-    await init(api);
-    handleDropped([SAMPLES[1]]);
-    await tick(50);
-    const done = confirmImport();
-    await tick(200);
-    await done;
-    expect(flow.req).toMatchObject({ kind: 'blocked' });
-    expect(app.profiles.at(-1)?.pendingBlocked).toBe(3);
   });
 
   it('errors are kept as codes for the dialog: path.not_granted on the plan, a failing import can go back', async () => {
@@ -204,11 +200,11 @@ describe('part 9 flows against the mock', () => {
     expect(toasts).toHaveLength(n);
   });
 
-  it('openCrash remembers the log; showModInContent filters the Content tab to that mod', () => {
+  it('openCrash remembers the log; showModInContent filters the Mods tab to that mod', () => {
     openCrash('p1', 'crash:x.txt');
     expect(pf.crash).toEqual({ profileId: 'p1', logId: 'crash:x.txt' });
     showModInContent('p1', 'Sodium');
-    expect(nav).toMatchObject({ view: 'profile', profileId: 'p1', profileTab: 'content', contentQuery: 'Sodium' });
+    expect(nav).toMatchObject({ view: 'profile', profileId: 'p1', profileTab: 'mods', contentQuery: 'Sodium' });
   });
 
   it('?mockCrash and ?mockDrop are parsed', () => {

@@ -1,8 +1,8 @@
 <script lang="ts">
   interface Opt { value: string; label: string; count?: number; /** Not selectable: stays visible, dark, with this text as tooltip and accessible description. */ disabledReason?: string }
-  interface Props { options: Opt[]; value: string; label: string; onchange: (v: string) => void; role?: 'radiogroup' | 'tablist'; idPrefix?: string }
+  interface Props { options: Opt[]; value: string; label: string; onchange: (v: string) => void; role?: 'radiogroup' | 'tablist'; idPrefix?: string; /** Fill the full width: every option the same share, label centered. */ fill?: boolean }
   import { tip } from '../lib/tooltip';
-  let { options, value, label, onchange, role = 'radiogroup', idPrefix = 'seg' }: Props = $props();
+  let { options, value, label, onchange, role = 'radiogroup', idPrefix = 'seg', fill = false }: Props = $props();
 
   function key(e: KeyboardEvent, i: number) {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
@@ -16,7 +16,7 @@
   }
 </script>
 
-<div class="seg" {role} aria-label={label}>
+<div class="seg" class:fill {role} aria-label={label}>
   {#each options as o, i (o.value)}
     {@const on = o.value === value}
     <button
@@ -28,9 +28,14 @@
 </div>
 
 <style>
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--ink-1); max-width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-m); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: var(--ink-1); max-width: 100%; }
+  .seg::-webkit-scrollbar { display: none; }
+  .seg.fill { display: flex; width: 100%; }
+  .seg.fill button { flex: 1 1 0; min-width: max-content; justify-content: center; text-align: center; }
   button { position: relative; height: 34px; padding: 0 14px; color: var(--paper-dim); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border-right: 1px solid var(--line-soft); transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
   button:last-child { border-right: 0; }
+  /* page tabs: tighter, so the nine instance tabs fit a 960px window without scrolling */
+  .seg[role='tablist'] button { padding: 0 10px; }
   button:hover { color: var(--paper); background: var(--ink-3); }
   button.off { color: var(--paper-mute); opacity: 0.55; cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.off:hover { color: var(--paper-mute); background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }

@@ -43,7 +43,7 @@ describe('onboarding', () => {
 
 describe('plan dialogs: RAM line', () => {
   it('says the pack recommended it and names the cap', () => {
-    const out = html(PlanRam, { plan: { ram: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' }, appliedRamMb: 4096 } });
+    const out = html(PlanRam, { plan: { ram: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'modrinth' }, appliedRamMb: 4096 } });
     expect(out).toContain('This instance will get 4 GB (recommended by the pack).');
     expect(out).toContain('The pack advises at most 6 GB.');
   });
@@ -55,7 +55,7 @@ describe('plan dialogs: RAM line', () => {
 });
 
 describe('RamControl', () => {
-  const props = { id: 'x', value: 8192, source: 'user', hint: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' }, limits, defaultMb: 4096, onsave: () => {} };
+  const props = { id: 'x', value: 8192, source: 'user', hint: { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'modrinth' }, limits, defaultMb: 4096, onsave: () => {} };
   it('renders slider, GB field, source label, both reset buttons and the cap warning', () => {
     const out = html(RamControl, props);
     expect(out).toContain('type="range"');

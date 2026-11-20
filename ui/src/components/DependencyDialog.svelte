@@ -2,9 +2,7 @@
   import { untrack } from 'svelte';
   import LockSimpleIcon from 'phosphor-svelte/lib/LockSimpleIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
-  import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
-  import ArrowSquareOutIcon from 'phosphor-svelte/lib/ArrowSquareOutIcon';
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
@@ -12,9 +10,9 @@
   import LoadError from './LoadError.svelte';
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
-  import { fileCount, includeFor, planBytes, planGroups, requestedBlocked, type RunStep } from '../lib/install';
+  import { fileCount, includeFor, planBytes, planGroups, type RunStep } from '../lib/install';
   import { fmtBytes } from '../lib/format';
-  import { actions, app, errorText, getApi, lang, t, tp, type FlowProject } from '../lib/stores.svelte';
+  import { app, errorText, getApi, lang, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { InstallPlan, InstallPlanItem } from '../lib/types';
 
   interface Props {
@@ -45,7 +43,7 @@
       const out: Loaded = { plans: {}, errors: {} };
       await Promise.all(ids.map(async (profileId) => {
         try {
-          out.plans[profileId] = await getApi().installPlan({ provider: project.provider, projectId: project.projectId, profileId, ...(versionId ? { versionId } : {}) });
+          out.plans[profileId] = await getApi().installPlan({ projectId: project.projectId, profileId, ...(versionId ? { versionId } : {}) });
         } catch (e) { out.plans[profileId] = 'error'; out.errors[profileId] = errorText(e); }
       }));
       return out;
@@ -54,7 +52,7 @@
   });
 
   const ready = $derived(profileIds.filter((id) => plans[id] && plans[id] !== 'error') as string[]);
-  const usable = $derived(ready.filter((id) => !requestedBlocked(plans[id] as InstallPlan)));
+  const usable = $derived(ready);
   const files = $derived(usable.reduce((a, id) => a + fileCount(plans[id] as InstallPlan, chosen[id] ?? []), 0));
   const bytes = $derived(usable.reduce((a, id) => a + planBytes(plans[id] as InstallPlan, chosen[id] ?? []), 0));
   const nothingNew = $derived(!loading && usable.length > 0 && files === 0);
@@ -68,7 +66,7 @@
   function confirm() {
     if (!usable.length || loading) return;
     onconfirm(usable.map((profileId) => ({
-      profileId, provider: project.provider, projectId: project.projectId, versionId, title: project.title,
+      profileId, projectId: project.projectId, versionId, title: project.title,
       include: includeFor(plans[profileId] as InstallPlan, chosen[profileId] ?? []),
     })));
   }
@@ -96,7 +94,7 @@
         {/if}
 
         {#if g.requested}
-          <div class="item req" class:blocked={g.requested.distributionBlocked}>
+          <div class="item req">
             <Tile kind="mod" id={g.requested.projectId} src={g.requested.iconUrl ?? project.iconUrl} size={36} radius={6} />
             <span class="t"><b>{g.requested.title}</b><span class="hint mono">{g.requested.alreadyInstalled ? t('flow.dep.alreadyThisVersion', { v: g.requested.installedVersion ?? '' }) : update && g.requested.installedVersion ? t('flow.dep.fromTo', { from: g.requested.installedVersion }) : t('flow.dep.requested')}</span></span>
             <span class="sz mono">{sz(g.requested)}</span>
@@ -107,12 +105,12 @@
           <h4 class="eyebrow">{tp('flow.dep.required', g.required.length)}</h4>
           <ul class="deps">
             {#each g.required as d (d.projectId)}
-              <li class="item" class:done={d.alreadyInstalled} class:blocked={d.distributionBlocked}>
+              <li class="item" class:done={d.alreadyInstalled}>
                 <Tile kind="mod" id={d.projectId} src={d.iconUrl} size={32} radius={6} />
                 <span class="t"><b>{d.title}</b>
-                  <span class="hint mono">{#if d.alreadyInstalled}{t('flow.dep.installedV', { v: d.installedVersion ?? '' })}{:else if d.distributionBlocked}{t('flow.dep.blockedShort')}{:else}{t('flow.dep.requiredBy', { name: project.title })}{/if}</span></span>
+                  <span class="hint mono">{#if d.alreadyInstalled}{t('flow.dep.installedV', { v: d.installedVersion ?? '' })}{:else}{t('flow.dep.requiredBy', { name: project.title })}{/if}</span></span>
                 <span class="sz mono">{d.alreadyInstalled ? '' : sz(d)}</span>
-                <span class="lock" title={t('flow.dep.locked')}>{#if d.alreadyInstalled}<CheckIcon weight="bold" size={16} aria-hidden="true" />{:else if d.distributionBlocked}<ProhibitIcon weight="bold" size={16} aria-hidden="true" />{:else}<input type="checkbox" checked disabled aria-label={t('flow.dep.lockedLabel', { name: d.title })} /><LockSimpleIcon weight="bold" size={12} aria-hidden="true" />{/if}</span>
+                <span class="lock" title={t('flow.dep.locked')}>{#if d.alreadyInstalled}<CheckIcon weight="bold" size={16} aria-hidden="true" />{:else}<input type="checkbox" checked disabled aria-label={t('flow.dep.lockedLabel', { name: d.title })} /><LockSimpleIcon weight="bold" size={12} aria-hidden="true" />{/if}</span>
               </li>
             {/each}
           </ul>
@@ -143,18 +141,6 @@
           </div>
         {/if}
 
-        {#if g.blocked.length}
-          <div class="warn block" role="note">
-            <WarningIcon weight="bold" size={16} aria-hidden="true" />
-            <div><b>{tp('flow.dep.blocked', g.blocked.length)}</b>
-              <p class="hint">{t('flow.dep.blockedNote')}</p>
-              <ul class="bl">{#each g.blocked as d (d.projectId)}
-                <li><span>{d.title}</span>
-                  {#if d.downloadUrl}<button class="btn small" type="button" onclick={() => d.downloadUrl && actions.openExternal(d.downloadUrl)}><ArrowSquareOutIcon weight="bold" size={14} aria-hidden="true" />{t('flow.openWebsite')}</button>{/if}</li>
-              {/each}</ul>
-            </div>
-          </div>
-        {/if}
       </section>
     {:else if plan === 'error'}
       <p class="err" role="alert">{name(pid)}: {errors[pid]}</p>
@@ -180,11 +166,10 @@
   .eyebrow { margin: 14px 0 4px; }
   .deps { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: var(--r-m); }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 34px; gap: 12px; align-items: center; padding: 8px 12px; }
-  .item.req { grid-template-columns: auto minmax(0, 1fr) auto; background: var(--ink-3); border: 1px solid var(--line); border-left: 3px solid var(--accent-fill); border-radius: var(--r-m); }
+  .item.req { grid-template-columns: auto minmax(0, 1fr) auto; background: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r-m); }
   .deps .item { border-bottom: 1px solid var(--line-soft); }
   .deps .item:last-child { border-bottom: 0; }
   .item.done { opacity: 0.6; }
-  .item.blocked :global(.tile) { opacity: 0.5; filter: grayscale(1); }
   .t { display: grid; gap: 1px; min-width: 0; cursor: default; }
   .t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .t .hint { font-size: var(--fs-xs); }
@@ -193,14 +178,9 @@
   .lock { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--paper-mute); }
   .lock input { width: 16px; height: 16px; margin: 0; }
   .item.done .lock { color: var(--leaf); }
-  .warn { display: flex; gap: 10px; margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
+  .warn { display: flex; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
   .warn > :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
-  .warn.block { border-left-color: var(--tomato); background: color-mix(in srgb, var(--tomato) 9%, transparent); }
-  .warn.block > :global(svg) { color: var(--tomato); }
   .warn ul { margin: 4px 0; padding-left: 18px; }
-  .warn p { margin: 2px 0 6px; }
-  .bl { list-style: none; padding: 0 !important; display: grid; gap: 6px; }
-  .bl li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .tot { margin-right: auto; align-self: center; font-size: var(--fs-sm); color: var(--paper-dim); }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }

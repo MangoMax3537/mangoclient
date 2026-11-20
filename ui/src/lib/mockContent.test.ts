@@ -50,7 +50,7 @@ describe('mockApi part 2', () => {
 
   it('search pages through 40+ mod hits and filters', async () => {
     const { api } = await setup();
-    const base = { provider: 'modrinth' as const, query: '', projectType: 'mod' as const, sort: 'downloads' as const, limit: 20 };
+    const base = { query: '', projectType: 'mod' as const, sort: 'downloads' as const, limit: 20 };
     const p1 = await settle(api.searchProjects({ params: { ...base, offset: 0 } }), 300);
     const p2 = await settle(api.searchProjects({ params: { ...base, offset: 20 } }), 300);
     const p3 = await settle(api.searchProjects({ params: { ...base, offset: 40 } }), 300);
@@ -70,7 +70,7 @@ describe('mockApi part 2', () => {
     const { api, iron, vanilla } = await setup();
     const ev: ApiEvents['install:progress'][] = [];
     await api.listen('install:progress', (e) => ev.push(e));
-    const p = api.installApply({ provider: 'modrinth', profileId: iron, projectId: 'create-fabric', include: [] });
+    const p = api.installApply({ profileId: iron, projectId: 'create-fabric', include: [] });
     await vi.advanceTimersByTimeAsync(300);
     expect(ev.length).toBeGreaterThan(0);
     expect(ev.length).toBeLessThan(4);
@@ -79,14 +79,14 @@ describe('mockApi part 2', () => {
     expect(ev.at(-1)?.done).toBe(ev.at(-1)?.total);
     expect(items).toHaveLength(39);
     expect(items.find((i) => i.projectId === 'create-fabric')?.enabled).toBe(true);
-    const v = await settle(api.installApply({ provider: 'modrinth', profileId: vanilla, projectId: 'create-fabric', include: [] }), 2000);
+    const v = await settle(api.installApply({ profileId: vanilla, projectId: 'create-fabric', include: [] }), 2000);
     expect(v.map((i) => i.projectId)).toEqual(expect.arrayContaining(['create-fabric', 'fabric-api']));
     expect(v.find((i) => i.projectId === 'fabric-api')?.dependency).toBe(true);
   });
 
   it('modpack install creates a profile', async () => {
     const { api } = await setup();
-    const p = await settle(api.modpackInstall({ provider: 'modrinth', projectId: 'fabulously-optimized' }), 3000);
+    const p = await settle(api.modpackInstall({ projectId: 'fabulously-optimized' }), 3000);
     expect(p.name).toBe('Fabulously Optimized');
     expect((await api.appState()).profiles.some((x) => x.id === p.id)).toBe(true);
     expect((await settle(api.contentList({ profileId: p.id }), 200)).length).toBeGreaterThan(0);
@@ -94,7 +94,7 @@ describe('mockApi part 2', () => {
 
   it('versions mark compatibility per profile', async () => {
     const { api, iron } = await setup();
-    const v = await settle(api.projectVersions({ provider: 'modrinth', projectId: 'sodium', profileId: iron }), 300);
+    const v = await settle(api.projectVersions({ projectId: 'sodium', profileId: iron }), 300);
     expect(v.some((x) => x.compatible)).toBe(true);
     expect(v.some((x) => !x.compatible)).toBe(true);
   });

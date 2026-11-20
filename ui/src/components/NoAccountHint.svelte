@@ -10,5 +10,5 @@
 </span>
 
 <style>
-  .nah { display: inline-flex; align-items: center; gap: var(--s-2); padding: 4px 6px 4px 12px; border-left: 3px solid var(--mango); font-size: var(--fs-sm); color: var(--hero-dim, var(--paper-dim)); background: rgba(0, 0, 0, 0.28); }
+  .nah { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); max-width: 100%; padding: 4px 6px 4px 12px; border-radius: var(--r-s); font-size: var(--fs-sm); color: var(--hero-dim, var(--paper-dim)); background: rgba(0, 0, 0, 0.42); }
 </style>

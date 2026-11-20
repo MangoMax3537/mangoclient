@@ -48,7 +48,7 @@
 </section>
 
 <style>
-  .console { background: var(--ink-1); border: 1px solid var(--line-soft); border-left: 3px solid var(--line); overflow: hidden; }
+  .console { background: var(--ink-1); border: 1px solid var(--line-soft); overflow: hidden; }
   header { display: flex; align-items: center; justify-content: space-between; padding-right: 6px; }
   .toggle { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex: 1; text-align: left; font-weight: 600; }
   .count { color: var(--paper-mute); font-size: var(--fs-xs); font-weight: 400; }

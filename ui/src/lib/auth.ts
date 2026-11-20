@@ -33,14 +33,12 @@ export function classifyLoginError(e: unknown): LoginErrorInfo {
 }
 
 const EXTERNAL_HOSTS = ['microsoft.com', 'xbox.com', 'minecraft.net'];
-/** https only, no credentials in the URL, host is (a subdomain of) an official Microsoft/Xbox/Minecraft domain, or a CurseForge Minecraft project page. */
+/** https only, no credentials in the URL, host is (a subdomain of) an official Microsoft/Xbox/Minecraft domain. */
 export function isAllowedExternalUrl(raw: string): boolean {
   let u: URL;
   try { u = new URL(raw); } catch { return false; }
   if (u.protocol !== 'https:' || u.username || u.password || u.port) return false;
   const h = u.hostname.toLowerCase();
-  // blocked CurseForge files: the website page of the project (docs/ipc.md Part 4), nothing else on that host
-  if (h === 'curseforge.com' || h === 'www.curseforge.com') return u.pathname === '/minecraft' || u.pathname.startsWith('/minecraft/');
   return EXTERNAL_HOSTS.some((d) => h === d || h.endsWith(`.${d}`));
 }
 

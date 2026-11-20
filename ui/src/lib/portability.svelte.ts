@@ -2,7 +2,7 @@
 // Dialog state lives here (not in the dialogs) so an import keeps running when its dialog is hidden, and so tests can drive the flows.
 import { toAppError } from './api';
 import {
-  actions, app, eventHooks, errorText, getApi, installs, nav, openBlocked, openProfile, t, toast, tp,
+  actions, app, eventHooks, errorText, getApi, installs, nav, openProfile, t, toast, tp,
 } from './stores.svelte';
 import {
   classifyDrop, importDefaultName, importReduce, initialImport, nameValid, type ImportEvent, type ImportState,
@@ -55,11 +55,7 @@ export async function confirmImport(): Promise<void> {
     if (pf.imp === started) { step({ e: 'imported', profileId: p.id }); pf.imp = null; pf.impOpen = false; }
     delete installs['import'];
     toast(t('import.done', { name: p.name }), 'ok');
-    if (p.pendingBlocked > 0) {
-      openBlocked(p.id);
-      openProfile(p.id, 'content');
-      if (!visible) toast(tp('blocked.toast', p.pendingBlocked, { name: p.name }), 'info', 9000);
-    } else if (visible) openProfile(p.id, 'overview');
+    if (visible) openProfile(p.id, 'overview');
     else toast(p.name, 'ok', 8000, { label: t('import.open'), run: () => openProfile(p.id) });
   } catch (e) {
     delete installs['import'];
@@ -108,10 +104,10 @@ export function offerCrash(profileId: string): void {
 eventHooks.crashed.push(offerCrash);
 eventHooks.dropped.push((paths) => handleDropped(paths));
 
-/** Where the profile page shows the Content tab filtered to one mod (crash cause links). */
+/** Where the profile page shows the Mods tab filtered to one mod (crash cause links). */
 export function showModInContent(profileId: string, mod: string): void {
   nav.contentQuery = mod;
-  openProfile(profileId, 'content');
+  openProfile(profileId, 'mods');
 }
 
 /** True while a modal dialog is open: a drag over it belongs to that dialog (an icon or background picker has its own drop zone). */

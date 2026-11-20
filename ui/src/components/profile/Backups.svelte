@@ -110,7 +110,7 @@
 <style>
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .h { display: flex; align-items: baseline; gap: 12px; }
-  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
   .note :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
   .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }

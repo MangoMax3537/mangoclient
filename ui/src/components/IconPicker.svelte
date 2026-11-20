@@ -89,10 +89,11 @@
     try { await actions.useModpackLogo(profileId); toast(t('icons.logo.restored'), 'ok'); onclose(); }
     catch (e) { toast(errorText(e), 'error'); busy = false; }
   }
+  // A tab that does not apply is not rendered (no modpack logo, no logo tab).
   const tabs = $derived([
     { value: 'gallery', label: t('icons.tab.gallery') },
     { value: 'upload', label: t('icons.tab.upload') },
-    { value: 'logo', label: t('icons.tab.logo'), disabledReason: hasLogo ? undefined : t('icons.logo.none') },
+    ...(hasLogo || tab === 'logo' ? [{ value: 'logo', label: t('icons.tab.logo') }] : []),
   ]);
 </script>
 
@@ -110,8 +111,7 @@
     </div>
 
     <div class="main">
-      <Seg options={tabs} value={tab} label={t('icons.title', { name: profile?.name ?? '' })} role="tablist" idPrefix="ipick" onchange={(v) => (tab = v as typeof tab)} />
-      {#if !hasLogo && tab !== 'logo'}<p class="hint note">{t('icons.logo.none')}</p>{/if}
+      <Seg options={tabs} value={tab} label={t('icons.title', { name: profile?.name ?? '' })} role="tablist" idPrefix="ipick" fill onchange={(v) => (tab = v as typeof tab)} />
 
       {#if tab === 'gallery'}
         <div role="tabpanel" aria-labelledby="ipick-gallery" class="panel">
@@ -182,7 +182,6 @@
   .prev .btn { white-space: normal; height: auto; min-height: 28px; padding-block: 4px; text-align: center; }
   .cap { margin: 0; text-align: center; font-size: var(--fs-sm); max-width: 168px; overflow-wrap: anywhere; }
   .main { min-width: 0; display: grid; align-content: start; gap: 10px; }
-  .note { margin: 0; }
   .panel { display: grid; gap: 10px; align-content: start; min-height: 260px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; padding: 4px; margin: -4px; }
   .cell { display: grid; gap: 4px; justify-items: stretch; text-align: center; padding: 6px 6px 8px; border: 1px solid transparent; border-radius: var(--r-m); }

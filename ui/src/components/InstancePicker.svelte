@@ -3,15 +3,14 @@
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
   import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
-  import ArrowSquareOutIcon from 'phosphor-svelte/lib/ArrowSquareOutIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import LoadError from './LoadError.svelte';
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
-  import { allBlocked, nextIndex, preselect, REASON_KEY, selectAll, selectionSummary, targetRows, toggleSelection, type TargetRow } from '../lib/install';
-  import { actions, app, errorText, getApi, nav, prefs, selectedProfile, t, tp, type FlowProject } from '../lib/stores.svelte';
+  import { nextIndex, preselect, REASON_KEY, selectAll, selectionSummary, targetRows, toggleSelection, type TargetRow } from '../lib/install';
+  import { app, getApi, nav, prefs, selectedProfile, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { InstallTarget } from '../lib/types';
 
   interface Props {
@@ -31,11 +30,10 @@
 
   const rows = $derived(targets ? targetRows(targets, app.profiles) : []);
   const sum = $derived(selectionSummary(rows, selected));
-  const blocked = $derived(allBlocked(rows));
 
   $effect(() => {
     void project.projectId; void versionId;
-    tl.run(() => getApi().installTargets({ provider: project.provider, projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
+    tl.run(() => getApi().installTargets({ projectId: project.projectId, ...(versionId ? { versionId } : {}) }));
     return () => tl.cancel();
   });
   $effect(() => {
@@ -64,15 +62,6 @@
     else if (e.key === 'Enter') { e.preventDefault(); if (sum.count) onnext(selected); else toggle(r.profile.id); }
     else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); selected = selectAll(rows); }
   }
-  async function openWebsite() {
-    const first = rows[0]?.profile.id;
-    if (!first) return;
-    try {
-      const plan = await getApi().installPlan({ provider: project.provider, projectId: project.projectId, profileId: first, ...(versionId ? { versionId } : {}) });
-      const url = plan.items.find((i) => i.role === 'requested')?.downloadUrl;
-      if (url) await actions.openExternal(url);
-    } catch { /* the reason is already visible in the list */ }
-  }
 </script>
 
 <Modal title={t('picker.title', { name: project.title })} {onclose} size="lg" onenter={() => { if (sum.count) onnext(selected); }}>
@@ -88,10 +77,6 @@
   {:else if rows.length === 0}
     <p class="hint">{t('picker.none')}</p>
   {:else}
-    {#if blocked}
-      <p class="note warn" role="note"><ProhibitIcon weight="bold" size={16} aria-hidden="true" /><span>{t('picker.blockedAll')}</span>
-        <button class="btn small" type="button" onclick={openWebsite}><ArrowSquareOutIcon weight="bold" size={14} aria-hidden="true" />{t('flow.openWebsite')}</button></p>
-    {/if}
     <ul class="list" role="listbox" aria-multiselectable="true" aria-label={t('picker.list')} bind:this={listEl}>
       {#each rows as r, i (r.profile.id)}
         {@const on = selected.includes(r.profile.id)}
@@ -136,7 +121,7 @@
   .row:last-child { border-bottom: 0; }
   .row:hover { background: var(--ink-3); }
   .row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .row.on { background: color-mix(in srgb, var(--accent-fill) 12%, var(--ink-2)); box-shadow: inset 3px 0 var(--accent-fill); }
+  .row.on { background: color-mix(in srgb, var(--accent-fill) 12%, var(--ink-2)); }
   /* dark: not selectable. Image and text dimmed, the reason stays readable. */
   .row.dark { cursor: not-allowed; background: var(--ink-1); }
   .row.dark:hover { background: var(--ink-1); }
@@ -152,8 +137,6 @@
   .box { width: 20px; height: 20px; display: grid; place-items: center; border: 1.5px solid var(--paper-mute); border-radius: 4px; color: var(--on-fill); }
   .row.on .box { background: var(--accent-fill); border-color: var(--accent-fill); }
   .dep { font-size: var(--fs-xs); color: var(--paper-dim); }
-  .note { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 8px 10px 8px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
-  .note span { flex: 1; }
   .count { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--paper-dim); }
   .create { margin-right: auto; }
 </style>

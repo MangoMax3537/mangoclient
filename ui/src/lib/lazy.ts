@@ -35,7 +35,6 @@ export const dialogs = {
   diagnosticsDialog: memo(() => import('../components/DiagnosticsDialog.svelte')),
   crashPanel: memo(() => import('../components/CrashPanel.svelte')),
   projectDrawer: memo(() => import('../components/ProjectDrawer.svelte')),
-  blockedDialog: memo(() => import('../components/BlockedDialog.svelte')),
   instancePicker: memo(() => import('../components/InstancePicker.svelte')),
   dependencyDialog: memo(() => import('../components/DependencyDialog.svelte')),
   modpackDialog: memo(() => import('../components/ModpackDialog.svelte')),
@@ -46,7 +45,7 @@ export const dialogs = {
 } satisfies Record<string, Loader>;
 
 export const tabs = {
-  content: memo(() => import('../components/profile/Content.svelte')),
+  content: memo(() => import('../components/profile/ContentTab.svelte')),
   media: memo(() => import('../components/profile/Media.svelte')),
   backups: memo(() => import('../components/profile/Backups.svelte')),
   logs: memo(() => import('../components/profile/Logs.svelte')),

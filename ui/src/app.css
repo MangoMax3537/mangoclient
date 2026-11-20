@@ -196,22 +196,21 @@ textarea.field { height: auto; padding: 8px 12px; }
 input[type='range'] { accent-color: var(--accent-fill); width: 100%; }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-fill); }
 
-/* ---- toggle ------------------------------------------------------------------------------- */
-.switch { position: relative; width: 40px; height: 22px; flex: none; }
-.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.switch span { position: absolute; inset: 0; background: var(--ink-4); border: 1px solid var(--line); border-radius: 4px; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); pointer-events: none; }
-.switch span::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 2px; background: var(--paper-dim); transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
-.switch input:checked + span { background: var(--accent-fill); border-color: var(--accent-fill); }
-.switch input:checked + span::after { transform: translateX(18px); background: var(--on-fill); }
-.switch input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
-.switch input:disabled + span { opacity: 0.45; }
-
-/* ---- tabs (underline, for page sections; Seg.svelte is the boxed control) ----------------- */
-.tabs { display: flex; gap: var(--s-5); border-bottom: 1px solid var(--line); }
-.tabs button, .tabs a { position: relative; padding: 10px 0; color: var(--paper-dim); font-weight: 500; }
-.tabs button:hover { color: var(--paper); }
-.tabs [aria-selected='true'], .tabs .on { color: var(--paper); }
-.tabs [aria-selected='true']::after, .tabs .on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--accent-fill); }
+/* ---- settings layout: exactly ONE hairline between two adjacent things ----------------------------
+   Separators are drawn only as `adjacent + adjacent { border-top }`, never as border-bottom on the one and border-top on the next,
+   so two neighbours can never produce a double line. Used by Settings, the instance Settings tab and SettingRow/SettingSection. */
+.set-sections > * + * { border-top: 1px solid var(--line); }
+.set-rows > * + * { border-top: 1px solid var(--line-soft); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 0; }
+.set-row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.set-row .txt { display: grid; gap: 2px; min-width: 0; }
+.set-row .txt label, .set-row .txt .lbl { font-weight: 500; }
+label.set-row { cursor: pointer; }
+/* the settings search jumps here: a pulse by opacity only */
+.set-flash { position: relative; }
+.set-flash::after { content: ''; position: absolute; inset: 0 -8px; border: 2px solid var(--accent-fill); border-radius: var(--r-m); pointer-events: none; animation: set-flash 1.4s ease-out both; }
+@keyframes set-flash { 0% { opacity: 0; } 15% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .set-flash::after { animation: none; opacity: 1; } }
 
 /* ---- dropdown / menu ---------------------------------------------------------------------- */
 .pop {

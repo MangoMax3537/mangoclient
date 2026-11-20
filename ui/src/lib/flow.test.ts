@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from './mockApi';
 import { activityItems } from './activity';
 import {
-  app, applyTheme, closeFlow, contentRev, errorText, flow, init, installs, launches, loadProviders, nav, providers, resetStores, runs, startContentRun, startInstall,
+  app, applyTheme, closeFlow, contentRev, errorText, flow, init, installs, launches, nav, resetStores, runs, startContentRun, startInstall,
   startModpackRun, t, theme, toasts,
 } from './stores.svelte';
 
@@ -21,8 +21,8 @@ describe('install flow store', () => {
   it('a background run tracks per-instance status, bumps content revisions and ends with a summary toast', async () => {
     const { neo, iron } = await boot();
     const run = startContentRun('content', 'Sodium', null, [
-      { profileId: neo.id, provider: 'modrinth', projectId: 'sodium', include: [], title: 'Sodium' },
-      { profileId: iron.id, provider: 'modrinth', projectId: 'create-fabric', include: [], title: 'Sodium' },
+      { profileId: neo.id, projectId: 'sodium', include: [], title: 'Sodium' },
+      { profileId: iron.id, projectId: 'create-fabric', include: [], title: 'Sodium' },
     ]);
     expect(run.jobs.map((j) => j.status)).toEqual(['running', 'queued']); // sequential: the second waits
     await vi.advanceTimersByTimeAsync(10);
@@ -41,7 +41,7 @@ describe('install flow store', () => {
   it('a failing step is marked with its code and the summary says how many finished', async () => {
     const { neo } = await boot();
     const run = startContentRun('content', 'Waystone Atlas', null, [
-      { profileId: neo.id, provider: 'curseforge', projectId: '999999999', include: [], title: 'x' },
+      { profileId: neo.id, projectId: '999999999', include: [], title: 'x' },
     ]);
     await vi.advanceTimersByTimeAsync(2000);
     expect(run.finished).toBe(true);
@@ -52,13 +52,13 @@ describe('install flow store', () => {
 
   it('a modpack run navigates to the new instance only while its dialog is open', async () => {
     const { } = await boot();
-    const proj = { provider: 'modrinth' as const, projectId: 'fabulously-optimized', title: 'Fabulously Optimized', type: 'modpack' as const, iconUrl: null };
+    const proj = { projectId: 'fabulously-optimized', title: 'Fabulously Optimized', type: 'modpack' as const, iconUrl: null };
     startInstall({ kind: 'modpack', project: proj });
     const a = await startModpackRun(proj, 'FO watched', undefined, true);
     await vi.advanceTimersByTimeAsync(3000);
     const pa = await a.done;
     expect(pa?.name).toBe('FO watched');
-    expect(nav).toMatchObject({ view: 'profile', profileId: pa?.id, profileTab: 'content' });
+    expect(nav).toMatchObject({ view: 'profile', profileId: pa?.id, profileTab: 'mods' });
     expect(flow.req).toBeNull();
 
     nav.view = 'home'; nav.profileId = null;
@@ -72,7 +72,7 @@ describe('install flow store', () => {
 
   it('closing the run dialog marks the run as not watched', async () => {
     const { neo } = await boot();
-    const run = startContentRun('content', 'Iris', null, [{ profileId: neo.id, provider: 'modrinth', projectId: 'iris', include: [], title: 'Iris' }]);
+    const run = startContentRun('content', 'Iris', null, [{ profileId: neo.id, projectId: 'iris', include: [], title: 'Iris' }]);
     startInstall({ kind: 'run', runId: run.id });
     closeFlow();
     expect(flow.req).toBeNull();
@@ -85,19 +85,11 @@ describe('providers state, errors, theme, activity', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => { vi.useRealTimers(); resetStores(); });
 
-  it('providers_status is loaded into the store; no key means CurseForge unavailable', async () => {
-    await boot({ noCurseforge: true });
-    await loadProviders();
-    expect(providers.status).toContainEqual({ provider: 'curseforge', available: false, reason: 'no_api_key' });
-  });
-
   it('errors map by code, then by family, then fall back', async () => {
     await boot();
-    expect(errorText({ code: 'distribution_blocked' })).toBe(t('err.distribution_blocked'));
-    expect(errorText({ code: 'curseforge.unauthorized' })).toBe(t('err.curseforge.unauthorized'));
-    expect(errorText({ code: 'curseforge.something_new' })).toBe(t('err.curseforge')); // family fallback
+    expect(errorText({ code: 'import.unsupported_curseforge' })).toBe(t('err.import.unsupported_curseforge'));
     expect(errorText({ code: 'net.timeout' })).toBe(t('err.net.timeout'));
-    expect(new Set(['distribution_blocked', 'curseforge.unauthorized', 'curseforge.something_new', 'totally.unknown'].map((c) => errorText({ code: c }))).size).toBe(4);
+    expect(new Set(['net.timeout', 'project_not_found', 'totally.unknown'].map((c) => errorText({ code: c }))).size).toBe(3);
     expect(errorText({ code: 'totally.unknown' })).toBe(t('err.unknown'));
   });
 

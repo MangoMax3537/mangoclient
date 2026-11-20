@@ -8,7 +8,6 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
-  import KeyIcon from 'phosphor-svelte/lib/KeyIcon';
   import Tile from './Tile.svelte';
   import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
@@ -20,17 +19,15 @@
   import Lazy from './Lazy.svelte';
   import { dialogs } from '../lib/lazy';
   import { fmtCompact } from '../lib/format';
-  import { effectiveProvider, providerLabel, sourceOptions } from '../lib/install';
   import type { Key } from '../lib/i18n';
-    import { app, errorText, getApi, installs, lang, loadProviders, nav, openProfile, providers, startInstall, t, tp, type FlowProject } from '../lib/stores.svelte';
-  import type { ContentItem, Loader, ProjectHit, ProjectType, Provider, SearchSort, VersionManifest } from '../lib/types';
+  import { app, errorText, getApi, installs, lang, nav, openProfile, startInstall, t, tp, tabForType, type FlowProject } from '../lib/stores.svelte';
+  import type { ContentItem, Loader, ProjectHit, ProjectType, SearchSort, VersionManifest } from '../lib/types';
 
   const PAGE = 20;
   const TYPES: ProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader'];
   const LOADERS: Loader[] = ['fabric', 'quilt', 'forge', 'neoforge'];
   const SORTS: SearchSort[] = ['relevance', 'downloads', 'follows', 'newest', 'updated'];
 
-  let wanted = $state<Provider>('modrinth');
   let query = $state('');
   let loader = $state<Loader | ''>('');
   let mcVersion = $state('');
@@ -53,16 +50,10 @@
   const type = $derived(nav.discoverType);
   const scope = $derived(app.profiles.find((p) => p.id === nav.discoverProfile) ?? null);
   const isPack = $derived(type === 'modpack');
-  const opts = $derived(sourceOptions(providers.status));
-  const source = $derived(effectiveProvider(wanted, opts));
-  const cfOff = $derived(opts.find((o) => o.provider === 'curseforge' && o.disabled) ?? null);
-  const typeOpts = $derived(TYPES.map((v) => ({ value: v, label: t(`discover.type.${v}` as Key) })));
-  const sourceSeg = $derived(opts.map((o) => ({
-    value: o.provider, label: providerLabel(o.provider), ...(o.disabled ? { disabledReason: t(`discover.source.${o.reason ?? 'offline'}` as Key) } : {}),
-  })));
+  // Data packs are not browsed on their own tab bar entry unless an instance tab sent the user here for them.
+  const typeOpts = $derived((type === 'datapack' ? [...TYPES, 'datapack' as ProjectType] : TYPES).map((v) => ({ value: v, label: t(`discover.type.${v}` as Key) })));
   const versions = $derived((manifest?.versions ?? []).filter((v) => v.type === 'release').slice(0, 40));
 
-  $effect(() => { void loadProviders(); });
   // Filters follow the scope instance (and are free when there is none).
   $effect(() => {
     const p = scope;
@@ -75,7 +66,7 @@
     scopeItems = {};
     if (!id) return;
     let dead = false;
-    getApi().contentList({ profileId: id }).then((l) => { if (!dead) scopeItems = Object.fromEntries(l.map((i) => [`${i.provider}:${i.projectId}`, i])); }, () => {});
+    getApi().contentList({ profileId: id }).then((l) => { if (!dead) scopeItems = Object.fromEntries(l.map((i) => [i.projectId, i])); }, () => {});
     return () => { dead = true; };
   });
 
@@ -86,7 +77,7 @@
       void signal;
       const r = await getApi().searchProjects({
         params: {
-          provider: source, query: query.trim(), projectType: type, sort, offset, limit: PAGE,
+          query: query.trim(), projectType: type, sort, offset, limit: PAGE,
           ...(loader && (type === 'mod' || type === 'modpack') ? { loader } : {}), ...(mcVersion ? { mcVersion } : {}),
         },
       });
@@ -94,13 +85,13 @@
     }, { silent: append });
   }
   $effect(() => {
-    void type; void query; void loader; void mcVersion; void sort; void source;
+    void type; void query; void loader; void mcVersion; void sort;
     const h = setTimeout(() => run(false), 220);
     return () => { clearTimeout(h); };
   });
 
   type St = 'install' | 'installing' | 'installed' | 'update';
-  const keyOf = (h: ProjectHit) => `${h.provider}:${h.projectId}`;
+  const keyOf = (h: ProjectHit) => h.projectId;
   function stateOf(h: ProjectHit): St {
     if (installs[h.projectId]) return 'installing';
     if (h.type === 'modpack' || !scope) return 'install';
@@ -110,7 +101,7 @@
   }
   const pct = (id: string) => { const e = installs[id]; return e && e.total ? Math.round((e.done / e.total) * 100) : 0; };
   const asProject = (h: ProjectHit): FlowProject => ({
-    provider: h.provider, projectId: h.projectId, title: h.title, type: h.type, iconUrl: h.iconUrl, loaders: h.loaders, gameVersions: h.gameVersions,
+    projectId: h.projectId, title: h.title, type: h.type, iconUrl: h.iconUrl, loaders: h.loaders, gameVersions: h.gameVersions,
   });
   function install(h: ProjectHit, versionId?: string) {
     drawer = null;
@@ -127,23 +118,14 @@
       <h1 class="display">{t('nav.discover')}</h1>
       <div class="hint">{t('discover.lead')}</div>
     </div>
-    <div class="source">
-      <span class="eyebrow" id="dc-src">{t('discover.source')}</span>
-      <Seg options={sourceSeg} value={source} label={t('discover.source')} idPrefix="dsrc" onchange={(v) => (wanted = v as Provider)} />
-    </div>
   </header>
-
-  {#if cfOff}
-    <p class="note" role="note"><KeyIcon weight="bold" size={16} aria-hidden="true" /><span>{t(`discover.source.${cfOff.reason ?? 'offline'}` as Key)}</span>
-      {#if cfOff.reason === 'no_api_key'}<button class="btn small" type="button" onclick={() => (nav.view = 'settings')}>{t('discover.source.openSettings')}</button>{/if}</p>
-  {/if}
 
   {#if scope && !isPack}
     <div class="scope">
       <InstanceIcon profile={scope} size={40} notch={7} />
       <div class="who"><span class="eyebrow">{t('discover.installingTo')}</span><b>{scope.name}</b>
         <span class="mono hint">{scope.mcVersion} / {scope.loader === 'vanilla' ? t('profile.vanilla') : scope.loader}</span></div>
-      <button class="btn ghost small" type="button" onclick={() => openProfile(scope.id, 'content')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('discover.backToProfile')}</button>
+      <button class="btn ghost small" type="button" onclick={() => openProfile(scope.id, tabForType(type))}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('discover.backToProfile')}</button>
       <button class="btn small" type="button" onclick={() => (nav.discoverProfile = null)}><XIcon weight="bold" size={14} aria-hidden="true" />{t('discover.allInstances')}</button>
     </div>
   {/if}
@@ -154,7 +136,7 @@
     <label class="search">
       <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
       <span class="sr-only">{t('discover.search')}</span>
-      <input class="field" type="search" placeholder={t('discover.searchIn', { source: providerLabel(source) })} bind:value={query} />
+      <input class="field" type="search" placeholder={t('discover.searchIn')} bind:value={query} />
     </label>
     {#if type === 'mod' || type === 'modpack'}
       <label class="f"><span class="hint">{t('new.loader')}</span>
@@ -176,14 +158,11 @@
       <!-- first ~150 ms of a first load: nothing yet, so a fast answer never flashes a skeleton -->
     {:else if error}
       <EmptyState title={t('discover.errTitle')} hint={error.text}>
-        {#if error.code === 'curseforge.no_api_key'}<button class="btn accent" type="button" onclick={() => (nav.view = 'settings')}><KeyIcon weight="bold" size={14} aria-hidden="true" />{t('discover.source.openSettings')}</button>
-        {:else if source === 'curseforge'}<button class="btn" type="button" onclick={() => (wanted = 'modrinth')}>{t('discover.useModrinth')}</button>{/if}
         <button class="btn" type="button" onclick={() => run(false)}>{t('common.retry')}</button>
       </EmptyState>
     {:else if hits.length === 0}
       <EmptyState title={t('discover.emptyTitle')} hint={t('discover.empty')}>
         {#if filtered}<button class="btn" type="button" onclick={resetFilters}><XIcon weight="bold" size={14} aria-hidden="true" />{t('discover.clearFilters')}</button>{/if}
-        {#if opts.every((o) => !o.disabled)}<button class="btn" type="button" onclick={() => (wanted = source === 'modrinth' ? 'curseforge' : 'modrinth')}>{t('discover.trySource', { source: providerLabel(source === 'modrinth' ? 'curseforge' : 'modrinth') })}</button>{/if}
       </EmptyState>
     {:else}
       <p class="hint mono count" aria-live="polite">{t('discover.results', { shown: hits.length, total })}</p>
@@ -230,11 +209,7 @@
   .dc { height: 100%; overflow: auto; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-3); }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s-4); flex-wrap: wrap; }
   h1 { font-size: var(--fs-3xl); }
-  .source { display: grid; gap: 4px; justify-items: end; }
-  .note { display: flex; align-items: center; gap: 10px; margin: 0; padding: 6px 8px 6px 12px; border-left: 3px solid var(--mango); background: color-mix(in srgb, var(--mango) 8%, transparent); font-size: var(--fs-sm); }
-  .note span { flex: 1; }
-  .note :global(svg) { color: var(--mango); flex: none; }
-  .scope { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent-fill); background: var(--ink-1); }
+  .scope { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 12px; border: 1px solid var(--line); background: var(--ink-1); }
   .scope .who { flex: 1; display: grid; gap: 0; min-width: 0; }
   .scope b { font: 700 var(--fs-lg) var(--font-display); }
   .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }

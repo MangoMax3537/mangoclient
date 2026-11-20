@@ -14,7 +14,6 @@
   import { fmtCompact, fmtDate } from '../lib/format';
   import { markdownLite } from '../lib/markdown';
   import type { Key } from '../lib/i18n';
-  import { providerLabel } from '../lib/install';
   import { errorText, getApi, lang, t, toast } from '../lib/stores.svelte';
   import type { ContentItem, ProfileView, ProjectDetail, ProjectHit, ProjectVersion } from '../lib/types';
 
@@ -38,8 +37,8 @@
     const id = hit.projectId;
     shot = 0;
     const api = getApi();
-    detailLoad.run(() => api.projectDetail({ provider: hit.provider, projectId: id }));
-    versLoad.run(() => api.projectVersions({ provider: hit.provider, projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }));
+    detailLoad.run(() => api.projectDetail({ projectId: id }));
+    versLoad.run(() => api.projectVersions({ projectId: id, ...(scope && hit.type !== 'modpack' ? { profileId: scope.id } : {}) }));
     return () => { detailLoad.cancel(); versLoad.cancel(); };
   });
 
@@ -51,7 +50,7 @@
   <div class="top">
     <Tile kind="mod" id={hit.projectId} src={hit.iconUrl} size={72} radius={10} />
     <div class="meta">
-      <div class="hint">{providerLabel(hit.provider)} &middot; {t('discover.by', { author: hit.author })}</div>
+      <div class="hint">{t('discover.by', { author: hit.author })}</div>
       <p class="d">{hit.description}</p>
       <div class="stats mono">
         <span><DownloadSimpleIcon weight="bold" size={14} aria-hidden="true" />{fmtCompact(hit.downloads, lang())}</span>

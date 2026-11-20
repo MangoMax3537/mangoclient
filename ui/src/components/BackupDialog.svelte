@@ -42,5 +42,5 @@
   .f { display: grid; gap: 6px; }
   .f label { font-weight: 500; }
   .b { margin-top: 14px; }
-  .err { margin: 12px 0 0; padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
+  .err { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
 </style>

@@ -10,7 +10,7 @@
   import LoadError from './LoadError.svelte';
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
-  import { updatable, updateRows, updateSteps, providerLabel, type RunStep, type UpdateRow } from '../lib/install';
+  import { updateRows, updateSteps, type RunStep, type UpdateRow } from '../lib/install';
   import { fmtBytes } from '../lib/format';
   import { app, getApi, lang, t, tp } from '../lib/stores.svelte';
   import type { InstallPlan, UpdateInfo } from '../lib/types';
@@ -28,13 +28,13 @@
     untrack(() => { skip = []; });
     rl.run(async () => {
       const plans = await Promise.all(list.map((i): Promise<InstallPlan | null> =>
-        getApi().installPlan({ provider: i.provider ?? 'modrinth', projectId: i.projectId, versionId: i.versionId, profileId }).catch(() => null)));
+        getApi().installPlan({ projectId: i.projectId, versionId: i.versionId, profileId }).catch(() => null)));
       return updateRows(list, plans);
     });
     return () => rl.cancel();
   });
 
-  const active = $derived((rows ? updatable(rows) : []).filter((r) => !skip.includes(r.info.projectId)));
+  const active = $derived((rows ?? []).filter((r) => !skip.includes(r.info.projectId)));
   const bytes = $derived(active.reduce((a, r) => a + r.bytes, 0));
   const newDeps = $derived(active.reduce((a, r) => a + r.newDeps.length, 0));
   function confirm() {
@@ -54,18 +54,14 @@
     <ul class="rows">
       {#each rows as r (r.info.projectId)}
         {@const off = skip.includes(r.info.projectId)}
-        {@const blockedReq = !!r.plan && r.plan.items.some((i) => i.role === 'requested' && i.distributionBlocked)}
-        <li class="row" class:off={off || blockedReq}>
+        <li class="row" class:off={off}>
           <Tile kind="mod" id={r.info.projectId} src={null} size={36} radius={6} />
           <div class="t">
-            <div class="l1"><b>{r.info.title}</b><span class="tag">{providerLabel(r.info.provider)}</span></div>
+            <div class="l1"><b>{r.info.title}</b></div>
             <div class="ver mono">{r.info.from ?? '?'}<ArrowRightIcon weight="bold" size={12} aria-hidden="true" />{r.info.to}</div>
             {#if r.newDeps.length}
               <div class="deps"><PlusIcon weight="bold" size={12} aria-hidden="true" /><span class="hint">{tp('flow.upd.newDeps', r.newDeps.length)}</span>
                 {#each r.newDeps as d (d.projectId)}<span class="chip sm">{d.title}</span>{/each}</div>
-            {/if}
-            {#if r.blocked.length || blockedReq}
-              <div class="w"><WarningIcon weight="bold" size={13} aria-hidden="true" />{blockedReq ? t('flow.upd.blockedReq') : t('flow.upd.blockedDeps', { list: r.blocked.map((b) => b.title).join(', ') })}</div>
             {/if}
             {#if r.conflicts.length}
               <div class="w"><WarningIcon weight="bold" size={13} aria-hidden="true" />{t('flow.upd.conflict', { list: r.conflicts.map((c) => c.title).join(', ') })}</div>
@@ -73,7 +69,7 @@
             {#if !r.plan}<div class="w"><WarningIcon weight="bold" size={13} aria-hidden="true" />{t('flow.upd.noPlan')}</div>{/if}
           </div>
           <span class="sz mono">{r.bytes ? fmtBytes(r.bytes, lang()) : ''}</span>
-          <input type="checkbox" checked={!off && !blockedReq} disabled={blockedReq} aria-label={t('flow.upd.include', { name: r.info.title })} onchange={(e) => flip(r.info.projectId, e.currentTarget.checked)} />
+          <input type="checkbox" checked={!off} aria-label={t('flow.upd.include', { name: r.info.title })} onchange={(e) => flip(r.info.projectId, e.currentTarget.checked)} />
         </li>
       {/each}
     </ul>
@@ -101,7 +97,6 @@
   .t { display: grid; gap: 3px; min-width: 0; }
   .l1 { display: flex; align-items: center; gap: 8px; }
   .l1 b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tag { font-size: var(--fs-xs); padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-s); color: var(--paper-dim); }
   .ver { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--paper-dim); }
   .ver :global(svg) { color: var(--mango); }
   .deps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); }

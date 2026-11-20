@@ -8,8 +8,10 @@
     row: Snippet<[T, number]>;
     label: string;
     overscan?: number;
+    /** One hairline between neighbouring rows (never at the list's own edges). */
+    separators?: boolean;
   }
-  let { items, rowHeight, key, row, label, overscan = 6 }: Props = $props();
+  let { items, rowHeight, key, row, label, overscan = 6, separators = false }: Props = $props();
   let top = $state(0);
   let h = $state(600);
   const start = $derived(Math.max(0, Math.floor(top / rowHeight) - overscan));
@@ -18,7 +20,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="vl" role="list" aria-label={label} bind:clientHeight={h} onscroll={(e) => (top = e.currentTarget.scrollTop)} tabindex="-1">
+<div class="vl" class:sep={separators} role="list" aria-label={label} bind:clientHeight={h} onscroll={(e) => (top = e.currentTarget.scrollTop)} tabindex="-1">
   <div class="space" style:height="{items.length * rowHeight}px">
     <div class="win" style:transform="translateY({start * rowHeight}px)">
       {#each slice as item, i (key(item, start + i))}
@@ -33,4 +35,6 @@
   .space { position: relative; }
   .win { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
   .r { overflow: hidden; }
+  /* one hairline between neighbouring rows, never at the list's own edges (the list's container draws those) */
+  .sep .r + .r { border-top: 1px solid var(--line-soft); }
 </style>

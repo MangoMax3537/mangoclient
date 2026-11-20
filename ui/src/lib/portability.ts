@@ -125,7 +125,7 @@ const IMPORT_ERRORS: Record<string, Key> = {
   'import.unsupported_format': 'import.err.unsupportedFormat',
   'import.invalid_pack': 'import.err.invalidPack',
   'import.unsafe_archive': 'import.err.unsafeArchive',
-  'curseforge.no_api_key': 'import.err.noApiKey',
+  'import.unsupported_curseforge': 'err.import.unsupported_curseforge',
   'loaders.installer_unverified': 'import.err.installerUnverified',
   'net.host_not_allowed': 'import.err.hostNotAllowed',
 };
@@ -145,7 +145,7 @@ const EXPORT_ERRORS: Record<string, Key> = {
 };
 export const exportErrorKey = (code: string): Key | null => EXPORT_ERRORS[code] ?? null;
 
-export const KIND_LABEL: Record<PlanKind, Key> = { mrpack: 'import.kind.mrpack', curseforge: 'import.kind.curseforge', prism: 'import.kind.prism' };
+export const KIND_LABEL: Record<PlanKind, Key> = { mrpack: 'import.kind.mrpack', prism: 'import.kind.prism' };
 
 /** The import dialog as a state machine (the component only renders it). */
 export type ImportState =

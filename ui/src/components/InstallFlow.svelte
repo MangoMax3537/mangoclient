@@ -40,6 +40,4 @@
   <Lazy load={dialogs.updatePreview} props={{ profileId: req.profileId, infos: req.infos, onconfirm: (steps: RunStep[]) => start('update', tp('flow.upd.items', steps.length), null, steps), onclose: closeFlow }} />
 {:else if req?.kind === 'run'}
   <Lazy load={dialogs.runDialog} props={{ runId: req.runId, onclose: closeFlow }} />
-{:else if req?.kind === 'blocked'}
-  <Lazy load={dialogs.blockedDialog} props={{ profileId: req.profileId, onclose: closeFlow }} />
 {/if}

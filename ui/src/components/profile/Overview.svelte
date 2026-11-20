@@ -4,7 +4,6 @@
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import ScrollIcon from 'phosphor-svelte/lib/ScrollIcon';
   import ImagesIcon from 'phosphor-svelte/lib/ImagesIcon';
-  import BlockedBanner from '../BlockedBanner.svelte';
   import Img from '../Img.svelte';
   import LoadError from '../LoadError.svelte';
   import ScreenshotGridSkeleton from '../skeleton/ScreenshotGridSkeleton.svelte';
@@ -21,6 +20,9 @@
   const logLoad = createLoadState<{ entry: LogEntry; lines: string[] } | null>({ isEmpty: () => false });
   const shots = $derived(shotsLoad.data);
   const excerpt = $derived(logLoad.data);
+  // a section with nothing to show is not rendered (no empty boxes, no "nothing yet" sentences)
+  const showShots = $derived(shotsLoad.phase === 'error' || shots === null || shots.length > 0);
+  const showLog = $derived(logLoad.phase === 'error' || logLoad.phase !== 'ready' || excerpt !== null);
 
   $effect(() => {
     const id = profile.id;
@@ -49,7 +51,6 @@
 </script>
 
 <div class="ov">
-  <BlockedBanner {profile} />
   <dl class="tiles">
     <div><dt>{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
     <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
@@ -57,6 +58,7 @@
     <div><dt>{t('home.mods')}</dt><dd class="mono">{profile.modCount}</dd></div>
   </dl>
 
+  {#if showShots}
   <section class="shots" aria-labelledby="ov-shots">
     <header><h2 id="ov-shots" class="eyebrow">{t('overview.screenshots')}</h2>
       {#if shots?.length}<button class="btn ghost" type="button" onclick={() => (nav.profileTab = 'media')}>{t('overview.all')}</button>{/if}
@@ -64,8 +66,6 @@
     {#if shotsLoad.phase === 'error'}<LoadError compact error={shotsLoad.error} onretry={() => shotsLoad.retry()} />
     {:else if shots === null}
       {#if shotsLoad.showSkeleton}<ScreenshotGridSkeleton count={3} min={150} gap={8} />{/if}
-    {:else if shots.length === 0}
-      <p class="hint">{t('media.empty')}</p>
     {:else}
       <ul class="strip">
         {#each shots.slice(0, 6) as s (s.name)}
@@ -74,18 +74,20 @@
       </ul>
     {/if}
   </section>
+  {/if}
 
+  {#if showLog}
   <section class="log" aria-labelledby="ov-log">
     <header><h2 id="ov-log" class="eyebrow">{t('overview.lastLog')}{#if excerpt}<span class="mono dim">&nbsp;&middot;&nbsp;{excerpt.entry.name}</span>{/if}</h2>
       <button class="btn ghost" type="button" onclick={() => (nav.profileTab = 'logs')}>{t('overview.openLogs')}</button>
     </header>
     {#if logLoad.phase === 'error'}<LoadError compact error={logLoad.error} onretry={() => logLoad.retry()} />
     {:else if logLoad.phase === 'loading'}{#if logLoad.showSkeleton}<div class="skpre"><LogLineSkeleton count={12} lineHeight={19.375} pad="10px 14px" /></div>{/if}
-    {:else if excerpt === null}<p class="hint">{t('logs.empty')}</p>
-    {:else}
+    {:else if excerpt}
       <pre class="mono">{#each excerpt.lines as l, i (i)}<span class="ln {logLevel(l)}">{l}{'\n'}</span>{/each}</pre>
     {/if}
   </section>
+  {/if}
 
   <section class="links" aria-labelledby="ov-links">
     <h2 id="ov-links" class="eyebrow">{t('overview.quick')}</h2>

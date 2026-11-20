@@ -22,7 +22,7 @@ export function lazyMockApi(search: string): Api {
   let impl: Promise<MockApi> | null = null;
   const load = (): Promise<MockApi> => (impl ??= import('./mockApi').then((m) => {
     const a = m.createMockApi(m.mockOptionsFromSearch(search));
-    // Dev helper of the browser mock: `__mangoMock.download(profileId)` plays the user saving a blocked file into Downloads, `.drop(paths)` plays files:dropped.
+    // Dev helper of the browser mock: `__mangoMock.download(profileId)` `.drop(paths)` plays files:dropped.
     if (typeof window !== 'undefined') (window as unknown as { __mangoMock: MockApi['dev'] }).__mangoMock = a.dev;
     return a;
   }));

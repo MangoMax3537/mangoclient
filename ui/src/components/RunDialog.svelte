@@ -56,7 +56,7 @@
     {/if}
     {#snippet footer()}
       {#if run.finished && run.kind !== 'update' && run.jobs.length === 1 && run.jobs[0].status === 'done'}
-        <button class="btn" type="button" onclick={() => { const id = run.jobs[0].profileId; onclose(); openProfile(id, 'content'); }}>{t('flow.run.open')}</button>
+        <button class="btn" type="button" onclick={() => { const id = run.jobs[0].profileId; onclose(); openProfile(id, 'overview'); }}>{t('flow.run.open')}</button>
       {/if}
       <button class="btn" class:accent={run.finished} type="button" onclick={onclose}>{run.finished ? t('common.done') : t('flow.run.hide')}</button>
     {/snippet}
@@ -76,8 +76,8 @@
   .error .st { color: var(--tomato); }
   .running .st { color: var(--mango); }
   .queued { opacity: 0.7; }
-  .sum { margin: 12px 0 0; padding: 8px 12px; border-left: 3px solid var(--leaf); background: color-mix(in srgb, var(--leaf) 10%, transparent); }
-  .sum.bad { border-left-color: var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); }
+  .sum { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--leaf) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--leaf) 10%, transparent); }
+  .sum.bad { border-color: var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); }
   .bg { margin: 12px 0 0; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }

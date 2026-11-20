@@ -17,7 +17,7 @@
   function go(it: (typeof items)[number]) {
     open = false;
     if (it.runId !== undefined) startInstall({ kind: 'run', runId: it.runId });
-    else if (it.profileId) openProfile(it.profileId, it.kind === 'install' ? 'content' : 'overview');
+    else if (it.profileId) openProfile(it.profileId, it.kind === 'install' ? 'mods' : 'overview');
   }
   function onwin(e: MouseEvent) { if (open && root && !root.contains(e.target as Node)) open = false; }
   function onkey(e: KeyboardEvent) { if (open && e.key === 'Escape') { open = false; (root?.querySelector('.pill') as HTMLElement | null)?.focus(); } }

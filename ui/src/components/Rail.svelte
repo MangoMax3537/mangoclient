@@ -45,7 +45,8 @@
       {#each Array(4) as _, i (i)}<li aria-hidden="true"><span class="ring"><Skeleton variant="box" w={40} h={40} notch={7} /></span></li>{/each}
     {/if}
     {#each recent as p (p.id)}
-      {@const sel = nav.view === 'profile' ? p.id === nav.profileId : p.id === selectedProfile()?.id}
+      <!-- highlighted only where that instance is the subject: its own page, or Home while Home shows it. Never in Library, Discover, Servers, Stats, Settings. -->
+      {@const sel = nav.view === 'profile' ? p.id === nav.profileId : nav.view === 'home' && p.id === selectedProfile()?.id}
       <li class:sel class:on={nav.view === 'profile' && p.id === nav.profileId}>
         <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined}
           onclick={() => { actions.selectProfile(p.id); openProfile(p.id); }}>

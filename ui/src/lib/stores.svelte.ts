@@ -4,8 +4,8 @@ import { runSteps, type RunStep } from './install';
 import { listenDropped } from './drop';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, BlockedFile, BlockIconsStatus, Config, ConfigPatch, ProfilePatch, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
-  ProviderStatus, RamLimitsView, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
+  AppState, BlockIconsStatus, Config, ConfigPatch, ProfilePatch, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, PublicAccount,
+  RamLimitsView, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
 export const CONSOLE_CAP = 800;
@@ -37,7 +37,10 @@ export const app = $state({
 export const launches = $state<Record<string, LaunchInfo>>({});
 export const consoles = $state<Record<string, ConsoleLine[]>>({});
 export type View = 'home' | 'library' | 'discover' | 'servers' | 'stats' | 'settings' | 'profile';
-export type ProfileTab = 'overview' | 'content' | 'media' | 'backups' | 'logs' | 'settings';
+export type ProfileTab = 'overview' | 'mods' | 'shaders' | 'resourcepacks' | 'datapacks' | 'media' | 'backups' | 'logs' | 'settings';
+/** The profile tab that lists a content type (a modpack has none: it is an instance of its own). */
+export const tabForType = (type: ProjectType): ProfileTab =>
+  type === 'shader' ? 'shaders' : type === 'resourcepack' ? 'resourcepacks' : type === 'datapack' ? 'datapacks' : type === 'mod' ? 'mods' : 'overview';
 export const nav = $state({
   view: 'home' as View, newProfile: false, accounts: false,
   /** "Create new instance for this": New profile opens with a compatible loader/version and starts the install afterwards. */
@@ -48,7 +51,7 @@ export const nav = $state({
   discoverProfile: null as string | null, discoverType: 'mod' as ProjectType,
   /** Instance whose icon / background picker is open (mounted once in App). */
   iconPicker: null as string | null, backgroundPicker: null as string | null,
-  /** The Content tab picks this up once as its search text (crash cause "related mods" link there). */
+  /** The Mods tab picks this up once as its search text (crash cause "related mods" link there). */
   contentQuery: null as string | null,
 });
 export const openIconPicker = (id: string): void => { nav.iconPicker = id; };
@@ -93,16 +96,14 @@ export function openDiscover(profileId: string | null = null, type: ProjectType 
 }
 
 /* ---- install flow (picker, dependency dialog, modpack dialog, update preview) ---- */
-export interface FlowProject { provider: Provider; projectId: string; title: string; type: ProjectType; iconUrl: string | null; loaders?: string[]; gameVersions?: string[] }
+export interface FlowProject { projectId: string; title: string; type: ProjectType; iconUrl: string | null; loaders?: string[]; gameVersions?: string[] }
 export type FlowRequest =
   | { kind: 'content'; project: FlowProject; versionId?: string; /** Skips the instance picker. */ scopeProfileId?: string | null; update?: boolean }
   | { kind: 'modpack'; project: FlowProject; versionId?: string }
   | { kind: 'updates'; profileId: string; infos: UpdateInfo[] }
-  | { kind: 'run'; runId: number }
-  | { kind: 'blocked'; profileId: string };
+  | { kind: 'run'; runId: number };
 export const flow = $state<{ req: FlowRequest | null }>({ req: null });
 export const startInstall = (req: FlowRequest): void => { flow.req = req; };
-export const openBlocked = (profileId: string): void => { flow.req = { kind: 'blocked', profileId }; };
 export const closeFlow = (): void => {
   const r = flow.req;
   if (r?.kind === 'run') { const run = runs.find((x) => x.id === r.runId); if (run) run.watching = false; }
@@ -128,42 +129,6 @@ export interface InstallRun {
 }
 export const runs = $state<InstallRun[]>([]);
 let runId = 0;
-
-/** Part 5: blocked CurseForge files per profile (blocked_files + blocked:changed) and the folders being watched. */
-export const blocked = $state({ files: {} as Record<string, BlockedFile[]>, watching: {} as Record<string, string[]> });
-/** Files not yet installed or skipped and not left to Modrinth: what ProfileView.pendingBlocked counts. */
-export const pendingOf = (files: readonly BlockedFile[]): number => files.filter((f) => f.state === 'pending' || f.state === 'found').length;
-export function applyBlocked(profileId: string, files: BlockedFile[]): void {
-  blocked.files[profileId] = files;
-  const p = app.profiles.find((x) => x.id === profileId);
-  if (p) p.pendingBlocked = pendingOf(files);
-}
-export async function loadBlocked(profileId: string): Promise<BlockedFile[]> {
-  const files = await currentApi.blockedFiles({ profileId });
-  applyBlocked(profileId, files);
-  return files;
-}
-/** Starts watching for the instance and returns a function that stops it again (idempotent). */
-export async function startBlockedWatch(profileId: string): Promise<() => Promise<void>> {
-  const dirs = await currentApi.blockedWatchStart({ profileId });
-  blocked.watching[profileId] = dirs;
-  let stopped = false;
-  return async () => {
-    if (stopped) return;
-    stopped = true;
-    delete blocked.watching[profileId];
-    try { await currentApi.blockedWatchStop({ profileId }); } catch { /* the watcher dies with the app anyway */ }
-  };
-}
-export async function skipBlocked(profileId: string, fileName: string): Promise<void> {
-  applyBlocked(profileId, await currentApi.blockedSkip({ profileId, fileName }));
-}
-
-/** Content sources (providers_status). `null` until the first answer. */
-export const providers = $state({ status: null as ProviderStatus[] | null });
-export async function loadProviders(): Promise<void> {
-  try { providers.status = await currentApi.providersStatus(); } catch { providers.status = null; }
-}
 
 /* ---- theme ---- */
 export type ThemeMode = 'system' | 'dark' | 'light';
@@ -231,7 +196,7 @@ export const t = (key: Key, vars?: Vars): string => translate(lang(), key, vars)
 export const tp = (key: PluralKey, n: number, vars?: Vars): string => plural(lang(), key, n, vars);
 export function errorText(e: unknown): string {
   const code = toAppError(e).code;
-  // exact code, then its family (curseforge.unauthorized -> err.curseforge, net.request -> err.net)
+  // exact code, then its family (net.request -> err.net)
   for (const key of [`err.${code}`, `err.${code.split('.')[0]}`]) if (hasKey(lang(), key)) return translate(lang(), key);
   return translate(lang(), 'err.unknown');
 }
@@ -316,7 +281,6 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('update:status', (u) => { updates.status = u; }),
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
     api.listen('accounts:changed', () => { void refreshAccounts(); }),
-    api.listen('blocked:changed', (e) => applyBlocked(e.profileId, e.files)),
     api.listen('blocks:status', applyBlocksStatus),
     api.listen('panorama:ready', (e) => { void loadPanorama(e.profileId, true); }),
   ]);
@@ -373,21 +337,18 @@ export function startContentRun(kind: 'content' | 'update', title: string, iconU
 export async function startModpackRun(
   project: FlowProject, name: string, versionId: string | undefined, watching = true,
 ): Promise<{ run: InstallRun; done: Promise<ProfileView | null> }> {
-  const step: RunStep = { profileId: '', provider: project.provider, projectId: project.projectId, versionId, include: [], title: name };
+  const step: RunStep = { profileId: '', projectId: project.projectId, versionId, include: [], title: name };
   const run: InstallRun = { id: ++runId, kind: 'modpack', title: name, iconUrl: project.iconUrl, jobs: [{ ...step, status: 'running' as const }], finished: false, watching };
   runs.push(run);
   const live = runs[runs.length - 1];
   const done = (async () => {
     try {
-      const p = await currentApi.modpackInstall({ provider: project.provider, projectId: project.projectId, name, ...(versionId ? { versionId } : {}) });
+      const p = await currentApi.modpackInstall({ projectId: project.projectId, name, ...(versionId ? { versionId } : {}) });
       live.jobs[0].status = 'done'; live.profileId = p.id; live.jobs[0].profileId = p.id;
       await actions.addProfile(p);
       live.finished = true;
       toast(t('discover.packInstalled', { name: p.name }), 'ok');
-      if (p.pendingBlocked > 0) {
-        if (live.watching) { flow.req = { kind: 'blocked', profileId: p.id }; openProfile(p.id, 'content'); }
-        else toast(tp('blocked.toast', p.pendingBlocked, { name: p.name }), 'info', 9000);
-      } else if (live.watching) { flow.req = null; openProfile(p.id, 'content'); }
+      if (live.watching) { flow.req = null; openProfile(p.id, 'mods'); }
       return p;
     } catch (e) {
       live.jobs[0].status = 'error'; live.jobs[0].error = toAppError(e).code; live.finished = true;
@@ -409,9 +370,7 @@ export function resetStores(): void {
   toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
-  runs.length = 0; flow.req = null; providers.status = null;
-  for (const k of Object.keys(blocked.files)) delete blocked.files[k];
-  for (const k of Object.keys(blocked.watching)) delete blocked.watching[k];
+  runs.length = 0; flow.req = null;
   updates.status = { state: 'idle' }; updates.overlay = false; updates.installing = false;
   auth.signingIn = false; auth.error = null; auth.relogin = null; auth.noticeDismissed = false;
   for (const k of Object.keys(auth.refreshing)) delete auth.refreshing[k];
@@ -427,9 +386,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | undefined> {
 }
 export const actions = {
   async setConfig(patch: ConfigPatch) {
-    const visible: ConfigPatch = { ...patch };
-    delete visible.curseforgeApiKey; // write-only: never part of the visible config
-    if (app.config) Object.assign(app.config, visible); // optimistic
+    if (app.config) Object.assign(app.config, patch); // optimistic
     const c = await guard(() => currentApi.configSet({ patch }));
     if (c) app.config = c;
     // the default heap changed: instances that follow it have a new effective value (only the backend knows it)

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Import plan dialog (docs/ipc.md Part 9): the plan of a .mrpack / CurseForge / Prism file, an editable name, blocked files and the import
+  // Import plan dialog (docs/ipc.md Part 9): the plan of a .mrpack / Prism file, an editable name and the import
   // itself with progress. All state lives in portability.svelte.ts, so an import keeps running when this dialog is hidden.
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import PackageIcon from 'phosphor-svelte/lib/PackageIcon';
@@ -8,7 +8,6 @@
   import Skeleton from './skeleton/Skeleton.svelte';
   import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
-  import BlockedPlanNote from './BlockedPlanNote.svelte';
   import PlanRam from './PlanRam.svelte';
   import { fmtBytes } from '../lib/format';
   import {
@@ -65,7 +64,6 @@
       </dl>
 
       <PlanRam {plan} />
-      <BlockedPlanNote files={plan.blockedFiles} id="imp-blocked" />
 
       {#if importing}
         <div class="prog" role="status">
@@ -102,7 +100,6 @@
   h3 { font-size: var(--fs-lg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd p { margin: 0; }
   .kind { font-weight: 600; color: var(--paper); border-color: var(--accent-fill); }
-  .kind.curseforge { border-color: var(--tomato); }
   .kind.prism { border-color: var(--sky); }
   .lbl { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--paper-dim); margin-bottom: 4px; }
   .field { width: 100%; }
@@ -113,7 +110,7 @@
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
   .creates { margin: 12px 0 0; }
-  .box { margin: 14px 0 0; padding: 8px 12px; border-left: 3px solid var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
+  .box { margin: 14px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
   :global(.skl-imp) { display: grid; gap: 10px; align-content: start; min-height: 220px; }
   .ln { height: 14px; width: 60%; }
   .prog { display: flex; align-items: center; gap: 12px; margin-top: 14px; }

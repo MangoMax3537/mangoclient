@@ -3,7 +3,7 @@ import { derivedRam, gbText, hintTarget, parseGb, planRam, RamSaver, ramMarkers,
 import { dictionaries, hasKey } from './i18n';
 
 const limits = { minMb: 1024, maxMb: 14336, totalMb: 16384 };
-const hint = { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'curseforge' as const };
+const hint = { recommendedMb: 4096, minMb: 3072, maxMb: 6144, source: 'modrinth' as const };
 const env: RamEnv = { limits, defaultMb: 4096, hint };
 const noHint: RamEnv = { limits, defaultMb: 4096, hint: null };
 

@@ -61,16 +61,27 @@
   .scene { opacity: 0; transition: opacity var(--dur) var(--ease); }
   .scene.ready { opacity: 1; }
   .scene.instant { transition: none; }
-  .scene { --w: 62cqmin; --a: calc(var(--w) * 0.57735); position: absolute; left: 50%; top: 50%; width: var(--w); height: calc(var(--a) * 2); transform: translate(-50%, -52%); }
+  /* Geometry in whole device-independent pixels: the edge length `a` is rounded to 1px where CSS round() exists, and the scene is placed with
+     rounded offsets instead of a fractional translate(-50%), so face edges land on the same sub-pixel phase at every size and zoom. */
+  .scene { --a: calc(62cqmin * 0.57735); position: absolute; width: calc(var(--a) * 1.732051); height: calc(var(--a) * 2); left: 50%; top: 50%; transform: translate(-50%, -52%); }
+  @supports (width: round(down, 1px, 1px)) {
+    .scene { --a: round(nearest, calc(62cqmin * 0.57735), 1px); transform: none;
+      left: round(down, calc(50cqw - var(--a) * 0.866025), 1px); top: round(down, calc(50cqh - var(--a) * 1.04), 1px); }
+  }
   .cube { position: absolute; inset: 0; transition: transform var(--dur) var(--ease); }
-  /* hexagon underlay: closes the hairline seams between faces and gives a dark contour */
-  .cube::before { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
-  .f { position: absolute; width: var(--a); height: var(--a); transform-origin: 0 0; overflow: hidden; }
+  /* Backing silhouette under the three faces, in a neutral that belongs to the surface (not black): whatever anti-aliasing leaves between
+     two faces shows this instead of a dark hairline. */
+  .cube::before { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--tint, var(--sky)) 28%, #34312c); }
+  /* Everything is clipped to the exact hexagon, so each face can bleed 1px over every edge (its own outermost texel row, stretched) without
+     changing the silhouette: shared edges overlap instead of meeting, so no anti-aliased gap can appear between two faces. */
+  .cube { clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+  .f { position: absolute; width: calc(var(--a) + 2px); height: calc(var(--a) + 2px); transform-origin: 0 0; overflow: hidden; backface-visibility: hidden; }
   .f img { display: block; width: 100%; height: 100%; object-fit: fill; }
   .f::after { content: ''; position: absolute; inset: 0; }
-  .top { left: 0; top: calc(var(--a) * 0.5); transform: matrix(0.866025, -0.5, 0.866025, 0.5, 0, 0); }
-  .left { left: 0; top: calc(var(--a) * 0.5); transform: matrix(0.866025, 0.5, 0, 1, 0, 0); }
-  .right { left: 50%; top: var(--a); transform: matrix(0.866025, -0.5, 0, 1, 0, 0); }
+  /* matrix(a b c d tx ty): the shear of each face, plus the translation that moves its origin back by the 1px bleed along its own axes */
+  .top { left: 0; top: calc(var(--a) * 0.5); transform: matrix(0.866025, -0.5, 0.866025, 0.5, -1.732, 0); }
+  .left { left: 0; top: calc(var(--a) * 0.5); transform: matrix(0.866025, 0.5, 0, 1, -0.866, -1.5); }
+  .right { left: 50%; top: var(--a); transform: matrix(0.866025, -0.5, 0, 1, -0.866, -0.5); }
   /* Minecraft face shading: top 100%, left 80%, right 60% */
   .top::after { background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 55%); }
   .left::after { background: rgba(0, 0, 0, 0.2); }
