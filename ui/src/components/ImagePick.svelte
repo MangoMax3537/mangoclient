@@ -2,11 +2,11 @@
   // Drop zone + file button shared by the icon and background pickers. Dropping is wired by the parent (`use:imageDrop`).
   import UploadSimpleIcon from 'phosphor-svelte/lib/UploadSimpleIcon';
   import { pickImage, type PickedImage } from '../lib/pickImage';
-  import { t } from '../lib/stores.svelte';
+  import { errorText, t, toast } from '../lib/stores.svelte';
 
   let { onpick, hint, over = false, bad = false }: { onpick: (img: PickedImage) => void; hint: string; over?: boolean; bad?: boolean } = $props();
   async function choose() {
-    const i = await pickImage();
+    const i = await pickImage(t('icons.upload.dialogTitle')).catch((e) => { toast(errorText(e), 'error'); return null; });
     if (i) onpick(i);
   }
 </script>

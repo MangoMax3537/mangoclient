@@ -19,7 +19,7 @@
   import IconPicker from './components/IconPicker.svelte';
   import BackgroundPicker from './components/BackgroundPicker.svelte';
   import { actions, app, auth, errorText, flow, init, initTheme, nav, t, updates } from './lib/stores.svelte';
-  import { inTauri } from './lib/api';
+  import { inHttp, inTauri } from './lib/api';
 
   onMount(() => { initTheme(); init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); }); });
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
@@ -28,7 +28,7 @@
 <div class="shell">
   <div class="strip" data-tauri-drag-region>
     <span class="brand" data-tauri-drag-region>{t('app.name')}</span>
-    {#if !inTauri()}<span class="dev mono" data-tauri-drag-region>mock</span>{/if}
+    {#if !inTauri()}<span class="dev mono" data-tauri-drag-region>{inHttp() ? 'dev server' : 'mock'}</span>{/if}
     <span class="grow" data-tauri-drag-region></span>
     <Activity />
     <UpdatePill />

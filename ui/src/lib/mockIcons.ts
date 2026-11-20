@@ -2,7 +2,7 @@
 // No Mojang art may be committed and no placeholder art generated, so every face is the real MangoClient icon.
 import type { Api } from './api';
 import { brandIcon, hashId } from './fallbackImage';
-import type { ApiEvents, BlockIcon, BlockIconsStatus, PanoramaSet, ProfileView } from './types';
+import type { ApiEvents, BlockIcon, BlockIconsStatus, PanoramaSet, ProfileBackground, ProfileView } from './types';
 
 /** `?mockBlocks=`: default = missing, then ready after the prepare run; off = prepare does nothing; preparing = never finishes; error = fails. */
 export type MockBlocksMode = 'default' | 'off' | 'preparing' | 'error';
@@ -31,7 +31,11 @@ export interface IconsMockCtx {
 
 export type IconsApi = Pick<Api,
   'blockIconsStatus' | 'blockIconsPrepare' | 'profileIconSetBlock' | 'profileIconSetImage' | 'profileIconClear' | 'panoramaForProfile'
-  | 'profileBackgroundSetScreenshot' | 'profileBackgroundSetImage' | 'profileBackgroundClear'>;
+  | 'profileBackgroundSetScreenshot' | 'profileBackgroundSetImage' | 'profileBackgroundClear'
+  | 'profileBackgroundSetStyle' | 'profileBackgroundSetKind' | 'profileIconUseModpackLogo'>;
+
+/** Same shape rule as the Rust side (`ProfileBackground.id`): bundled wallpaper file stem. */
+const WALLPAPER_STEM = /^[a-z0-9-]{1,64}$/;
 
 const isUrl = (s: string) => /^(blob:|data:|https?:|\/|\.\/|assets\/)/.test(s) || /\.(png|jpe?g|webp|gif)$/i.test(s) && s.includes('/');
 
@@ -55,6 +59,15 @@ export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () =>
     return isUrl(filePath) ? filePath : brandIcon(256);
   };
   const asked = new Set<string>();
+  /** dim/blur survive kind changes (stored beside the kind, like `backgroundDim` / `backgroundBlur`). */
+  const styles = new Map<string, { dim?: number; blur?: number }>();
+  /** `covers/<id>-pack.png`: the modpack logo kept next to a custom image. */
+  const packLogos = new Map<string, string>();
+  const setBg = (id: string, bg: ProfileBackground) => {
+    const st = styles.get(id) ?? {};
+    ctx.find(id).background = bg.kind === 'none' ? bg : { ...bg, ...(st.dim !== undefined && { dim: st.dim }), ...(st.blur !== undefined && { blur: st.blur }) };
+  };
+  const stashLogo = (p: ProfileView) => { if (p.iconSource === 'modpack' && p.coverUrl) packLogos.set(p.id, p.coverUrl); };
 
   const api: IconsApi = {
     async blockIconsStatus() { return structuredClone(status); },
@@ -71,17 +84,25 @@ export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () =>
     async profileIconSetBlock({ id, block }) {
       const p = ctx.find(id);
       if (status.state !== 'ready' || !gallery.some((b) => b.id === block)) throw fail('block_unknown');
-      p.icon = { kind: 'block', block }; p.coverUrl = null;
+      stashLogo(p); p.icon = { kind: 'block', block }; p.coverUrl = null; p.iconSource = null;
       return view(id);
     },
     async profileIconSetImage({ id, filePath }) {
       const p = ctx.find(id);
-      p.coverUrl = readCover(filePath); p.icon = { kind: 'image' };
+      const cover = readCover(filePath);
+      stashLogo(p); p.coverUrl = cover; p.icon = { kind: 'image' }; p.iconSource = 'custom';
       return view(id);
     },
     async profileIconClear({ id }) {
       const p = ctx.find(id);
-      p.icon = null; p.coverUrl = null;
+      stashLogo(p); p.icon = null; p.coverUrl = null; p.iconSource = null;
+      return view(id);
+    },
+    async profileIconUseModpackLogo({ id }) {
+      const p = ctx.find(id);
+      const logo = packLogos.get(id) ?? (p.iconSource === 'modpack' ? p.coverUrl : null);
+      if (!logo) throw fail('icon.no_modpack_logo');
+      p.coverUrl = logo; p.icon = { kind: 'image' }; p.iconSource = 'modpack';
       return view(id);
     },
     async panoramaForProfile({ id }) {
@@ -98,15 +119,37 @@ export function createIconsMock(ctx: IconsMockCtx): { api: IconsApi; sync: () =>
     },
     async profileBackgroundSetScreenshot({ id, name }) {
       if (!/^[^/\\]+\.(png|jpe?g)$/i.test(name)) throw fail('invalid_name');
-      ctx.find(id).background = { kind: 'image', url: brandIcon(512) };
+      setBg(id, { kind: 'image', url: brandIcon(512) });
       return view(id);
     },
     async profileBackgroundSetImage({ id, filePath }) {
-      ctx.find(id).background = { kind: 'image', url: readCover(filePath) };
+      setBg(id, { kind: 'image', url: readCover(filePath) });
       return view(id);
     },
     async profileBackgroundClear({ id, none }) {
-      ctx.find(id).background = none ? { kind: 'none' } : { kind: 'auto' };
+      styles.delete(id); // clearing also resets dim and blur
+      setBg(id, none ? { kind: 'none' } : { kind: 'auto' });
+      return view(id);
+    },
+    async profileBackgroundSetStyle({ id, dim, blur }) {
+      const bg = ctx.find(id).background;
+      const ok = (v: number | null | undefined, max: number) => v == null || (Number.isFinite(v) && v >= 0 && v <= max);
+      if (!ok(dim, 1) || !ok(blur, 24)) throw fail('background.bad_style');
+      const st = { ...styles.get(id) };
+      if (dim != null) st.dim = dim;
+      if (blur != null) st.blur = blur;
+      styles.set(id, st);
+      setBg(id, bg);
+      return view(id);
+    },
+    async profileBackgroundSetKind({ id, kind, wallpaper }) {
+      ctx.find(id);
+      if (kind === 'wallpaper') {
+        if (!wallpaper || !WALLPAPER_STEM.test(wallpaper)) throw fail('background.bad_wallpaper');
+        setBg(id, { kind: 'wallpaper', id: wallpaper });
+      } else if (kind === 'auto' || kind === 'none' || kind === 'panorama') {
+        setBg(id, { kind });
+      } else throw fail('background.bad_kind');
       return view(id);
     },
   };

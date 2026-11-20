@@ -3,7 +3,7 @@ import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from '.
 import { runSteps, type RunStep } from './install';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, BlockedFile, BlockIconsStatus, Config, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
+  AppState, BlockedFile, BlockIconsStatus, Config, ConfigPatch, ProfilePatch, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
   ProviderStatus, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
@@ -58,16 +58,6 @@ export async function loadPanorama(id: string, force = false): Promise<void> {
   if (!force && panoramaAsked.has(id)) return;
   panoramaAsked.add(id);
   try { panoramas[id] = await currentApi.panoramaForProfile({ id }); } catch { panoramas[id] = null; }
-}
-/** UI preference: instances whose `auto` background shows the Minecraft panorama (the backend has no such kind, it keeps `auto`). */
-const PANO_KEY = 'mango-bg-panorama';
-function loadPanoPrefs(): Record<string, boolean> {
-  try { const l = JSON.parse(localStorage.getItem(PANO_KEY) ?? '[]'); return Object.fromEntries((Array.isArray(l) ? l : []).map((id: string) => [id, true])); } catch { return {}; }
-}
-export const bgPanorama = $state<Record<string, boolean>>(loadPanoPrefs());
-export function setPanoramaPref(id: string, on: boolean): void {
-  if (on) bgPanorama[id] = true; else delete bgPanorama[id];
-  try { localStorage.setItem(PANO_KEY, JSON.stringify(Object.keys(bgPanorama))); } catch { /* storage unavailable: preference lasts for the session */ }
 }
 export function applyBlocksStatus(s: BlockIconsStatus): void {
   const wasReady = blocks.status?.state === 'ready';
@@ -422,8 +412,10 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | undefined> {
   }
 }
 export const actions = {
-  async setConfig(patch: Partial<Config>) {
-    if (app.config) Object.assign(app.config, patch); // optimistic
+  async setConfig(patch: ConfigPatch) {
+    const visible: ConfigPatch = { ...patch };
+    delete visible.curseforgeApiKey; // write-only: never part of the visible config
+    if (app.config) Object.assign(app.config, visible); // optimistic
     const c = await guard(() => currentApi.configSet({ patch }));
     if (c) app.config = c;
   },
@@ -493,7 +485,7 @@ export const actions = {
     if (!isAllowedExternalUrl(url)) return Promise.resolve();
     return currentApi.openExternal({ url }).catch(() => {});
   },
-  async createProfile(a: { name: string; mcVersion: string; loader: ProfileView['loader']; loaderVersion?: string | null }, extra: Partial<ProfileView>) {
+  async createProfile(a: { name: string; mcVersion: string; loader: ProfileView['loader']; loaderVersion?: string | null }, extra: ProfilePatch) {
     let p = await currentApi.profileCreate(a);
     if (Object.keys(extra).length) p = await currentApi.profileUpdate({ id: p.id, patch: extra });
     app.profiles = [...app.profiles, p];
@@ -517,7 +509,7 @@ export const actions = {
       applyState(id, 'crashed');
     }
   },
-  async updateProfile(id: string, patch: Partial<ProfileView>) {
+  async updateProfile(id: string, patch: ProfilePatch) {
     const p = await currentApi.profileUpdate({ id, patch }); // caller handles errors
     app.profiles = app.profiles.map((x) => (x.id === id ? p : x));
     return p;
@@ -529,11 +521,21 @@ export const actions = {
   async clearIcon(id: string) { return actions.applyView(await currentApi.profileIconClear({ id })); },
   async setBackgroundScreenshot(id: string, name: string) { return actions.applyView(await currentApi.profileBackgroundSetScreenshot({ id, name })); },
   async setBackgroundImage(id: string, filePath: string) { return actions.applyView(await currentApi.profileBackgroundSetImage({ id, filePath })); },
+  /** Back to `auto`; also resets dim and blur. */
   async clearBackground(id: string, none = false) {
-    const p = await actions.applyView(await currentApi.profileBackgroundClear(none ? { id, none } : { id }));
-    if (!none) void loadPanorama(id, true);
+    return actions.applyView(await currentApi.profileBackgroundClear(none ? { id, none } : { id }));
+  },
+  /** Persisted kinds: auto, none, panorama, or a bundled wallpaper (its file stem). dim and blur are kept. */
+  async setBackgroundKind(id: string, kind: 'auto' | 'none' | 'panorama' | 'wallpaper', wallpaper?: string) {
+    const p = await actions.applyView(await currentApi.profileBackgroundSetKind(kind === 'wallpaper' ? { id, kind, wallpaper } : { id, kind }));
+    if (kind === 'panorama') void loadPanorama(id, true);
     return p;
   },
+  /** dim 0..1, blur 0..24 px; an absent field stays unchanged. */
+  async setBackgroundStyle(id: string, style: { dim?: number; blur?: number }) {
+    return actions.applyView(await currentApi.profileBackgroundSetStyle({ id, ...style }));
+  },
+  async useModpackLogo(id: string) { return actions.applyView(await currentApi.profileIconUseModpackLogo({ id })); },
   async deleteProfile(id: string) {
     await currentApi.profileDelete({ id });
     await refresh();

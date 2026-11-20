@@ -62,7 +62,7 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'autoBlock' | 'background'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, autoBlock: null, background: { kind: 'auto' } };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'iconSource' | 'autoBlock' | 'background'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' } };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
@@ -123,6 +123,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
     blockedModsModrinthFallback: true, blockedModsWatchDirs: ['/home/mango/Downloads'], blockedModsCheckSubfolders: false,
+    autoSnapshot: false, backupKeep: 5,
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now, opts);
@@ -177,6 +178,9 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       };
     },
     async configSet({ patch }) {
+      // like the Rust dispatch: unknown keys are rejected, not ignored
+      const unknown = Object.keys(patch).find((k) => k !== 'curseforgeApiKey' && !(k in config));
+      if (unknown) throw { code: 'validation', message: `Unknown configuration setting: ${unknown}`, needsRelogin: false };
       const { curseforgeApiKey, ...rest } = patch;
       Object.assign(config, rest);
       if (curseforgeApiKey !== undefined) cfOn = !!curseforgeApiKey; // write-only, never returned
@@ -186,7 +190,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
-        icon: null, autoBlock: null, background: { kind: 'auto' },
+        icon: null, iconSource: null, autoBlock: null, background: { kind: 'auto' },
       };
       profiles = [...profiles, p];
       icons.sync();
@@ -297,6 +301,18 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       return true;
     },
     async gameRunning() { return [...running]; },
+    async pickImageFile() { return null; }, // no native dialog in the browser: the UI uses <input type=file> there
+    async pickFolder() { return null; },
+    async pickSaveFile() { return null; },
+    // worlds and backups have no UI yet: the mock only answers the list calls
+    async worldsList() { return []; },
+    async backupsList() { return []; },
+    async worldOpenFolder({ profileId }) { return `~/.mangoclient/instances/${profileId}/saves`; },
+    async worldBackup() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
+    async worldDelete() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
+    async backupRestore() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
+    async backupDelete() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
+    async snapshotCreate() { throw { code: 'not_implemented', message: 'worlds are not mocked', needsRelogin: false }; },
     async openFolder({ target }) { return `~/.mangoclient/${target}`; },
     async openExternal({ url }) {
       if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');

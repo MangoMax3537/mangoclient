@@ -31,6 +31,11 @@ describe('i18n', () => {
     }
     expect(missing).toEqual([]);
   });
+  it('the Part 8 strings exist in both languages', () => {
+    const keys = ['bg.look', 'bg.dim', 'bg.blur', 'psettings.bg.wallpaper', 'icons.logo.use', 'icons.logo.restored', 'icons.upload.dialogTitle',
+      'settings.blocked.browse', 'settings.blocked.dialogTitle', 'err.background', 'err.icon.no_modpack_logo', 'err.backend_unreachable', 'err.validation', 'err.bad_args'];
+    for (const k of keys) { expect(hasKey('en', k), k).toBe(true); expect(hasKey('de', k), k).toBe(true); expect(dictionaries.de[k]).not.toBe(dictionaries.en[k]); }
+  });
   it('translates per language', () => {
     expect(translate('de', 'home.play')).toBe('Spielen');
     expect(translate('en', 'home.play')).toBe('Play');

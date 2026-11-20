@@ -70,23 +70,35 @@ export type ResolvedBackground =
 
 export interface BackgroundContext {
   mcVersion: string; profileId: string;
-  /** The user picked the Minecraft panorama explicitly (UI preference; the backend keeps `auto`). */
-  panoramaPref: boolean;
   panorama: PanoramaSet | null | undefined;
   wallpapers: readonly Wallpaper[];
 }
 
 /**
- * image -> that image; none -> plain surface; auto -> the Minecraft panorama when picked explicitly, else the curated wallpaper
+ * image -> that image; none -> plain surface; panorama -> the Minecraft panorama (watermark until it is extracted);
+ * wallpaper -> the bundled wallpaper with that id (auto when it no longer exists); auto -> the curated wallpaper
  * (version rule, then generic pool by id hash), else the watermark surface.
  */
 export function resolveBackground(bg: ProfileBackground | null | undefined, c: BackgroundContext): ResolvedBackground {
   const b = bg ?? { kind: 'auto' as const };
   if (b.kind === 'image') return { kind: 'image', url: b.url, scrim: DEFAULT_SCRIM, source: 'custom' };
   if (b.kind === 'none') return { kind: 'plain' };
-  if (c.panoramaPref) return c.panorama && c.panorama.faces.length === 6 ? { kind: 'panorama', set: c.panorama } : { kind: 'watermark' };
+  if (b.kind === 'panorama') return c.panorama && c.panorama.faces.length === 6 ? { kind: 'panorama', set: c.panorama } : { kind: 'watermark' };
+  if (b.kind === 'wallpaper') {
+    const w = c.wallpapers.find((x) => x.id === b.id);
+    if (w) return { kind: 'image', url: w.url, scrim: w.scrim, source: 'wallpaper' };
+  }
   const w = autoWallpaper(c.wallpapers, c.mcVersion, c.profileId);
   return w ? { kind: 'image', url: w.wallpaper.url, scrim: w.wallpaper.scrim, source: 'wallpaper' } : { kind: 'watermark' };
+}
+
+/** Overlay strength and blur (px) a background is drawn with: the instance's dim/blur override, else the resolved defaults. */
+export const BLUR_MAX = 24;
+export const PANORAMA_BLUR = 6;
+export function backgroundStyle(bg: ProfileBackground | null | undefined, res: ResolvedBackground): { dim: number; blur: number } {
+  const dim = bg && 'dim' in bg && typeof bg.dim === 'number' ? bg.dim : res.kind === 'image' ? res.scrim : DEFAULT_SCRIM;
+  const blur = bg && 'blur' in bg && typeof bg.blur === 'number' ? bg.blur : res.kind === 'panorama' ? PANORAMA_BLUR : 0;
+  return { dim, blur };
 }
 
 /** Start angle (degrees, 0..359) of the rotating panorama: derived from the id so instances differ, stable across runs. */
@@ -120,9 +132,19 @@ export type BackgroundChoice =
   | { kind: 'auto' } | { kind: 'none' } | { kind: 'keep' } | { kind: 'panorama' }
   | { kind: 'screenshot'; name: string; url: string }
   | { kind: 'image'; path: string; name: string; preview: string | null }
-  | { kind: 'wallpaper'; id: string; label: string; path: string; url: string };
-export const choiceFromBackground = (b: ProfileBackground, panoramaPref: boolean): BackgroundChoice =>
-  b.kind === 'image' ? { kind: 'keep' } : b.kind === 'none' ? { kind: 'none' } : panoramaPref ? { kind: 'panorama' } : { kind: 'auto' };
+  | { kind: 'wallpaper'; id: string; label: string; url: string };
+export function choiceFromBackground(b: ProfileBackground, list: readonly Wallpaper[] = []): BackgroundChoice {
+  switch (b.kind) {
+    case 'image': return { kind: 'keep' };
+    case 'none': return { kind: 'none' };
+    case 'panorama': return { kind: 'panorama' };
+    case 'wallpaper': {
+      const w = list.find((x) => x.id === b.id);
+      return w ? { kind: 'wallpaper', id: w.id, label: w.label, url: w.url } : { kind: 'auto' };
+    }
+    default: return { kind: 'auto' };
+  }
+}
 export function sameBackground(a: BackgroundChoice, b: BackgroundChoice): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'screenshot' && b.kind === 'screenshot') return a.name === b.name;
@@ -130,14 +152,15 @@ export function sameBackground(a: BackgroundChoice, b: BackgroundChoice): boolea
   if (a.kind === 'wallpaper' && b.kind === 'wallpaper') return a.id === b.id;
   return true;
 }
-/** The background (and panorama flag) the mini preview draws for a draft; `current` is what the instance has now. */
-export function previewBackground(c: BackgroundChoice, current: ProfileBackground): { background: ProfileBackground; panorama: boolean } {
+/** The background the mini preview draws for a draft; `current` is what the instance has now. */
+export function previewBackground(c: BackgroundChoice, current: ProfileBackground): ProfileBackground {
   switch (c.kind) {
-    case 'auto': return { background: { kind: 'auto' }, panorama: false };
-    case 'panorama': return { background: { kind: 'auto' }, panorama: true };
-    case 'none': return { background: { kind: 'none' }, panorama: false };
-    case 'keep': return { background: current, panorama: false };
-    case 'screenshot': case 'wallpaper': return { background: { kind: 'image', url: c.url }, panorama: false };
-    case 'image': return { background: c.preview ? { kind: 'image', url: c.preview } : current, panorama: false };
+    case 'auto': return { kind: 'auto' };
+    case 'panorama': return { kind: 'panorama' };
+    case 'none': return { kind: 'none' };
+    case 'keep': return current;
+    case 'wallpaper': return { kind: 'wallpaper', id: c.id };
+    case 'screenshot': return { kind: 'image', url: c.url };
+    case 'image': return c.preview ? { kind: 'image', url: c.preview } : current;
   }
 }

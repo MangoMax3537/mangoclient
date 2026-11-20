@@ -5,7 +5,9 @@
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import Seg from './Seg.svelte';
+  import { inTauri } from '../lib/api';
   import { cleanDir, validateWatchDir } from '../lib/blocked';
+  import { pickFolder } from '../lib/pickImage';
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { sourceOptions } from '../lib/install';
@@ -51,6 +53,16 @@
     if (err) return;
     await actions.setConfig({ blockedModsWatchDirs: [...watchDirs, cleanDir(dirInput)] });
     dirInput = '';
+  }
+  /** Tauri: the native folder dialog gives a real path; the browser keeps the text input. */
+  async function browseDir() {
+    let picked: string | null = null;
+    try { picked = await pickFolder(t('settings.blocked.dialogTitle')); } catch (e) { toast(errorText(e), 'error'); return; }
+    if (!picked) return;
+    const err = validateWatchDir(watchDirs, picked);
+    dirErr = err;
+    if (err) return;
+    await actions.setConfig({ blockedModsWatchDirs: [...watchDirs, cleanDir(picked)] });
   }
   const removeDir = (d: string) => actions.setConfig({ blockedModsWatchDirs: watchDirs.filter((x) => x !== d) });
   const us = $derived(updates.status);
@@ -138,11 +150,17 @@
         {:else}
           <div class="hint warnline" role="status">{t('settings.blocked.noDirs')}</div>
         {/if}
+        {#if inTauri()}
+          <div class="keyrow">
+            <button id="bdir" class="btn" type="button" onclick={browseDir}><PlusIcon weight="bold" size={14} aria-hidden="true" />{t('settings.blocked.browse')}</button>
+          </div>
+        {:else}
         <div class="keyrow">
           <input id="bdir" class="field mono" bind:value={dirInput} placeholder={t('settings.blocked.placeholder')} autocomplete="off" spellcheck="false"
             aria-invalid={dirErr !== null} aria-describedby={dirErr ? 'bdir-err' : undefined} oninput={() => (dirErr = null)} onkeydown={(e) => e.key === 'Enter' && addDir()} />
           <button class="btn" type="button" disabled={!dirInput.trim()} onclick={addDir}><PlusIcon weight="bold" size={14} aria-hidden="true" />{t('settings.blocked.add')}</button>
         </div>
+        {/if}
         {#if dirErr}<div id="bdir-err" class="err" role="alert">{t(`settings.blocked.err.${dirErr}` as Key)}</div>{/if}
       </div>
 

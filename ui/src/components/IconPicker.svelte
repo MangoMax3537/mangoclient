@@ -83,6 +83,12 @@
       onclose();
     } catch (e) { toast(errorText(e), 'error'); busy = false; }
   }
+  async function useLogo() {
+    if (!profileId) return;
+    busy = true;
+    try { await actions.useModpackLogo(profileId); toast(t('icons.logo.restored'), 'ok'); onclose(); }
+    catch (e) { toast(errorText(e), 'error'); busy = false; }
+  }
   const tabs = $derived([
     { value: 'gallery', label: t('icons.tab.gallery') },
     { value: 'upload', label: t('icons.tab.upload') },
@@ -155,7 +161,8 @@
       {:else}
         <div role="tabpanel" aria-labelledby="ipick-logo" class="panel logo">
           {#if profile?.coverUrl}<span class="lg"><Tile kind="profile" id={profile.id} src={profile.coverUrl} {tint} size={112} notch={16} /></span>{/if}
-          <div><p><b>{t('icons.logo.current')}</b></p><p class="hint">{t('icons.logo.hint')}</p></div>
+          <div><p><b>{t('icons.logo.current')}</b></p><p class="hint">{t('icons.logo.hint')}</p>
+            {#if profile?.iconSource === 'custom'}<button class="btn" type="button" disabled={busy} onclick={useLogo}>{t('icons.logo.use')}</button>{/if}</div>
         </div>
       {/if}
     </div>

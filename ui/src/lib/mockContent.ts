@@ -323,7 +323,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const provider = params.provider ?? 'modrinth';
       needProvider(provider);
       await sleep(220);
-      const q = params.query.trim().toLowerCase();
+      const q = (params.query ?? '').trim().toLowerCase();
       let hits = catalogFor(provider, params.projectType).map((r) => toHit(provider, idFor(provider, r[0]), now));
       if (q) hits = hits.filter((h) => `${h.title} ${h.description} ${h.author}`.toLowerCase().includes(q));
       if (params.loader && (params.projectType === 'mod' || params.projectType === 'modpack')) {
@@ -336,9 +336,10 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const key = { downloads: (h: ProjectHit) => -h.downloads, follows: (h: ProjectHit) => -h.follows, newest: (h: ProjectHit) => -hash(h.slug), updated: (h: ProjectHit) => -Date.parse(h.dateModified) }[params.sort as string];
       if (key) hits = [...hits].sort((a, b) => key(a) - key(b));
       const total = hits.length;
-      const page = hits.slice(params.offset, params.offset + params.limit);
+      const offset = params.offset ?? 0;
+      const page = hits.slice(offset, offset + (params.limit ?? 20));
       for (const h of page) h.installedIn = ctx.profiles().filter((p) => listFor(p.id).some((i) => slugOf(i.projectId) === h.slug && i.provider === provider)).map((p) => p.id);
-      return { hits: page, total, offset: params.offset };
+      return { hits: page, total, offset };
     },
     async projectDetail({ provider, projectId }): Promise<ProjectDetail> {
       needProvider(provider);
@@ -386,11 +387,11 @@ export function createContentApi(ctx: MockCtx): Part2 {
     async installPlan({ provider, projectId, versionId, profileId }): Promise<InstallPlan> {
       needProvider(provider);
       await sleep(160);
-      return planFor(provider, projectId, versionId, profileId);
+      return planFor(provider, projectId, versionId ?? undefined, profileId);
     },
     async installApply({ provider, projectId, versionId, profileId, include }) {
       needProvider(provider);
-      const plan = planFor(provider, projectId, versionId, profileId);
+      const plan = planFor(provider, projectId, versionId ?? undefined, profileId);
       const req = plan.items.find((i) => i.role === 'requested');
       if (!req) throw fail('project_not_found');
       if (req.distributionBlocked) throw fail('distribution_blocked');
@@ -448,7 +449,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const p: ProfileView = {
         id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
-        icon: { kind: 'image' }, autoBlock: null, background: { kind: 'auto' }, // the pack logo becomes the image icon
+        icon: { kind: 'image' }, iconSource: 'modpack', autoBlock: null, background: { kind: 'auto' }, // the pack logo becomes the image icon
       };
       if (provider === 'curseforge' && ctx.seedBlocked) p.pendingBlocked = ctx.seedBlocked(id, blockedFilesFor(hit.slug));
       ctx.addProfile(p);

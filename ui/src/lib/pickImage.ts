@@ -1,6 +1,7 @@
-// Choosing an image for an icon or a background. Inside Tauri the OS file dialog (plugin-dialog) and the webview drag-drop event give a real
-// file path; in the browser mock an <input type=file> / DOM drop gives a File, passed on as a blob: URL (the mock accepts URLs).
+// Choosing an image for an icon or a background. Inside Tauri the backend's native dialog (`pick_image_file`) and the webview drag-drop event
+// give a real file path; in the browser mock an <input type=file> / DOM drop gives a File, passed on as a blob: URL (the mock accepts URLs).
 import { inTauri } from './api';
+import { getApi } from './stores.svelte';
 
 export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'] as const;
 export interface PickedImage { path: string; name: string; /** Something an <img> can show now (blob: URL in the browser), else null. */ preview: string | null }
@@ -16,10 +17,9 @@ export function fromFile(f: File): PickedImage | null {
 const fromPath = (p: string): PickedImage | null => (isImageName(p) ? { path: p, name: baseName(p), preview: null } : null);
 
 /** Opens the file dialog. `null` = cancelled (or not an image). */
-export async function pickImage(): Promise<PickedImage | null> {
+export async function pickImage(title?: string): Promise<PickedImage | null> {
   if (inTauri()) {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const r = await open({ multiple: false, directory: false, filters: [{ name: 'Images', extensions: [...IMAGE_EXTENSIONS] }] });
+    const r = await getApi().pickImageFile(title ? { title } : {});
     return typeof r === 'string' ? fromPath(r) : null;
   }
   return new Promise((resolve) => {
@@ -69,4 +69,10 @@ export function imageDrop(node: HTMLElement, handlers: DropHandlers) {
       node.removeEventListener('dragover', onOver); node.removeEventListener('dragleave', onLeave); node.removeEventListener('drop', onDrop);
     },
   };
+}
+
+/** Native folder dialog (`pick_folder`). Only meaningful in the Tauri shell: the browser has no folder paths, callers keep a text input there. */
+export async function pickFolder(title?: string): Promise<string | null> {
+  const r = await getApi().pickFolder(title ? { title } : {});
+  return typeof r === 'string' && r ? r : null;
 }

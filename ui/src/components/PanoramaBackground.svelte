@@ -1,9 +1,9 @@
 <script lang="ts">
   // Hero background: a curated wallpaper / custom image (ken-burns), the Minecraft panorama as a slowly rotating CSS 3D cube (explicit choice), or the surface.
   import { brandIcon } from '../lib/fallbackImage';
-  import { PANORAMA_SECONDS, panoramaAngle, panoramaDelay, resolveBackground } from '../lib/instanceIcon';
+  import { PANORAMA_SECONDS, backgroundStyle, panoramaAngle, panoramaDelay, resolveBackground } from '../lib/instanceIcon';
   import { wallpapers } from '../lib/wallpapers';
-  import { bgPanorama, loadPanorama, panoramas } from '../lib/stores.svelte';
+  import { loadPanorama, panoramas } from '../lib/stores.svelte';
   import type { ProfileBackground } from '../lib/types';
 
   interface Props {
@@ -12,11 +12,12 @@
     background: ProfileBackground;
     /** Instance colour for the accent bar and the glow of the plain surface. */
     tint?: string | null;
-    /** Overrides the saved panorama preference (the picker's live preview). */
-    panorama?: boolean;
+    /** Overrides the background's own dim / blur (the picker's live preview while a slider moves). */
+    dim?: number | null;
+    blur?: number | null;
   }
-  let { profileId, mcVersion, background, tint = null, panorama }: Props = $props();
-  const wantPano = $derived(background.kind === 'auto' && (panorama ?? !!bgPanorama[profileId]));
+  let { profileId, mcVersion, background, tint = null, dim = null, blur = null }: Props = $props();
+  const wantPano = $derived(background.kind === 'panorama');
 
   let hidden = $state(typeof document !== 'undefined' && document.hidden);
   let imgFailed = $state(false);
@@ -24,8 +25,12 @@
   $effect(() => { if (wantPano) void loadPanorama(profileId); });
 
   const res = $derived.by(() => {
-    const r = resolveBackground(background, { mcVersion, profileId, panoramaPref: wantPano, panorama: panoramas[profileId], wallpapers });
+    const r = resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers });
     return r.kind === 'image' && imgFailed ? ({ kind: 'watermark' } as const) : r;
+  });
+  const look = $derived.by(() => {
+    const d = backgroundStyle(background, res);
+    return { dim: dim ?? d.dim, blur: blur ?? d.blur };
   });
   const angle = $derived(panoramaAngle(profileId));
   // face order = panorama_0..5: front, right, back, left, up, down
@@ -34,7 +39,7 @@
 
 <svelte:document onvisibilitychange={() => (hidden = document.hidden)} />
 
-<div class="stage" style:--sc={res.kind === 'image' ? res.scrim : 0.6} style:--tint={tint ?? 'var(--accent-fill)'} aria-hidden="true">
+<div class="stage" style:--sc={look.dim} style:--blur="{look.blur}px" style:--tint={tint ?? 'var(--accent-fill)'} aria-hidden="true">
   {#if res.kind === 'panorama'}
     <div class="scene">
       <div class="cube" class:paused={hidden} style:--a0="{angle}deg" style:--d="{panoramaDelay(angle)}" style:--dur="{PANORAMA_SECONDS}s">
@@ -55,13 +60,13 @@
 
 <style>
   .stage { position: absolute; inset: 0; overflow: hidden; background: var(--hero-bg); container-type: size; }
-  .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 70% 40%; animation: kb 36s ease-out infinite alternate; }
+  .art { position: absolute; inset: calc(var(--blur) * -2); width: calc(100% + var(--blur) * 4); height: calc(100% + var(--blur) * 4); object-fit: cover; filter: blur(var(--blur)); transform-origin: 70% 40%; animation: kb 36s ease-out infinite alternate; }
   .surface { position: absolute; inset: 0; background: var(--hero-bg); }
   .surface.glow { background: radial-gradient(90% 120% at 82% 38%, color-mix(in srgb, var(--tint) 20%, transparent), transparent 62%), var(--hero-bg); }
   .mark { position: absolute; right: 6%; top: 50%; height: 104%; width: auto; aspect-ratio: 1; opacity: 0.09; transform: translateY(-50%); animation: drift 40s ease-out infinite alternate; }
 
   /* The camera sits in the middle of the cube: perspective p = half the stage width, cube edge = 2p, so the view is ~90 degrees wide. */
-  .scene { --p: 50cqw; position: absolute; inset: -14px; perspective: var(--p); filter: blur(6px); }
+  .scene { --p: 50cqw; position: absolute; inset: calc(var(--blur) * -2 - 4px); perspective: var(--p); filter: blur(var(--blur)); }
   .cube {
     position: absolute; left: 50%; top: 50%; width: calc(var(--p) * 2); height: calc(var(--p) * 2); margin: calc(var(--p) * -1) 0 0 calc(var(--p) * -1);
     transform-style: preserve-3d; transform: translateZ(var(--p)) rotateX(-5deg) rotateY(var(--a0));

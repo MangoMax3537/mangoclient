@@ -8,20 +8,24 @@
   import Seg from './Seg.svelte';
   import PanoramaBackground from './PanoramaBackground.svelte';
   import ImagePick from './ImagePick.svelte';
-  import { inTauri } from '../lib/api';
   import { fmtDateTime } from '../lib/format';
   import { autoWallpaper, uniqueWallpapers, wallpapers } from '../lib/wallpapers';
-  import { choiceFromBackground, previewBackground, sameBackground, type BackgroundChoice } from '../lib/instanceIcon';
+  import { BLUR_MAX, backgroundStyle, choiceFromBackground, previewBackground, resolveBackground, sameBackground, type BackgroundChoice } from '../lib/instanceIcon';
   import { imageDrop, type PickedImage } from '../lib/pickImage';
-  import { actions, app, bgPanorama, errorText, getApi, lang, loadPanorama, panoramas, setPanoramaPref, t, toast } from '../lib/stores.svelte';
+  import { actions, app, errorText, getApi, lang, loadPanorama, panoramas, t, toast } from '../lib/stores.svelte';
   import type { Screenshot } from '../lib/types';
 
   let { profileId, onclose }: { profileId: string; onclose: () => void } = $props();
   const profile = $derived(app.profiles.find((p) => p.id === profileId) ?? null);
-  const start: BackgroundChoice = untrack(() => choiceFromBackground(app.profiles.find((p) => p.id === profileId)?.background ?? { kind: 'auto' }, !!bgPanorama[profileId]));
+  const startBg = untrack(() => app.profiles.find((p) => p.id === profileId)?.background ?? { kind: 'auto' as const });
+  const start: BackgroundChoice = choiceFromBackground(startBg, wallpapers);
   let draft = $state<BackgroundChoice>(start);
   type Tab = 'auto' | 'wallpapers' | 'panorama' | 'screenshot' | 'upload' | 'none';
-  let tab = $state<Tab>(start.kind === 'keep' ? 'upload' : start.kind === 'none' ? 'none' : start.kind === 'panorama' ? 'panorama' : 'auto');
+  let tab = $state<Tab>(start.kind === 'keep' ? 'upload' : start.kind === 'none' ? 'none' : start.kind === 'panorama' ? 'panorama' : start.kind === 'wallpaper' ? 'wallpapers' : 'auto');
+  // Dim (0..1) and blur (px) overrides; null = not touched (the saved value or the default stays). `reset` = back to auto with default look.
+  let dimOv = $state<number | null>(null);
+  let blurOv = $state<number | null>(null);
+  let reset = $state(false);
   let busy = $state(false);
   let over = $state(false);
   let bad = $state(false);
@@ -36,8 +40,18 @@
   });
 
   const pano = $derived(panoramas[profileId]);
-  const changed = $derived(!sameBackground(draft, start));
+  const hasStyle = 'dim' in startBg || 'blur' in startBg;
+  const changed = $derived(reset || !sameBackground(draft, start) || dimOv !== null || blurOv !== null);
   const shown = $derived(previewBackground(draft, profile?.background ?? { kind: 'auto' }));
+  // dim/blur persist across kind changes (only a reset clears them): the saved values apply until a slider overrides them
+  const savedDim = 'dim' in startBg && typeof startBg.dim === 'number' ? startBg.dim : null;
+  const savedBlur = 'blur' in startBg && typeof startBg.blur === 'number' ? startBg.blur : null;
+  const effDim = $derived(dimOv ?? (reset ? null : savedDim));
+  const effBlur = $derived(blurOv ?? (reset ? null : savedBlur));
+  // the defaults of the shown background (the wallpaper's own scrim, the panorama's blur) fill in what is not set
+  const defaults = $derived(backgroundStyle({ kind: 'auto' }, resolveBackground(shown, { mcVersion: profile?.mcVersion ?? '', profileId, panorama: pano, wallpapers })));
+  const dimNow = $derived(effDim ?? defaults.dim);
+  const blurNow = $derived(effBlur ?? defaults.blur);
   const all = uniqueWallpapers(wallpapers);
   const auto = $derived(autoWallpaper(wallpapers, profile?.mcVersion ?? '', profileId));
   const autoText = $derived(!auto ? t('bg.auto.empty') : auto.rule === 'version'
@@ -54,6 +68,7 @@
   ]);
   function setTab(v: string) {
     tab = v as Tab;
+    reset = false;
     if (tab === 'auto') draft = { kind: 'auto' };
     else if (tab === 'panorama') draft = { kind: 'panorama' };
     else if (tab === 'none') draft = { kind: 'none' };
@@ -64,12 +79,16 @@
     busy = true;
     try {
       const d = draft;
-      setPanoramaPref(profileId, d.kind === 'panorama');
-      if (d.kind === 'auto' || d.kind === 'panorama') await actions.clearBackground(profileId);
-      else if (d.kind === 'none') await actions.clearBackground(profileId, true);
+      if (reset) await actions.clearBackground(profileId); // auto + default dim and blur
+      if (d.kind === 'auto') { if (!reset) await actions.setBackgroundKind(profileId, 'auto'); }
+      else if (d.kind === 'panorama') await actions.setBackgroundKind(profileId, 'panorama');
+      else if (d.kind === 'none') await actions.setBackgroundKind(profileId, 'none');
+      else if (d.kind === 'wallpaper') await actions.setBackgroundKind(profileId, 'wallpaper', d.id);
       else if (d.kind === 'screenshot') await actions.setBackgroundScreenshot(profileId, d.name);
       else if (d.kind === 'image') await actions.setBackgroundImage(profileId, d.path);
-      else if (d.kind === 'wallpaper') await actions.setBackgroundImage(profileId, inTauri() ? d.path : d.url);
+      if (dimOv !== null || blurOv !== null) {
+        await actions.setBackgroundStyle(profileId, { ...(dimOv !== null && { dim: dimOv }), ...(blurOv !== null && { blur: blurOv }) });
+      }
       onclose();
     } catch (e) { toast(errorText(e), 'error'); busy = false; }
   }
@@ -78,7 +97,7 @@
 <Modal title={t('bg.title', { name: profile?.name ?? '' })} size="lg" {onclose} onenter={changed ? apply : undefined}>
   <div class="bp" use:imageDrop={{ over: (b) => (over = b), drop: onFile, reject: () => { bad = true; tab = 'upload'; } }}>
     <div class="mini on-stage" role="img" aria-label={t('bg.preview')}>
-      <PanoramaBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={shown.background} panorama={shown.panorama} tint={profile?.color ?? null} />
+      <PanoramaBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={shown} dim={effDim} blur={effBlur} tint={profile?.color ?? null} />
       <span class="mt"><b class="display">{profile?.name}</b><span class="mono">{profile?.mcVersion}</span></span>
     </div>
 
@@ -115,7 +134,7 @@
         <div class="g" role="radiogroup" aria-label={t('bg.tab.wallpapers')}>
           {#each all as w (w.id)}
             {@const on = draft.kind === 'wallpaper' && draft.id === w.id}
-            <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => (draft = { kind: 'wallpaper', id: w.id, label: w.label, path: w.path, url: w.url })}>
+            <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => { reset = false; draft = { kind: 'wallpaper', id: w.id, label: w.label, url: w.url }; }}>
               <img src={w.url} alt="" loading="lazy" draggable="false" />
               <span class="cap">{w.label}</span>
               {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
@@ -126,10 +145,21 @@
         <p><b>{t('bg.none.title')}</b></p><p class="hint">{t('bg.none.hint')}</p>
       {/if}
     </div>
+
+    {#if tab !== 'none'}
+      <div class="look" role="group" aria-label={t('bg.look')}>
+        <label class="sl" for="bg-dim"><span>{t('bg.dim')}</span>
+          <input id="bg-dim" type="range" min="0" max="1" step="0.05" value={dimNow} aria-valuetext="{Math.round(dimNow * 100)} %" oninput={(e) => { dimOv = Number(e.currentTarget.value); }} />
+          <output class="mono">{Math.round(dimNow * 100)} %</output></label>
+        <label class="sl" for="bg-blur"><span>{t('bg.blur')}</span>
+          <input id="bg-blur" type="range" min="0" max={BLUR_MAX} step="1" value={blurNow} aria-valuetext="{Math.round(blurNow)} px" oninput={(e) => { blurOv = Number(e.currentTarget.value); }} />
+          <output class="mono">{Math.round(blurNow)} px</output></label>
+      </div>
+    {/if}
   </div>
 
   {#snippet footer()}
-    <button class="btn ghost reset" type="button" disabled={draft.kind === 'auto'} onclick={() => { draft = { kind: 'auto' }; tab = 'auto'; }}><ArrowCounterClockwiseIcon weight="bold" size={14} aria-hidden="true" />{t('bg.reset')}</button>
+    <button class="btn ghost reset" type="button" disabled={draft.kind === 'auto' && !hasStyle && dimOv === null && blurOv === null && !changed} onclick={() => { draft = { kind: 'auto' }; tab = 'auto'; dimOv = null; blurOv = null; reset = true; }}><ArrowCounterClockwiseIcon weight="bold" size={14} aria-hidden="true" />{t('bg.reset')}</button>
     <button class="btn ghost" type="button" onclick={onclose}>{t('common.cancel')}</button>
     <button class="btn accent" type="button" disabled={!changed || busy} onclick={apply}>{t('bg.apply')}</button>
   {/snippet}
@@ -155,4 +185,7 @@
   .sh { aspect-ratio: 16 / 9; border-radius: var(--r-m); }
   .chip { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-dim); font-size: var(--fs-sm); }
   .reset { margin-right: auto; }
+  .look { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .sl { display: grid; grid-template-columns: 96px 1fr 52px; align-items: center; gap: 12px; font-size: var(--fs-sm); }
+  .sl output { text-align: right; color: var(--paper-dim); }
 </style>

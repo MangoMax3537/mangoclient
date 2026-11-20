@@ -11,7 +11,7 @@
   import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
   import type { Key } from '../../lib/i18n';
   import { fmtDuration, fmtRam, fmtRelative } from '../../lib/format';
-  import { actions, app, bgPanorama, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
+  import { actions, app, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
   import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -102,7 +102,7 @@
 
     <div class="row">
       <div class="who"><span class="bgthumb on-stage"><PanoramaBackground profileId={profile.id} mcVersion={profile.mcVersion} background={profile.background} tint={profile.color} /></span>
-        <div class="txt"><b>{t('psettings.background')}</b><div class="hint">{t(`psettings.bg.${profile.background.kind === 'auto' && bgPanorama[profile.id] ? 'panorama' : profile.background.kind}` as Key)}</div></div></div>
+        <div class="txt"><b>{t('psettings.background')}</b><div class="hint">{t(`psettings.bg.${profile.background.kind}` as Key)}</div></div></div>
       <button class="btn" type="button" onclick={() => openBackgroundPicker(profile.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.backgroundChange')}</button>
     </div>
 

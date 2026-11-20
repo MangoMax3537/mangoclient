@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  blockErrorKey, blockForSeed, choiceFromBackground, panoramaAngle, panoramaDelay, pickerState, previewBackground, resolveBackground,
+  PANORAMA_BLUR, backgroundStyle, blockErrorKey, blockForSeed, choiceFromBackground, panoramaAngle, panoramaDelay, pickerState, previewBackground, resolveBackground,
   resolveInstanceIcon, sameBackground, type BackgroundContext,
 } from './instanceIcon';
 import { buildWallpapers } from './wallpapers';
@@ -67,7 +67,7 @@ const walls = buildWallpapers(
   { wallpapers: [{ file: 'pale-garden', label: 'Pale', versions: ['1.21.4'], scrim: 0.4 }, { file: 'badlands', label: 'B', generic: true }] },
   { '/a/pale-garden.webp': 'pale.url', '/a/badlands.jpg': 'bad.url' },
 );
-const ctx = (o: Partial<BackgroundContext> = {}): BackgroundContext => ({ mcVersion: '1.21.4', profileId: 'p1', panoramaPref: false, panorama: set, wallpapers: walls, ...o });
+const ctx = (o: Partial<BackgroundContext> = {}): BackgroundContext => ({ mcVersion: '1.21.4', profileId: 'p1', panorama: set, wallpapers: walls, ...o });
 
 describe('background resolution', () => {
   it('image and none', () => {
@@ -81,18 +81,35 @@ describe('background resolution', () => {
     expect(resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10' }))).toMatchObject({ url: 'bad.url' });
     expect(resolveBackground({ kind: 'auto' }, ctx({ wallpapers: [] }))).toEqual({ kind: 'watermark' });
   });
-  it('the panorama only shows when picked explicitly; null panorama = watermark', () => {
-    expect(resolveBackground({ kind: 'auto' }, ctx({ panoramaPref: true })).kind).toBe('panorama');
-    expect(resolveBackground({ kind: 'auto' }, ctx({ panoramaPref: true, panorama: null })).kind).toBe('watermark');
-    expect(resolveBackground({ kind: 'auto' }, ctx({ panoramaPref: true, panorama: { ...set, faces: ['a'] } })).kind).toBe('watermark');
+  it('auto never shows the panorama; the persisted panorama kind does (watermark until extracted)', () => {
+    expect(resolveBackground({ kind: 'auto' }, ctx()).kind).toBe('image');
+    expect(resolveBackground({ kind: 'panorama' }, ctx()).kind).toBe('panorama');
+    expect(resolveBackground({ kind: 'panorama' }, ctx({ panorama: null })).kind).toBe('watermark');
+    expect(resolveBackground({ kind: 'panorama' }, ctx({ panorama: { ...set, faces: ['a'] } })).kind).toBe('watermark');
     expect(resolveBackground(undefined, ctx()).kind).toBe('image');
   });
+  it('a wallpaper kind resolves by id with the wallpaper scrim; an unknown id falls back to auto', () => {
+    expect(resolveBackground({ kind: 'wallpaper', id: 'badlands' }, ctx())).toMatchObject({ kind: 'image', url: 'bad.url', source: 'wallpaper' });
+    expect(resolveBackground({ kind: 'wallpaper', id: 'gone' }, ctx())).toMatchObject({ url: 'pale.url' });
+  });
+  it('dim and blur: the instance override wins, else the resolved default (panorama is blurred by default)', () => {
+    const img = resolveBackground({ kind: 'auto' }, ctx());
+    expect(backgroundStyle({ kind: 'auto' }, img)).toEqual({ dim: 0.4, blur: 0 });
+    expect(backgroundStyle({ kind: 'auto', dim: 0.8, blur: 12 }, img)).toEqual({ dim: 0.8, blur: 12 });
+    expect(backgroundStyle({ kind: 'auto', dim: 0 }, img).dim).toBe(0);
+    expect(backgroundStyle({ kind: 'panorama' }, resolveBackground({ kind: 'panorama' }, ctx()))).toEqual({ dim: 0.6, blur: PANORAMA_BLUR });
+    expect(backgroundStyle({ kind: 'none' }, { kind: 'plain' })).toEqual({ dim: 0.6, blur: 0 });
+  });
   it('picker drafts', () => {
-    expect(choiceFromBackground({ kind: 'auto' }, true)).toEqual({ kind: 'panorama' });
-    expect(choiceFromBackground({ kind: 'image', url: 'u' }, true)).toEqual({ kind: 'keep' });
+    expect(choiceFromBackground({ kind: 'panorama' })).toEqual({ kind: 'panorama' });
+    expect(choiceFromBackground({ kind: 'auto' })).toEqual({ kind: 'auto' });
+    expect(choiceFromBackground({ kind: 'image', url: 'u' })).toEqual({ kind: 'keep' });
+    expect(choiceFromBackground({ kind: 'wallpaper', id: 'badlands' }, walls)).toEqual({ kind: 'wallpaper', id: 'badlands', label: 'B', url: 'bad.url' });
+    expect(choiceFromBackground({ kind: 'wallpaper', id: 'gone' }, walls)).toEqual({ kind: 'auto' });
     expect(sameBackground({ kind: 'screenshot', name: 'a', url: '1' }, { kind: 'screenshot', name: 'b', url: '1' })).toBe(false);
-    expect(previewBackground({ kind: 'panorama' }, { kind: 'none' })).toEqual({ background: { kind: 'auto' }, panorama: true });
-    expect(previewBackground({ kind: 'keep' }, { kind: 'none' }).background).toEqual({ kind: 'none' });
+    expect(previewBackground({ kind: 'panorama' }, { kind: 'none' })).toEqual({ kind: 'panorama' });
+    expect(previewBackground({ kind: 'wallpaper', id: 'badlands', label: 'B', url: 'x' }, { kind: 'none' })).toEqual({ kind: 'wallpaper', id: 'badlands' });
+    expect(previewBackground({ kind: 'keep' }, { kind: 'none' })).toEqual({ kind: 'none' });
   });
 });
 
