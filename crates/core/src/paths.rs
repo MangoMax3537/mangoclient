@@ -222,6 +222,13 @@ impl Paths {
             .join(format!("{}-bg.png", validate_profile_id(profile_id)?)))
     }
 
+    /// The saved modpack logo, `covers/<uuid>-pack.png`.
+    pub fn pack_logo_file(&self, profile_id: &str) -> Result<PathBuf> {
+        Ok(self
+            .covers()
+            .join(format!("{}-pack.png", validate_profile_id(profile_id)?)))
+    }
+
     /// The profile's user-chosen picture, `covers/<uuid>.png`.
     pub fn cover_file(&self, profile_id: &str) -> Result<PathBuf> {
         Ok(self

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main window: core IPC and events only. No fs, shell or opener access; all work happens in Rust commands.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:event:default"]
+  "permissions": ["core:default", "core:event:default", "dialog:allow-open"]
 }

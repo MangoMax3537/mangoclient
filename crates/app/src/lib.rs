@@ -36,6 +36,8 @@ mod tests_p4;
 mod tests_p5;
 #[cfg(test)]
 mod tests_p6;
+#[cfg(test)]
+mod tests_p7;
 
 pub use accounts::LaunchCredentials;
 pub use backgrounds::{PanoramaSet, PanoramaSource};
@@ -47,9 +49,9 @@ pub use events::{
     PanoramaReadyEvent, ProgressPhase,
 };
 pub use host::{
-    is_login_redirect, login_navigation_allowed, CannedLoginWindow, ClipboardImage, ExternalOpener,
-    Host, LoginOutcome, LoginWindow, NoClipboard, NoLoginWindow, OpenFolder, SystemExternal,
-    SystemOpener,
+    is_login_redirect, login_navigation_allowed, CannedFileDialog, CannedLoginWindow,
+    ClipboardImage, ExternalOpener, FileDialog, Host, LoginOutcome, LoginWindow, NoClipboard,
+    NoFileDialog, NoLoginWindow, OpenFolder, SystemExternal, SystemOpener,
 };
 pub use models::{
     BlockedFile, BlockedModrinth, BlockedState, ContentItem, ContentType, InstallPlan,
@@ -59,7 +61,7 @@ pub use models::{
     ServerStatus, StatsDay, StatsProfile, StatsSummary, StatusReason, StorageKey, StorageUsage,
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
-pub use service::{AppService, ServiceOptions};
+pub use service::{resolve_bundle_dir, AppService, ServiceOptions};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,
     ProfileBackground, ProfileView, PublicAccount, VersionEntry, VersionManifest,

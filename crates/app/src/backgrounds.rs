@@ -205,6 +205,75 @@ impl AppService {
             .await
     }
 
+    /// Per-instance dim (0..1) and blur (0..24 px) of the background. An
+    /// absent field is left as it is; out-of-range values are rejected with
+    /// `background.bad_style` (never clamped).
+    pub fn profile_background_set_style(
+        &self,
+        id: String,
+        dim: Option<f64>,
+        blur: Option<f64>,
+    ) -> Res<ProfileView> {
+        self.profile(&id)?;
+        let ok = |v: Option<f64>, max: f64| match v {
+            None => true,
+            Some(f) => f.is_finite() && (0.0..=max).contains(&f),
+        };
+        if !ok(dim, 1.0) || !ok(blur, 24.0) {
+            return Err(AppError::new(
+                "background.bad_style",
+                "dim must be within 0..1 and blur within 0..24",
+            ));
+        }
+        let mut patch = serde_json::Map::new();
+        if let Some(d) = dim {
+            patch.insert("backgroundDim".into(), json!(d));
+        }
+        if let Some(b) = blur {
+            patch.insert("backgroundBlur".into(), json!(b));
+        }
+        if !patch.is_empty() {
+            self.inner
+                .patch_profile(&id, &serde_json::Value::Object(patch))?;
+        }
+        self.bg_view(&id)
+    }
+
+    /// Choose a non-image background. `wallpaper` is required for (and only
+    /// for) kind `wallpaper`. Dim/blur are kept. Image backgrounds are set
+    /// with `profile_background_set_image` / `_set_screenshot`.
+    pub fn profile_background_set_kind(
+        &self,
+        id: String,
+        kind: String,
+        wallpaper: Option<String>,
+    ) -> Res<ProfileView> {
+        self.profile(&id)?;
+        let value = match (kind.as_str(), wallpaper) {
+            ("auto", None) => json!(null),
+            ("none", None) => json!("none"),
+            ("panorama", None) => json!("panorama"),
+            ("wallpaper", Some(w)) if mango_core::is_wallpaper_id(&w) => {
+                json!(format!("wallpaper:{w}"))
+            }
+            ("wallpaper", _) => {
+                return Err(AppError::new(
+                    "background.bad_wallpaper",
+                    "wallpaper must be 1 to 64 characters of a-z, 0-9 and -",
+                ))
+            }
+            _ => {
+                return Err(AppError::new(
+                    "background.bad_kind",
+                    "kind must be auto, none, panorama or wallpaper",
+                ))
+            }
+        };
+        self.inner
+            .patch_profile(&id, &json!({"background": value}))?;
+        self.bg_view(&id)
+    }
+
     /// Back to automatic, or `none` (no background at all).
     pub fn profile_background_clear(&self, id: String, none: bool) -> Res<ProfileView> {
         self.profile(&id)?;
@@ -214,8 +283,11 @@ impl AppService {
             Err(e) => return Err(e.into()),
         }
         let value = if none { json!("none") } else { json!(null) };
-        self.inner
-            .patch_profile(&id, &json!({"background": value}))?;
+        // A cleared background also forgets its dim/blur override.
+        self.inner.patch_profile(
+            &id,
+            &json!({"background": value, "backgroundDim": null, "backgroundBlur": null}),
+        )?;
         self.bg_view(&id)
     }
 }

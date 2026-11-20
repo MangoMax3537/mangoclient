@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use crate::nbt::{self, Entry, Root, Value};
+use crate::ping::SrvFuture;
 use crate::*;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -380,4 +381,60 @@ async fn ping_is_offline_on_any_error() {
     let status = ping_server(&format!("127.0.0.1:{port}"), &PingOptions::default()).await;
     assert!(!status.online);
     assert_eq!(status.port, port);
+}
+
+fn srv(priority: u16, weight: u16, port: u16, target: &str) -> SrvRecord {
+    SrvRecord {
+        priority,
+        weight,
+        port,
+        target: target.to_string(),
+    }
+}
+
+#[test]
+fn select_srv_table() {
+    type Case = (Vec<SrvRecord>, Option<(&'static str, u16)>);
+    let cases: Vec<Case> = vec![
+        (vec![], None),
+        (
+            vec![srv(0, 5, 25570, "a.example.")],
+            Some(("a.example", 25570)),
+        ),
+        (
+            vec![srv(10, 100, 1, "low.x."), srv(5, 1, 2, "high.x.")],
+            Some(("high.x", 2)),
+        ),
+        (
+            vec![srv(5, 1, 1, "a."), srv(5, 50, 2, "b."), srv(5, 20, 3, "c.")],
+            Some(("b", 2)),
+        ),
+        (vec![srv(0, 0, 0, "zero.port.")], None),
+        (vec![srv(0, 0, 25565, ".")], None),
+        (vec![srv(0, 0, 25565, "no.dot")], Some(("no.dot", 25565))),
+    ];
+    for (records, want) in cases {
+        let want = want.map(|(h, p)| (h.to_string(), p));
+        assert_eq!(select_srv(&records), want, "{records:?}");
+    }
+}
+
+struct PanicSrv;
+
+impl SrvResolver for PanicSrv {
+    fn resolve_srv<'a>(&'a self, host: &'a str) -> SrvFuture<'a> {
+        panic!("SRV resolver must not be called for {host}");
+    }
+}
+
+#[tokio::test]
+async fn explicit_port_or_ip_literal_skips_srv() {
+    let opts = PingOptions {
+        timeout: std::time::Duration::from_millis(200),
+        ..PingOptions::default()
+    };
+    for addr in ["example.invalid:1", "127.0.0.1", "[::1]", "::1", "[::1]:1"] {
+        // A panic in PanicSrv fails the test; the ping itself may be offline.
+        let _ = ping_server_with(addr, &opts, &PanicSrv).await;
+    }
 }

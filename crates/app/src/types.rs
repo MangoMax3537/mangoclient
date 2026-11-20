@@ -38,6 +38,8 @@ pub struct ProfileView {
     pub icon: Option<InstanceIcon>,
     /// The block the automatic rule picks (gallery ready), else `null`.
     pub auto_block: Option<String>,
+    /// `custom` | `modpack` while the icon is an image, else `null`.
+    pub icon_source: Option<String>,
     pub background: ProfileBackground,
 }
 
@@ -48,11 +50,39 @@ pub enum InstanceIcon {
     Block { block: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ProfileBackground {
-    Auto,
-    Image { url: String },
+    /// The version's panorama. `dim` (0..1) and `blur` (px, 0..24) override
+    /// the defaults when present.
+    Auto {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dim: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        blur: Option<f64>,
+    },
+    /// A wallpaper bundled with the UI (`id` = file stem).
+    Wallpaper {
+        id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dim: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        blur: Option<f64>,
+    },
+    /// Explicit panorama choice (same picture as `auto`).
+    Panorama {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dim: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        blur: Option<f64>,
+    },
+    Image {
+        url: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dim: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        blur: Option<f64>,
+    },
     None,
 }
 
@@ -82,12 +112,34 @@ impl From<&Profile> for ProfileView {
                     .map(|block| InstanceIcon::Block { block })
             },
             auto_block: None,
+            icon_source: p
+                .cover
+                .then(|| p.icon_source.clone().unwrap_or_else(|| "custom".into())),
             background: match p.background.as_deref() {
                 Some("none") => ProfileBackground::None,
+                Some("panorama") => ProfileBackground::Panorama {
+                    dim: p.background_dim,
+                    blur: p.background_blur,
+                },
+                Some(w)
+                    if w.strip_prefix("wallpaper:")
+                        .is_some_and(mango_core::is_wallpaper_id) =>
+                {
+                    ProfileBackground::Wallpaper {
+                        id: w["wallpaper:".len()..].to_string(),
+                        dim: p.background_dim,
+                        blur: p.background_blur,
+                    }
+                }
                 Some("image") => ProfileBackground::Image {
                     url: crate::image_protocol::cover_url(&format!("{}-bg", p.id)),
+                    dim: p.background_dim,
+                    blur: p.background_blur,
                 },
-                _ => ProfileBackground::Auto,
+                _ => ProfileBackground::Auto {
+                    dim: p.background_dim,
+                    blur: p.background_blur,
+                },
             },
         }
     }

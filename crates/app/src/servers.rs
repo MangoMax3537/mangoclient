@@ -10,7 +10,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use mango_servers::{
     nbt, normalize_address, ping_all, ping_server_cached, read_server_list, strip_color_codes,
-    FeaturedServer, IconStore, NoSrv,
+    FeaturedServer, IconStore,
 };
 use sha1::{Digest, Sha1};
 use std::path::Path;
@@ -126,9 +126,15 @@ impl AppService {
             let opts = inner.opts.ping.clone();
             let icons: Arc<dyn IconStore> = inner.icons.clone();
             let emit = Arc::clone(&inner);
-            ping_all(&targets, &opts, Arc::new(NoSrv), icons, move |p| {
-                emit.emit(Event::ServersPinged(status_of(&p.id, &p.status)));
-            })
+            ping_all(
+                &targets,
+                &opts,
+                mango_servers::default_resolver(),
+                icons,
+                move |p| {
+                    emit.emit(Event::ServersPinged(status_of(&p.id, &p.status)));
+                },
+            )
             .await;
         });
         Ok(())
@@ -152,7 +158,7 @@ impl AppService {
         let status = ping_server_cached(
             &address,
             &self.inner.opts.ping,
-            &NoSrv,
+            mango_servers::default_resolver().as_ref(),
             self.inner.icons.as_ref(),
         )
         .await;

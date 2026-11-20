@@ -245,6 +245,7 @@ impl Store {
         let _ = std::fs::remove_dir_all(instance);
         let _ = std::fs::remove_file(cover);
         let _ = std::fs::remove_file(self.paths.background_file(id)?);
+        let _ = std::fs::remove_file(self.paths.pack_logo_file(id)?);
         Ok(())
     }
 

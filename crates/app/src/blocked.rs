@@ -104,7 +104,10 @@ pub(crate) fn view_of(paths: &Paths, p: &Profile) -> ProfileView {
         crate::types::ProfileBackground::Image { .. }
     ) && !paths.background_file(&p.id).is_ok_and(|f| f.is_file())
     {
-        view.background = crate::types::ProfileBackground::Auto;
+        view.background = crate::types::ProfileBackground::Auto {
+            dim: p.background_dim,
+            blur: p.background_blur,
+        };
     }
     view
 }

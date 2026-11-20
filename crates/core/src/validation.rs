@@ -27,6 +27,14 @@ fn invalid(name: &str) -> ValidationError {
     ValidationError::Invalid(name.to_string())
 }
 
+/// A bundled wallpaper's file stem: `[a-z0-9-]`, 1 to 64 long.
+pub fn is_wallpaper_id(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 64
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 /// 32 hex digits or canonical UUID.
 pub fn is_uuid(s: &str) -> bool {
     (s.len() == 32 && s.bytes().all(|c| c.is_ascii_hexdigit())) || is_canonical_uuid(s)
@@ -86,6 +94,18 @@ fn int_val(v: &Value) -> Option<i64> {
 fn integer(v: &Value, name: &str, min: i64, max: i64) -> R<Value> {
     match int_val(v) {
         Some(i) if i >= min && i <= max => Ok(json!(i)),
+        _ => Err(invalid(name)),
+    }
+}
+
+/// `null` or a finite number in `0..=max`; out of range is an error, never clamped.
+fn nullable_range(v: &Value, name: &str, max: f64) -> R<Value> {
+    match v {
+        Value::Null => Ok(Value::Null),
+        Value::Number(n) => match n.as_f64() {
+            Some(f) if f.is_finite() && (0.0..=max).contains(&f) => Ok(json!(f)),
+            _ => Err(invalid(name)),
+        },
         _ => Err(invalid(name)),
     }
 }
@@ -372,9 +392,23 @@ pub fn profile_field(key: &str, v: &Value) -> Option<R<Value>> {
         },
         "background" => match v {
             Value::Null => Ok(Value::Null),
-            Value::String(s) if s == "none" || s == "image" => Ok(v.clone()),
+            Value::String(s)
+                if s == "none"
+                    || s == "image"
+                    || s == "panorama"
+                    || s.strip_prefix("wallpaper:").is_some_and(is_wallpaper_id) =>
+            {
+                Ok(v.clone())
+            }
             _ => Err(invalid("background")),
         },
+        "iconSource" => match v {
+            Value::Null => Ok(Value::Null),
+            Value::String(s) if s == "custom" || s == "modpack" => Ok(v.clone()),
+            _ => Err(invalid("iconSource")),
+        },
+        "backgroundDim" => nullable_range(v, "backgroundDim", 1.0),
+        "backgroundBlur" => nullable_range(v, "backgroundBlur", 24.0),
         "ram" => match v {
             Value::Null => Ok(Value::Null),
             _ => integer(v, "profile ram", 1024, 131072),

@@ -927,6 +927,8 @@ async fn a_pack_logo_is_downloaded_from_allowed_hosts_only() {
         px(&e.paths().cover_file(&p.id).unwrap()).dimensions(),
         (256, 256)
     );
+    assert_eq!(v.icon_source.as_deref(), Some("modpack"));
+    assert!(e.paths().pack_logo_file(&p.id).unwrap().is_file());
     // failures are silent and change nothing
     let q = e.profile("1.21.1");
     for url in [

@@ -35,14 +35,74 @@ pub trait SrvResolver: Send + Sync {
     fn resolve_srv<'a>(&'a self, host: &'a str) -> SrvFuture<'a>;
 }
 
-/// TODO: real SRV lookup needs a DNS resolver dependency (e.g. hickory); until
-/// then hosts without a port use 25565.
+/// Never resolves SRV; hosts without a port use 25565.
 pub struct NoSrv;
 
 impl SrvResolver for NoSrv {
     fn resolve_srv<'a>(&'a self, _host: &'a str) -> SrvFuture<'a> {
         Box::pin(async { None })
     }
+}
+
+/// One SRV record reduced to what selection needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SrvRecord {
+    pub priority: u16,
+    pub weight: u16,
+    pub port: u16,
+    pub target: String,
+}
+
+/// Pick the lowest priority, then the highest weight (first wins on a tie).
+/// Strips the trailing dot of the target; empty targets and ports of 0 are
+/// ignored.
+pub fn select_srv(records: &[SrvRecord]) -> Option<(String, u16)> {
+    records
+        .iter()
+        .filter(|r| r.port != 0 && !r.target.trim_end_matches('.').is_empty())
+        .min_by_key(|r| (r.priority, std::cmp::Reverse(r.weight)))
+        .map(|r| (r.target.trim_end_matches('.').to_string(), r.port))
+}
+
+/// Real SRV lookup via the system DNS configuration (3 s timeout). Any error
+/// or NXDOMAIN yields `None`.
+pub struct HickorySrv;
+
+impl SrvResolver for HickorySrv {
+    fn resolve_srv<'a>(&'a self, host: &'a str) -> SrvFuture<'a> {
+        Box::pin(async move {
+            if host.parse::<std::net::IpAddr>().is_ok() {
+                return None;
+            }
+            let mut builder = hickory_resolver::TokioResolver::builder_tokio().ok()?;
+            builder.options_mut().timeout = Duration::from_secs(3);
+            let resolver = builder.build().ok()?;
+            let name = format!("_minecraft._tcp.{}.", host.trim_end_matches('.'));
+            let lookup = tokio::time::timeout(Duration::from_secs(3), resolver.srv_lookup(name))
+                .await
+                .ok()?
+                .ok()?;
+            let records: Vec<SrvRecord> = lookup
+                .answers()
+                .iter()
+                .filter_map(|r| match &r.data {
+                    hickory_resolver::proto::rr::RData::SRV(s) => Some(SrvRecord {
+                        priority: s.priority,
+                        weight: s.weight,
+                        port: s.port,
+                        target: s.target.to_utf8(),
+                    }),
+                    _ => None,
+                })
+                .collect();
+            select_srv(&records)
+        })
+    }
+}
+
+/// The resolver the app should use by default.
+pub fn default_resolver() -> Arc<dyn SrvResolver> {
+    Arc::new(HickorySrv)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -261,6 +321,7 @@ pub async fn ping_server_with(
     let (raw_host, raw_port) = split_address(address);
     let (host, port) = match raw_port {
         Some(p) => (raw_host.clone(), p),
+        None if raw_host.parse::<std::net::IpAddr>().is_ok() => (raw_host.clone(), 25565),
         None => srv
             .resolve_srv(&raw_host)
             .await
@@ -272,9 +333,9 @@ pub async fn ping_server_with(
     }
 }
 
-/// Ping without SRV support (see [`NoSrv`]).
+/// Ping using the default SRV resolver (see [`default_resolver`]).
 pub async fn ping_server(address: &str, opts: &PingOptions) -> ServerStatus {
-    ping_server_with(address, opts, &NoSrv).await
+    ping_server_with(address, opts, &HickorySrv).await
 }
 
 /// Ping, remember the first favicon, and always report the durable cached one.

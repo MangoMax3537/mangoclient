@@ -16,4 +16,6 @@ pub use model::{
 };
 pub use paths::{default_downloads_dir, downloads_dir_in, validate_profile_id, Paths};
 pub use store::Store;
-pub use validation::{config_patch, profile_patch, validate_mods, ValidationError};
+pub use validation::{
+    config_patch, is_wallpaper_id, profile_patch, validate_mods, ValidationError,
+};

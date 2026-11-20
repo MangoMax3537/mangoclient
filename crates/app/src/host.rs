@@ -220,6 +220,73 @@ impl LoginWindow for CannedLoginWindow {
     }
 }
 
+/// Native file and folder pickers (src-tauri: the dialog plugin).
+#[async_trait]
+pub trait FileDialog: Send + Sync {
+    /// One image file, `None` when cancelled.
+    async fn pick_image(&self, title: Option<String>) -> Option<std::path::PathBuf>;
+    /// One folder, `None` when cancelled.
+    async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf>;
+}
+
+/// Always cancelled; the default until the shell provides dialogs.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoFileDialog;
+
+#[async_trait]
+impl FileDialog for NoFileDialog {
+    async fn pick_image(&self, _title: Option<String>) -> Option<std::path::PathBuf> {
+        None
+    }
+    async fn pick_folder(&self, _title: Option<String>) -> Option<std::path::PathBuf> {
+        None
+    }
+}
+
+/// Answers with fixed paths and records the titles it was asked with (tests).
+#[derive(Debug, Default)]
+pub struct CannedFileDialog {
+    pub image: Option<std::path::PathBuf>,
+    pub folder: Option<std::path::PathBuf>,
+    titles: Mutex<Vec<(&'static str, Option<String>)>>,
+}
+
+impl CannedFileDialog {
+    pub fn new(image: Option<std::path::PathBuf>, folder: Option<std::path::PathBuf>) -> Self {
+        Self {
+            image,
+            folder,
+            titles: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// `("image" | "folder", title)` of every call so far.
+    pub fn calls(&self) -> Vec<(&'static str, Option<String>)> {
+        self.titles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+}
+
+#[async_trait]
+impl FileDialog for CannedFileDialog {
+    async fn pick_image(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        self.titles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(("image", title));
+        self.image.clone()
+    }
+    async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        self.titles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(("folder", title));
+        self.folder.clone()
+    }
+}
+
 /// The shell-provided capabilities.
 #[derive(Clone)]
 pub struct Host {
@@ -227,6 +294,7 @@ pub struct Host {
     pub clipboard: Arc<dyn ClipboardImage>,
     pub login: Arc<dyn LoginWindow>,
     pub external: Arc<dyn ExternalOpener>,
+    pub dialog: Arc<dyn FileDialog>,
     /// Encrypts account secrets with the per-device key.
     pub vault: Arc<Vault>,
 }
@@ -254,12 +322,18 @@ impl Host {
             external: Arc::new(SystemExternal {
                 enabled: open_enabled,
             }),
+            dialog: Arc::new(NoFileDialog),
             vault: Arc::new(default_vault()),
         }
     }
 
     pub fn with_external(mut self, external: Arc<dyn ExternalOpener>) -> Host {
         self.external = external;
+        self
+    }
+
+    pub fn with_dialog(mut self, dialog: Arc<dyn FileDialog>) -> Host {
+        self.dialog = dialog;
         self
     }
 

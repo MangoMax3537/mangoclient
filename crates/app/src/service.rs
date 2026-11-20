@@ -78,15 +78,8 @@ pub struct ServiceOptions {
 
 impl Default for ServiceOptions {
     fn default() -> Self {
-        let bundle_dir = match std::env::var_os("MANGO_BUNDLE_DIR").filter(|d| !d.is_empty()) {
-            Some(dir) => PathBuf::from(dir),
-            // Development checkout: crates/app -> crates -> repo root.
-            None => Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join("bundle/mangoconfig"),
-        };
         ServiceOptions {
-            bundle_dir,
+            bundle_dir: resolve_bundle_dir(std::env::var_os("MANGO_BUNDLE_DIR"), None),
             manifest_url: VERSION_MANIFEST_URL.to_string(),
             loader_endpoints: mango_loaders::Endpoints::default(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -119,6 +112,37 @@ impl Default for ServiceOptions {
     }
 }
 
+impl ServiceOptions {
+    /// Point `bundle_dir` at the packaged resources: `MANGO_BUNDLE_DIR` still
+    /// wins, then `<resource_dir>/mangoconfig`, then the dev checkout.
+    #[must_use]
+    pub fn with_resource_dir(mut self, resource_dir: &Path) -> Self {
+        self.bundle_dir =
+            resolve_bundle_dir(std::env::var_os("MANGO_BUNDLE_DIR"), Some(resource_dir));
+        self
+    }
+}
+
+/// Where the MangoConfig jars live: an explicit `env_dir` (non-empty), else
+/// `<resource_dir>/mangoconfig` if that directory exists, else the
+/// development checkout (crates/app -> crates -> repo root).
+pub fn resolve_bundle_dir(
+    env_dir: Option<std::ffi::OsString>,
+    resource_dir: Option<&Path>,
+) -> PathBuf {
+    if let Some(dir) = env_dir.filter(|d| !d.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    if let Some(packaged) = resource_dir.map(|r| r.join("mangoconfig")) {
+        if packaged.is_dir() {
+            return packaged;
+        }
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("bundle/mangoconfig")
+}
+
 /// Build-time key first (`option_env!`), then the environment at startup.
 fn default_curseforge_key() -> Option<mango_core::Secret> {
     option_env!("CURSEFORGE_API_KEY")
@@ -149,6 +173,7 @@ pub(crate) struct Inner {
     pub updates: Mutex<HashMap<String, HashMap<String, String>>>,
     pub vault: Arc<Vault>,
     pub login: Arc<dyn LoginWindow>,
+    pub dialog: Arc<dyn crate::host::FileDialog>,
     /// Runtime account state (tokens in memory only), by uuid.
     pub sessions: Mutex<HashMap<String, Session>>,
     /// Serializes token refreshes so a rotated refresh token is never lost.
@@ -232,6 +257,7 @@ impl AppService {
         let icons = Arc::new(ServerIcons::in_root(paths.root()));
         let updater = build_updater(&paths, &opts);
         let (host_vault, host_login) = (host.vault.clone(), host.login.clone());
+        let host_dialog = host.dialog.clone();
         let svc = AppService {
             inner: Arc::new(Inner {
                 paths,
@@ -251,6 +277,7 @@ impl AppService {
                 updates: Mutex::new(HashMap::new()),
                 vault: host_vault,
                 login: host_login,
+                dialog: host_dialog,
                 sessions: Mutex::new(HashMap::new()),
                 refresh_gate: tokio::sync::Mutex::new(()),
                 signing_in: AtomicBool::new(false),
@@ -512,6 +539,27 @@ impl AppService {
             }
             None => Ok(false),
         }
+    }
+
+    /// Native picker for one image (png/jpg/jpeg/webp/gif); `None` = cancelled.
+    /// The path goes to `profile_icon_set_image` / `profile_background_set_image`,
+    /// which validate it themselves.
+    pub async fn pick_image_file(&self, title: Option<String>) -> Res<Option<String>> {
+        let dialog = self.inner.dialog.clone();
+        Ok(dialog
+            .pick_image(title)
+            .await
+            .map(|p| p.display().to_string()))
+    }
+
+    /// Native folder picker; `None` = cancelled. The caller stores the path
+    /// through `config_set` (`blockedModsWatchDirs`), which validates it.
+    pub async fn pick_folder(&self, title: Option<String>) -> Res<Option<String>> {
+        let dialog = self.inner.dialog.clone();
+        Ok(dialog
+            .pick_folder(title)
+            .await
+            .map(|p| p.display().to_string()))
     }
 
     /// Returns the path; opens the OS file manager when enabled.

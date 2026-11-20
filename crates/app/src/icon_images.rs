@@ -152,8 +152,10 @@ impl AppService {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        self.inner
-            .patch_profile(&id, &json!({"cover": false, "iconBlock": block}))?;
+        self.inner.patch_profile(
+            &id,
+            &json!({"cover": false, "iconBlock": block, "iconSource": null}),
+        )?;
         self.view(&id)
     }
 
@@ -166,8 +168,10 @@ impl AppService {
             Ok(())
         })
         .await??;
-        self.inner
-            .patch_profile(&id, &json!({"cover": true, "iconBlock": null}))?;
+        self.inner.patch_profile(
+            &id,
+            &json!({"cover": true, "iconBlock": null, "iconSource": "custom"}),
+        )?;
         self.view(&id)
     }
 
@@ -179,8 +183,10 @@ impl AppService {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        self.inner
-            .patch_profile(&id, &json!({"cover": false, "iconBlock": null}))?;
+        self.inner.patch_profile(
+            &id,
+            &json!({"cover": false, "iconBlock": null, "iconSource": null}),
+        )?;
         self.view(&id)
     }
 
@@ -200,13 +206,45 @@ impl AppService {
             return Err(AppError::new("image_too_large", "Logo is too large"));
         }
         let dest = self.inner.paths.cover_file(profile_id)?;
+        let pack = self.inner.paths.pack_logo_file(profile_id)?;
         tokio::task::spawn_blocking(move || -> Res<()> {
-            write_atomic(&dest, &icon_png(&bytes)?)?;
+            let png = icon_png(&bytes)?;
+            write_atomic(&pack, &png)?;
+            write_atomic(&dest, &png)?;
             Ok(())
         })
         .await??;
-        self.inner
-            .patch_profile(profile_id, &json!({"cover": true, "iconBlock": null}))?;
+        self.inner.patch_profile(
+            profile_id,
+            &json!({"cover": true, "iconBlock": null, "iconSource": "modpack"}),
+        )?;
         Ok(())
+    }
+
+    /// Restore the saved modpack logo as the image icon.
+    pub async fn profile_icon_use_modpack_logo(&self, id: String) -> Res<ProfileView> {
+        self.profile(&id)?;
+        let pack = self.inner.paths.pack_logo_file(&id)?;
+        let dest = self.inner.paths.cover_file(&id)?;
+        tokio::task::spawn_blocking(move || -> Res<()> {
+            let bytes = match std::fs::read(&pack) {
+                Ok(b) => b,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(AppError::new(
+                        "icon.no_modpack_logo",
+                        "This instance has no saved modpack logo",
+                    ))
+                }
+                Err(e) => return Err(e.into()),
+            };
+            write_atomic(&dest, &bytes)?;
+            Ok(())
+        })
+        .await??;
+        self.inner.patch_profile(
+            &id,
+            &json!({"cover": true, "iconBlock": null, "iconSource": "modpack"}),
+        )?;
+        self.view(&id)
     }
 }

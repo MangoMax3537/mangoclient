@@ -11,8 +11,9 @@ pub mod serverlist;
 pub use error::{Result, ServersError};
 pub use icons::{normalize_address, valid_icon, IconStore, NoIcons, ServerIcons};
 pub use ping::{
-    flatten_motd, ping_all, ping_server, ping_server_cached, ping_server_with, strip_color_codes,
-    NoSrv, PingOptions, PingedServer, Players, ServerStatus, SrvResolver,
+    default_resolver, flatten_motd, ping_all, ping_server, ping_server_cached, ping_server_with,
+    select_srv, strip_color_codes, HickorySrv, NoSrv, PingOptions, PingedServer, Players,
+    ServerStatus, SrvRecord, SrvResolver,
 };
 pub use serverlist::{
     cache_featured_server_icons, empty_server_list, ensure_featured_servers, featured_name,

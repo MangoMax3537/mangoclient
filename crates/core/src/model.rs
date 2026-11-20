@@ -263,6 +263,15 @@ pub struct Profile {
     /// `none` or `image`; `None` = automatic (the version's panorama).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background: Option<String>,
+    /// Where the image icon came from: `custom` or `modpack`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_source: Option<String>,
+    /// Darkening over the background, `0..=1`; `None` = the default scrim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_dim: Option<f64>,
+    /// Blur of the background in px, `0..=24`; `None` = no override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_blur: Option<f64>,
     pub ram: Option<u32>,
     pub java_args: String,
     pub mods: Vec<ModRecord>,
@@ -285,6 +294,9 @@ impl Profile {
             cover: false,
             icon_block: None,
             background: None,
+            icon_source: None,
+            background_dim: None,
+            background_blur: None,
             ram: None,
             java_args: String::new(),
             mods: Vec::new(),

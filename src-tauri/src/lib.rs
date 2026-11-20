@@ -5,12 +5,13 @@ use std::sync::{Arc, Mutex};
 
 use mango_app::image_protocol::Image;
 use mango_app::{
-    AppError, AppService, AppState, BlockIconsStatus, BlockedFile, ClipboardImage, ConfigView, ContentItem, ContentType, Event,
-    EventSink, Host, InstallPlan, InstallTarget, LaunchResult, LoaderVersion, LogEntry, LogText,
-    LogUpload, LoginOutcome, LoginWindow, ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion,
-    Provider, ProviderStatus, PublicAccount, Screenshot, ScreenshotAction, SearchParams,
-    SearchResult, ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey,
-    StorageUsage, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
+    AppError, AppService, AppState, BlockIconsStatus, BlockedFile, ClipboardImage, ConfigView,
+    ContentItem, ContentType, Event, EventSink, FileDialog, Host, InstallPlan, InstallTarget,
+    LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome, LoginWindow,
+    ModpackPlan, PanoramaSet, ProfileView, ProjectDetail, ProjectVersion, Provider, ProviderStatus,
+    PublicAccount, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,
+    ServerStatus, ServiceOptions, StatsSummary, StorageKey, StorageUsage, ToggleResult,
+    UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
 };
 use mango_core::Paths;
 use serde::Deserialize;
@@ -18,6 +19,7 @@ use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::DialogExt;
 
 /// Emits the service events (`accounts:changed`, `launch:*`, `install:progress`, `servers:pinged`,
 /// `update:status`, `content:changed`, `blocked:changed`, `blocks:status`, `panorama:ready`).
@@ -400,8 +402,43 @@ async fn profile_background_set_image(
 }
 
 #[tauri::command]
+fn profile_background_set_style(
+    svc: Svc<'_>,
+    id: String,
+    dim: Option<f64>,
+    blur: Option<f64>,
+) -> Res<ProfileView> {
+    svc.profile_background_set_style(id, dim, blur)
+}
+
+#[tauri::command]
+fn profile_background_set_kind(
+    svc: Svc<'_>,
+    id: String,
+    kind: String,
+    wallpaper: Option<String>,
+) -> Res<ProfileView> {
+    svc.profile_background_set_kind(id, kind, wallpaper)
+}
+
+#[tauri::command]
+async fn profile_icon_use_modpack_logo(svc: Svc<'_>, id: String) -> Res<ProfileView> {
+    svc.profile_icon_use_modpack_logo(id).await
+}
+
+#[tauri::command]
 fn profile_background_clear(svc: Svc<'_>, id: String, none: Option<bool>) -> Res<ProfileView> {
     svc.profile_background_clear(id, none.unwrap_or(false))
+}
+
+#[tauri::command]
+async fn pick_image_file(svc: Svc<'_>, title: Option<String>) -> Res<Option<String>> {
+    svc.pick_image_file(title).await
+}
+
+#[tauri::command]
+async fn pick_folder(svc: Svc<'_>, title: Option<String>) -> Res<Option<String>> {
+    svc.pick_folder(title).await
 }
 
 // ---- servers, media, logs, stats, storage ----
@@ -502,6 +539,44 @@ impl ClipboardImage for TauriClipboard {
             .clipboard()
             .write_image(&image)
             .map_err(|e| e.to_string())
+    }
+}
+
+/// Native pickers through the dialog plugin. The blocking dialog runs on a
+/// blocking thread so the async runtime stays free.
+struct TauriDialog(AppHandle);
+
+impl TauriDialog {
+    async fn pick(&self, title: Option<String>, folder: bool) -> Option<std::path::PathBuf> {
+        let app = self.0.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut dialog = app.dialog().file();
+            if let Some(t) = title {
+                dialog = dialog.set_title(t);
+            }
+            let picked = if folder {
+                dialog.blocking_pick_folder()
+            } else {
+                dialog
+                    .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif"])
+                    .blocking_pick_file()
+            };
+            picked.and_then(|p| p.into_path().ok())
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+}
+
+#[async_trait::async_trait]
+impl FileDialog for TauriDialog {
+    async fn pick_image(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        self.pick(title, false).await
+    }
+
+    async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        self.pick(title, true).await
     }
 }
 
@@ -621,6 +696,7 @@ async fn image_response(svc: &AppService, url: &str) -> tauri::http::Response<Ve
 pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol("mangoimg", |ctx, request, responder| {
             let svc = ctx.app_handle().try_state::<AppService>();
             let url = request.uri().to_string();
@@ -636,18 +712,18 @@ pub fn run() {
         })
         .setup(|app| {
             let mut opts = ServiceOptions::default();
-            // Packaged builds ship the MangoConfig jars as resources/assets.
+            // Packaged builds ship the MangoConfig jars as the `mangoconfig`
+            // resource; MANGO_BUNDLE_DIR still wins, the dev checkout is the
+            // fallback.
             if let Ok(dir) = app.path().resource_dir() {
-                let bundled = dir.join("assets");
-                if bundled.is_dir() {
-                    opts.bundle_dir = bundled;
-                }
+                opts = opts.with_resource_dir(&dir);
             }
             let sink = Arc::new(TauriSink(app.handle().clone()));
             let host = Host::system(true)
                 .with_clipboard(Arc::new(TauriClipboard(app.handle().clone())))
                 .with_login(Arc::new(TauriLogin(app.handle().clone())))
-                .with_external(Arc::new(TauriExternal));
+                .with_external(Arc::new(TauriExternal))
+                .with_dialog(Arc::new(TauriDialog(app.handle().clone())));
             let svc = AppService::with_host(Paths::from_env(), sink, opts, host)?;
             app.manage(svc.clone());
             // Telemetry, update checks and the mods/ watcher need a tokio
@@ -707,7 +783,12 @@ pub fn run() {
             panorama_for_profile,
             profile_background_set_screenshot,
             profile_background_set_image,
+            profile_background_set_style,
+            profile_background_set_kind,
+            profile_icon_use_modpack_logo,
             profile_background_clear,
+            pick_image_file,
+            pick_folder,
             servers_list,
             servers_ping_all,
             servers_ping,
