@@ -308,6 +308,36 @@ mod unix {
         assert!(g.wait_exit(Some(Duration::from_secs(10))).is_some());
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn adoption_and_stop_refuse_a_reused_pid_with_another_start_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let java = script(dir.path(), "java", LOOP);
+        let (cb, _s) = collect();
+        let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
+        let real = g.session();
+        wait_until_alive(&real);
+        // Same live JVM pid, but the record says it was launched long ago.
+        let stale = Session {
+            started_at: real.started_at.saturating_sub(3_600_000),
+            ..real.clone()
+        };
+        assert!(!is_session_alive(&stale));
+        let (cb2, _s2) = collect();
+        let ad = AdoptOptions::new("pid", g.log_file().to_path_buf(), cb2);
+        assert!(GameInstance::adopt(&stale, ad).is_none());
+        assert_eq!(
+            crate::terminate_java_started(real.pid, Some(stale.started_at))
+                .unwrap_err()
+                .code(),
+            "not_java"
+        );
+        // The matching record is still adopted, and the process is still alive.
+        assert!(is_session_alive(&real));
+        g.stop().unwrap();
+        assert!(g.wait_exit(Some(Duration::from_secs(10))).is_some());
+    }
+
     #[test]
     fn adoption_rejects_dead_and_foreign_pids() {
         let (cb, _s) = collect();

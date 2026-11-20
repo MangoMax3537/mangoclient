@@ -161,6 +161,7 @@ impl AppService {
 
     pub async fn profile_icon_set_image(&self, id: String, file_path: String) -> Res<ProfileView> {
         self.profile(&id)?;
+        self.checked_in_path(&file_path, crate::path_grants::GrantKind::Image)?;
         let dest = self.inner.paths.cover_file(&id)?;
         tokio::task::spawn_blocking(move || -> Res<()> {
             let png = icon_png(&read_picture(Path::new(&file_path))?)?;

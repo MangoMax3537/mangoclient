@@ -109,6 +109,16 @@ pub fn write_json_atomic<T: Serialize>(file: &Path, data: &T) -> Result<()> {
     write_file_atomic(file, payload.as_bytes(), 0o600)
 }
 
+/// Like [`write_json_atomic`], but for a save that removes secrets: the old
+/// generation is NOT kept. Both the main file and `<file>.bak` receive the new
+/// payload (backup first), so no pre-scrub copy survives next to the file.
+pub fn write_json_scrubbed<T: Serialize>(file: &Path, data: &T) -> Result<()> {
+    let mut payload = serde_json::to_string_pretty(data)?;
+    payload.push('\n');
+    write_file_atomic(&backup_path(file), payload.as_bytes(), 0o600)?;
+    write_file_atomic(file, payload.as_bytes(), 0o600)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +193,19 @@ mod tests {
         write_json_atomic(&file, &json!({})).unwrap();
         let mode = fs::metadata(&file).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn scrubbed_save_leaves_no_old_generation_in_bak() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("accounts.json");
+        write_json_atomic(&file, &json!({"t": "PLAINTEXT-SECRET"})).unwrap();
+        write_json_atomic(&file, &json!({"t": "PLAINTEXT-SECRET", "x": 1})).unwrap();
+        write_json_scrubbed(&file, &json!({"x": 1})).unwrap();
+        for f in [file.clone(), backup_path(&file)] {
+            let raw = fs::read_to_string(&f).unwrap();
+            assert!(!raw.contains("PLAINTEXT-SECRET"), "{f:?}");
+            assert!(valid_json(&raw));
+        }
     }
 }

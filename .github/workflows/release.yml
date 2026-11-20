@@ -270,6 +270,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           echo "::add-mask::${MANGO_UPDATE_PRIVATE_KEY}"
+          # make_manifest signs `mango-update-v1|<version>|<platform key>|<sha256>`
+          # per artifact (not the raw file), and self-checks with the launcher's parser.
           printf '%s\n' "${NOTES:-MangoClient ${VERSION}}" > "${RUNNER_TEMP}/notes.txt"
           cargo run --quiet --release -p mango-updater --example make_manifest -- \
             "${VERSION}" "https://github.com/${REPO}/releases/download/${RELEASE_TAG}" \

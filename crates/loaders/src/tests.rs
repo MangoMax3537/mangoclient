@@ -262,8 +262,18 @@ mod forge {
         }
     }
 
+    const JAR_SHA1: &str = "f92e777f4341930bad9b2422283c4680d00dbc06";
+
     async fn setup() -> (Loaders, tempfile::TempDir, Paths) {
         let mut r = HashMap::new();
+        r.insert(
+            "/neo/21.0.5/neoforge-21.0.5-installer.jar.sha1".to_string(),
+            JAR_SHA1.as_bytes().to_vec(),
+        );
+        r.insert(
+            "/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-installer.jar.sha1".to_string(),
+            format!("{JAR_SHA1}  forge-installer.jar\n").into_bytes(),
+        );
         r.insert(
             "/neo/21.0.5/neoforge-21.0.5-installer.jar".to_string(),
             b"jar".to_vec(),
@@ -316,6 +326,95 @@ echo '{}' > "$root/versions/neoforge-21.0.5/neoforge-21.0.5.json""#,
             .join("launcher_profiles_microsoft_store.json")
             .exists());
         assert!(paths.cache().join("neoforge-21.0.5-installer.jar").exists());
+    }
+
+    fn marker_java(dir: &std::path::Path) -> JavaInfo {
+        // Leaves a marker when (wrongly) executed.
+        let marker = dir.join("ran");
+        fake_java(dir, &format!("touch {}; exit 1", marker.display()))
+    }
+
+    #[tokio::test]
+    async fn installer_with_mismatching_sidecar_is_refused_and_never_run() {
+        let mut r = HashMap::new();
+        r.insert(
+            "/neo/21.0.5/neoforge-21.0.5-installer.jar".to_string(),
+            b"evil".to_vec(),
+        );
+        r.insert(
+            "/neo/21.0.5/neoforge-21.0.5-installer.jar.sha1".to_string(),
+            JAR_SHA1.as_bytes().to_vec(),
+        );
+        let l = loaders(&serve(r).await);
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path().join("root"));
+        let java = marker_java(dir.path());
+        let e = l
+            .ensure(
+                &paths,
+                Loader::NeoForge,
+                "1.21",
+                Some("21.0.5"),
+                Some(&java),
+                &noop,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(e.code(), "net.checksum_mismatch", "{e}");
+        assert!(!dir.path().join("ran").exists());
+        assert!(!paths.cache().join("neoforge-21.0.5-installer.jar").exists());
+    }
+
+    #[tokio::test]
+    async fn installer_without_sidecar_is_refused_and_never_run() {
+        let mut r = HashMap::new();
+        r.insert(
+            "/neo/21.0.5/neoforge-21.0.5-installer.jar".to_string(),
+            b"jar".to_vec(),
+        );
+        let l = loaders(&serve(r).await);
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path().join("root"));
+        let java = marker_java(dir.path());
+        let e = l
+            .ensure(
+                &paths,
+                Loader::NeoForge,
+                "1.21",
+                Some("21.0.5"),
+                Some(&java),
+                &noop,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(e.code(), "loaders.installer_unverified");
+        assert!(!dir.path().join("ran").exists());
+    }
+
+    #[tokio::test]
+    async fn preplanted_cached_installer_is_not_trusted_without_matching_hash() {
+        let (l, dir, paths) = setup().await;
+        std::fs::create_dir_all(paths.cache()).unwrap();
+        let cached = paths.cache().join("neoforge-21.0.5-installer.jar");
+        std::fs::write(&cached, b"planted payload").unwrap();
+        let java = fake_java(
+            dir.path(),
+            r#"root="$4"
+mkdir -p "$root/versions/neoforge-21.0.5"
+echo '{}' > "$root/versions/neoforge-21.0.5/neoforge-21.0.5.json""#,
+        );
+        l.ensure(
+            &paths,
+            Loader::NeoForge,
+            "1.21",
+            Some("21.0.5"),
+            Some(&java),
+            &noop,
+        )
+        .await
+        .unwrap();
+        // The planted file was replaced by the verified download.
+        assert_eq!(std::fs::read(&cached).unwrap(), b"jar");
     }
 
     #[tokio::test]

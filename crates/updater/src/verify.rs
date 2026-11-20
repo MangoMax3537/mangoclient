@@ -1,4 +1,5 @@
-//! Detached Ed25519 verification over the exact bytes of the downloaded file.
+//! Detached Ed25519 verification of a domain-separated message that commits
+//! to version, platform and the SHA-256 of the downloaded file.
 //!
 //! KEY MANAGEMENT: [`UPDATE_PUBLIC_KEY_B64`] below is a PLACEHOLDER and makes
 //! every update fail closed until replaced. Generate a pair with
@@ -34,15 +35,35 @@ pub fn verify_bytes(public_key_b64: &str, signature_b64: &str, message: &[u8]) -
         .map_err(|_| UpdateError::SignatureInvalid)
 }
 
-/// Verify a file; on any failure the file is deleted before returning.
-pub async fn verify_file_or_delete(
+/// The exact message the publisher signs. Binding version, platform key and
+/// content hash stops a validly signed older (or other-platform) installer
+/// from being served under a newer version or another platform entry.
+pub fn update_message(version: &str, platform_key: &str, sha256_hex: &str) -> Vec<u8> {
+    format!(
+        "mango-update-v1|{version}|{platform_key}|{}",
+        sha256_hex.to_ascii_lowercase()
+    )
+    .into_bytes()
+}
+
+/// Verify the signature over [`update_message`] using the SHA-256 of the file
+/// on disk; on any failure the file is deleted before returning.
+pub async fn verify_update_or_delete(
     public_key_b64: &str,
     signature_b64: &str,
+    version: &str,
+    platform_key: &str,
     file: &Path,
 ) -> Result<()> {
     let result = async {
+        use sha2::{Digest, Sha256};
         let bytes = tokio::fs::read(file).await?;
-        verify_bytes(public_key_b64, signature_b64, &bytes)
+        let sha = hex::encode(Sha256::digest(&bytes));
+        verify_bytes(
+            public_key_b64,
+            signature_b64,
+            &update_message(version, platform_key, &sha),
+        )
     }
     .await;
     if result.is_err() {

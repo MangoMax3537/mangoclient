@@ -43,6 +43,8 @@ pub enum NetError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("the host of {url} is not allowed")]
+    HostNotAllowed { url: String },
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("worker task failed: {0}")]
@@ -60,6 +62,7 @@ impl NetError {
             Self::Oversized { .. } => "net.oversized",
             Self::ChecksumMismatch { .. } => "net.checksum_mismatch",
             Self::Json { .. } => "net.json",
+            Self::HostNotAllowed { .. } => "net.host_not_allowed",
             Self::Io(_) => "net.io",
             Self::Join(_) => "net.join",
         }

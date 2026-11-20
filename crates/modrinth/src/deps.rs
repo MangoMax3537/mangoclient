@@ -185,7 +185,10 @@ pub async fn set_mod_enabled(
     let Some(record) = mods.iter().find(|r| pid(r) == project_id) else {
         return Ok(None);
     };
-    let file = record.file.clone().unwrap_or_default();
+    // No (or a withheld) path: nothing to rename, and no bogus ".disabled".
+    let Some(file) = record.file.clone().filter(|f| !f.is_empty()) else {
+        return Ok(None);
+    };
     let disabled = if file.ends_with(".disabled") {
         file.clone()
     } else {

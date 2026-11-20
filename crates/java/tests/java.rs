@@ -196,7 +196,9 @@ mod unix {
     async fn serve(assets_json: String, pkg: Vec<u8>) -> String {
         let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", l.local_addr().unwrap());
-        let json = assets_json.replace("{BASE}", &base);
+        let json = assets_json
+            .replace("{BASE}", &base)
+            .replace("{LBASE}", &base.replace("127.0.0.1", "localhost"));
         tokio::spawn(async move {
             loop {
                 let Ok((mut s, _)) = l.accept().await else {
@@ -247,6 +249,7 @@ mod unix {
         let t = tempfile::tempdir().unwrap();
         let mut o = ResolveOptions::new(t.path().join("runtimes"), t.path().join("cache"));
         o.adoptium_base = base;
+        o.link_policy = mango_net::HostPolicy::allow_all();
         o.roots = SearchRoots::default();
         let r = resolve_java(21, &o).await.unwrap();
         assert_eq!(r.source, JavaSource::Downloaded);
@@ -275,6 +278,8 @@ mod unix {
             let t = tempfile::tempdir().unwrap();
             let mut o = ResolveOptions::new(t.path().join("runtimes"), t.path().join("cache"));
             o.adoptium_base = base;
+            o.link_policy = mango_net::HostPolicy::allow_all();
+            o.link_policy = mango_net::HostPolicy::allow_all();
             o.roots = SearchRoots::default();
             let e = resolve_java(21, &o).await.unwrap_err();
             assert_eq!(e.code(), "java.invalid_package_name", "{bad}");
@@ -285,6 +290,7 @@ mod unix {
         let t = tempfile::tempdir().unwrap();
         let mut o = ResolveOptions::new(t.path().join("runtimes"), t.path().join("cache"));
         o.adoptium_base = base;
+        o.link_policy = mango_net::HostPolicy::allow_all();
         o.roots = SearchRoots::default();
         assert_eq!(
             resolve_java(21, &o).await.unwrap_err().code(),
@@ -293,11 +299,63 @@ mod unix {
     }
 
     #[tokio::test]
+    async fn adoptium_package_link_on_another_host_is_refused() {
+        use sha2::{Digest, Sha256};
+        let pkg = tar_gz_with_java("openjdk version \"21.0.1\"");
+        let sha = hex::encode(Sha256::digest(&pkg));
+        // The API answers on 127.0.0.1 (allowed); the package link points at
+        // the same server under the name `localhost` (not allowed).
+        let json = assets("x.tar.gz", &sha, pkg.len()).replace("{BASE}", "{LBASE}");
+        let base = serve(json, pkg.clone()).await;
+        let t = tempfile::tempdir().unwrap();
+        let mut o = ResolveOptions::new(t.path().join("runtimes"), t.path().join("cache"));
+        o.adoptium_base = base.clone();
+        o.link_policy = mango_net::HostPolicy::https_hosts(&[]).with_http_host("127.0.0.1");
+        o.roots = SearchRoots::default();
+        let e = resolve_java(21, &o).await.unwrap_err();
+        assert_eq!(e.code(), "net.host_not_allowed");
+        assert!(!t
+            .path()
+            .join("runtimes")
+            .join("jre-21")
+            .join("bin")
+            .exists());
+
+        // With both names allowed the same package installs.
+        o.link_policy = mango_net::HostPolicy::https_hosts(&[])
+            .with_http_host("127.0.0.1")
+            .with_http_host("localhost");
+        assert!(resolve_java(21, &o).await.is_ok());
+    }
+
+    #[test]
+    fn default_policy_is_https_and_adoptium_github_hosts_only() {
+        let p = mango_java::default_link_policy();
+        for ok in [
+            "https://api.adoptium.net/v3/assets/latest/21/hotspot",
+            "https://github.com/adoptium/temurin21-binaries/releases/download/x/y.tar.gz",
+            "https://objects.githubusercontent.com/a",
+            "https://release-assets.githubusercontent.com/a",
+        ] {
+            assert!(p.allows(ok), "{ok}");
+        }
+        for bad in [
+            "http://api.adoptium.net/v3",
+            "https://evil.example/y.tar.gz",
+            "https://github.com.evil.example/y.tar.gz",
+            "https://githubusercontent.com/a",
+        ] {
+            assert!(!p.allows(bad), "{bad}");
+        }
+    }
+
+    #[tokio::test]
     async fn adoptium_empty_asset_list() {
         let base = serve("[]".into(), Vec::new()).await;
         let t = tempfile::tempdir().unwrap();
         let mut o = ResolveOptions::new(t.path().join("runtimes"), t.path().join("cache"));
         o.adoptium_base = base;
+        o.link_policy = mango_net::HostPolicy::allow_all();
         o.roots = SearchRoots::default();
         assert_eq!(
             resolve_java(21, &o).await.unwrap_err().code(),

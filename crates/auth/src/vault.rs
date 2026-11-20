@@ -44,6 +44,23 @@ pub const ENVELOPE_PREFIX: &str = "keyring:v1:";
 const ENVELOPE_KEY: &str = "encryptedCredentials";
 const LOCKED_KEY: &str = "credentialsLocked";
 
+/// A legacy v1 keyring entry is named by an account uuid: 32 hex digits, or
+/// the dashed 8-4-4-4-12 form. Anything else (notably `device-key-v1`, which
+/// lives in the same keyring service) is never read or deleted.
+pub fn is_legacy_key_name(key: &str) -> bool {
+    let hex = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_hexdigit());
+    if key.len() == 32 {
+        return hex(key);
+    }
+    let parts: Vec<&str> = key.split('-').collect();
+    key.len() == 36
+        && parts.len() == 5
+        && parts
+            .iter()
+            .zip([8usize, 4, 4, 4, 12])
+            .all(|(p, n)| p.len() == n && hex(p))
+}
+
 fn is_secret(v: &Value) -> bool {
     matches!(v, Value::String(s) if !s.is_empty() && s != "0")
 }
@@ -129,6 +146,11 @@ impl Vault {
                 Err(_) => acc.credentials_locked = true,
             }
         } else if let Some(key) = env.strip_prefix(ENVELOPE_PREFIX) {
+            if !is_legacy_key_name(key) {
+                // A forged name could point the cleanup at another keyring
+                // entry (the device key!): treat the envelope as unreadable.
+                return Err(AuthError::LegacyEnvelope);
+            }
             match self.legacy.as_ref().map(|s| s.get(key)) {
                 Some(Ok(Some(mut blob))) => {
                     acc.msa_refresh_token = refresh_from_v1(&blob);
@@ -209,7 +231,8 @@ impl Vault {
             stored
                 .get(ENVELOPE_KEY)
                 .and_then(Value::as_str)
-                .and_then(|e| e.strip_prefix(ENVELOPE_PREFIX)),
+                .and_then(|e| e.strip_prefix(ENVELOPE_PREFIX))
+                .filter(|k| is_legacy_key_name(k)),
         ) {
             store.delete(key)?;
         }
@@ -217,7 +240,9 @@ impl Vault {
     }
 
     fn delete_legacy(&self, key: Option<&str>) {
-        if let (Some(store), Some(key)) = (self.legacy.as_ref(), key) {
+        if let (Some(store), Some(key)) =
+            (self.legacy.as_ref(), key.filter(|k| is_legacy_key_name(k)))
+        {
             if store.delete(key).is_err() {
                 tracing::warn!("could not delete legacy credential entry");
             }

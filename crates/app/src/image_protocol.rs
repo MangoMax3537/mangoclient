@@ -32,6 +32,23 @@ const MAX_SKIN_JSON_BYTES: u64 = 8 * 1024 * 1024;
 /// Output size of a rendered head.
 pub const HEAD_SIZE: u32 = 64;
 
+/// The `Access-Control-Allow-Origin` value for a `mangoimg` response: the
+/// request's `Origin` only when it is the app's own webview origin (needed
+/// for WebGL skin textures), otherwise none. Never `*`.
+pub fn cors_allowed_origin(origin: Option<&str>) -> Option<String> {
+    const APP: &[&str] = &[
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ];
+    #[cfg(debug_assertions)]
+    const DEV: &[&str] = &["http://localhost:5173"];
+    #[cfg(not(debug_assertions))]
+    const DEV: &[&str] = &[];
+    let o = origin?;
+    (APP.contains(&o) || DEV.contains(&o)).then(|| o.to_string())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Image {
     /// A validated real path; read it and serve it.
@@ -501,6 +518,26 @@ fn blend(face: [u8; 4], hat: [u8; 4]) -> [u8; 4] {
         mix(face[2], hat[2]),
         face[3].max(hat[3]),
     ]
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::cors_allowed_origin;
+
+    #[test]
+    fn only_the_app_origin_is_echoed_never_a_wildcard() {
+        assert_eq!(
+            cors_allowed_origin(Some("tauri://localhost")).as_deref(),
+            Some("tauri://localhost")
+        );
+        assert_eq!(
+            cors_allowed_origin(Some("http://tauri.localhost")).as_deref(),
+            Some("http://tauri.localhost")
+        );
+        assert_eq!(cors_allowed_origin(Some("https://evil.example")), None);
+        assert_eq!(cors_allowed_origin(Some("*")), None);
+        assert_eq!(cors_allowed_origin(None), None);
+    }
 }
 
 #[cfg(test)]

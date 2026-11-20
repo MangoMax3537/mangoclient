@@ -3,7 +3,9 @@
 use crate::error::{Result, RuntimeError};
 use crate::follower::{FollowStart, LogFollower, DEFAULT_POLL};
 use crate::logparse::{LogLevel, LogParser};
-use crate::process::{is_game_alive, terminate_java};
+use crate::process::{
+    is_game_alive, process_start_ms, start_time_matches, terminate_java_started, START_TOLERANCE_MS,
+};
 use mango_core::Session;
 use mango_minecraft::LaunchCommand;
 use regex::Regex;
@@ -251,9 +253,15 @@ pub fn log_file_for(logs_dir: &Path, profile_name: &str, profile_id: &str) -> Pa
     logs_dir.join(format!("{slug}-{id8}.log"))
 }
 
-/// Is the recorded session still a live Java process?
+/// Is the recorded session still a live Java process that started when the
+/// session says it did? (A reused pid of another JVM is not the game.)
 pub fn is_session_alive(session: &Session) -> bool {
     is_game_alive(session.pid)
+        && start_time_matches(
+            session.started_at,
+            process_start_ms(session.pid),
+            START_TOLERANCE_MS,
+        )
 }
 
 fn build_command(cmd: &LaunchCommand, out: File, err: File) -> Command {
@@ -361,7 +369,7 @@ impl GameInstance {
     /// Re-attach to a session recorded before a launcher restart. `None` when
     /// the pid is gone or is no longer a Java process.
     pub fn adopt(session: &Session, opts: AdoptOptions) -> Option<GameInstance> {
-        if !is_game_alive(session.pid) {
+        if !is_session_alive(session) {
             return None;
         }
         let inner = Arc::new(Inner {
@@ -447,7 +455,10 @@ impl GameInstance {
         // Set the flag first: the exit watcher can observe the exit before
         // this method returns, and a requested stop must never read as a crash.
         self.inner.stop_requested.store(true, Ordering::SeqCst);
-        if let Err(e) = terminate_java(self.inner.pid) {
+        // Our own child is certainly the game; an adopted pid must also have
+        // started when the session says (it may have been reused).
+        let started = self.inner.adopted.then_some(self.inner.started_at_ms);
+        if let Err(e) = terminate_java_started(self.inner.pid, started) {
             self.inner.stop_requested.store(false, Ordering::SeqCst);
             return Err(e);
         }

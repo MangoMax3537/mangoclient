@@ -34,7 +34,7 @@
 use crate::backups::zip_name_ok;
 use crate::error::{AppError, Res};
 use crate::models::BlockedFile;
-use crate::outfile::{add_bytes, add_file, validate_out_path, write_zip_atomic, FileExport};
+use crate::outfile::{add_bytes, add_file, write_zip_atomic, FileExport};
 use crate::service::AppService;
 use mango_archive::Limits;
 use mango_core::{Loader, ModRecord, ModType, Profile};
@@ -436,7 +436,7 @@ impl AppService {
         let ExportFormat::Mrpack = format;
         let profile = self.profile(&profile_id)?;
         let instance = self.inner.paths.instance_dir(&profile.id)?;
-        let out = validate_out_path(&out_path, &[&instance])?;
+        let out = self.checked_out_path(&out_path, &[&instance])?;
 
         // Reconcile the list with the folder first, like `content_list`.
         let paths = self.inner.paths.clone();

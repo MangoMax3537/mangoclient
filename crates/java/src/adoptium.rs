@@ -27,6 +27,17 @@ struct Package {
 }
 
 /// The name must be a bare filename: no separators, no `.`/`..`, no NUL.
+/// https only: the Adoptium API, GitHub releases and the hosts GitHub
+/// redirects release assets to.
+pub fn default_link_policy() -> mango_net::HostPolicy {
+    mango_net::HostPolicy::https_hosts(&[
+        "api.adoptium.net",
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    ])
+}
+
 fn valid_package_name(name: &str) -> bool {
     !name.is_empty()
         && name != "."
@@ -50,7 +61,11 @@ pub async fn download_runtime(major: u32, opts: &ResolveOptions) -> Result<PathB
         platform.adoptium_arch(),
         platform.adoptium_os()
     );
-    let assets: Vec<Asset> = get_json(&url, &FetchOptions::default()).await?;
+    let fetch = FetchOptions {
+        host_policy: Some(opts.link_policy.clone()),
+        ..FetchOptions::default()
+    };
+    let assets: Vec<Asset> = get_json(&url, &fetch).await?;
     let Some(asset) = assets.into_iter().next() else {
         return Err(JavaError::NoRuntime {
             major,
@@ -76,6 +91,7 @@ pub async fn download_runtime(major: u32, opts: &ResolveOptions) -> Result<PathB
                 ..Default::default()
             },
             progress: opts.progress.clone(),
+            fetch,
             ..Default::default()
         },
     )

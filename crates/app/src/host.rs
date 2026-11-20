@@ -216,7 +216,22 @@ impl LoginWindow for CannedLoginWindow {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push((authorize_url.to_string(), redirect_prefix.to_string()));
-        self.outcome.clone()
+        // A canned redirect may contain `{state}`: the real window echoes the
+        // `state` of the authorize URL back, and so does this one.
+        match &self.outcome {
+            LoginOutcome::Code(text) if text.contains("{state}") => {
+                let state = url::Url::parse(authorize_url)
+                    .ok()
+                    .and_then(|u| {
+                        u.query_pairs()
+                            .find(|(k, _)| k == "state")
+                            .map(|(_, v)| v.into_owned())
+                    })
+                    .unwrap_or_default();
+                LoginOutcome::Code(text.replace("{state}", &state))
+            }
+            other => other.clone(),
+        }
     }
 }
 
@@ -227,6 +242,10 @@ pub trait FileDialog: Send + Sync {
     async fn pick_image(&self, title: Option<String>) -> Option<std::path::PathBuf>;
     /// One folder, `None` when cancelled.
     async fn pick_folder(&self, title: Option<String>) -> Option<std::path::PathBuf>;
+    /// One file to import (`.mrpack` / `.zip`), `None` when cancelled.
+    async fn pick_import(&self, _title: Option<String>) -> Option<std::path::PathBuf> {
+        None
+    }
     /// A file to write, `None` when cancelled. `default_name` is the
     /// suggested file name.
     async fn pick_save(
@@ -264,6 +283,8 @@ pub struct CannedFileDialog {
     pub folder: Option<std::path::PathBuf>,
     /// What `pick_save` answers.
     pub save: Option<std::path::PathBuf>,
+    /// What `pick_import` answers.
+    pub import: Option<std::path::PathBuf>,
     titles: Mutex<Vec<(&'static str, Option<String>)>>,
     save_names: Mutex<Vec<String>>,
 }
@@ -274,6 +295,7 @@ impl CannedFileDialog {
             image,
             folder,
             save: None,
+            import: None,
             titles: Mutex::new(Vec::new()),
             save_names: Mutex::new(Vec::new()),
         }
@@ -285,6 +307,12 @@ impl CannedFileDialog {
         self
     }
 
+    /// Answer `pick_import` with `path`.
+    pub fn with_import(mut self, path: Option<std::path::PathBuf>) -> Self {
+        self.import = path;
+        self
+    }
+
     /// The default names `pick_save` was asked with.
     pub fn save_names(&self) -> Vec<String> {
         self.save_names
@@ -293,7 +321,7 @@ impl CannedFileDialog {
             .clone()
     }
 
-    /// `("image" | "folder" | "save", title)` of every call so far.
+    /// `("image" | "folder" | "import" | "save", title)` of every call so far.
     pub fn calls(&self) -> Vec<(&'static str, Option<String>)> {
         self.titles
             .lock()
@@ -317,6 +345,13 @@ impl FileDialog for CannedFileDialog {
             .unwrap_or_else(|e| e.into_inner())
             .push(("folder", title));
         self.folder.clone()
+    }
+    async fn pick_import(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        self.titles
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(("import", title));
+        self.import.clone()
     }
     async fn pick_save(
         &self,

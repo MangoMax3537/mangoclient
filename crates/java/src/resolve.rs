@@ -144,6 +144,9 @@ pub struct ResolveOptions {
     pub roots: SearchRoots,
     pub platform: Platform,
     pub adoptium_base: String,
+    /// Hosts the Adoptium API and the package link (including every redirect
+    /// hop) may use. Tests with a local mock server use `HostPolicy::allow_all()`.
+    pub link_policy: mango_net::HostPolicy,
     /// Prefer `javaw.exe` on Windows (game launch).
     pub prefer_javaw: bool,
     pub progress: Option<ProgressFn>,
@@ -159,6 +162,7 @@ impl ResolveOptions {
             roots: SearchRoots::from_env(platform),
             platform,
             adoptium_base: crate::adoptium::DEFAULT_ADOPTIUM_BASE.to_string(),
+            link_policy: crate::adoptium::default_link_policy(),
             prefer_javaw: false,
             progress: None,
         }

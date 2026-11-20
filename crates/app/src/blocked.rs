@@ -25,7 +25,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 /// Next to the instance's `mods/`: the list of blocked files of its pack.
 pub(crate) const SIDECAR: &str = ".mangoclient-blocked.json";
@@ -492,14 +492,31 @@ pub(crate) struct Seen {
     modified: Option<SystemTime>,
 }
 
-#[derive(Default)]
+/// A hash-less match must have been written after the watcher started, give
+/// or take the coarse resolution of file timestamps.
+const MTIME_SLACK: Duration = Duration::from_secs(2);
+
 pub(crate) struct WatchState {
+    /// When this watcher started; a file without a hash is only trusted when
+    /// it is newer (a download the user just made).
+    started: SystemTime,
     /// Size of every candidate at the previous poll.
     sizes: HashMap<PathBuf, u64>,
     /// SHA-1 of files already hashed, by identity (path, size, mtime).
     hashes: HashMap<(PathBuf, u64, Option<SystemTime>), String>,
     /// Copies that failed: never retried for the same file.
     failed: HashSet<(String, PathBuf, u64)>,
+}
+
+impl Default for WatchState {
+    fn default() -> Self {
+        Self {
+            started: SystemTime::now(),
+            sizes: HashMap::new(),
+            hashes: HashMap::new(),
+            failed: HashSet::new(),
+        }
+    }
 }
 
 pub(crate) enum Tick {
@@ -660,10 +677,16 @@ impl AppService {
     }
 
     /// Does `candidate` look like `file`? Verifies the SHA-1 when the pack
-    /// has one; without a hash the exact name and size must match.
+    /// has one. Without a hash nothing can be proven, so the exact name and
+    /// size must match AND the file must have been written after this watch
+    /// started (an old file that merely looks alike is never installed).
     async fn candidate_matches(&self, file: &BlockedFile, c: &Seen, st: &mut WatchState) -> bool {
         let Some(want) = file.sha1.as_deref() else {
-            return file.size == Some(c.size)
+            let fresh = c
+                .modified
+                .is_some_and(|m| m >= st.started.checked_sub(MTIME_SLACK).unwrap_or(st.started));
+            return fresh
+                && file.size == Some(c.size)
                 && c.path
                     .file_name()
                     .is_some_and(|n| n.to_string_lossy() == file.file_name);

@@ -272,6 +272,68 @@ fn delete_credentials_removes_v1_entry() {
 }
 
 #[test]
+fn forged_legacy_envelope_names_never_touch_other_keyring_entries() {
+    let legacy = Arc::new(MockLegacy::default());
+    for k in ["device-key-v1", "some-other-entry", "../x", &uuid()] {
+        legacy.data.lock().unwrap().insert(k.into(), "{}".into());
+    }
+    let v = vault_with(Arc::new(MemoryDeviceKey::new()), legacy.clone());
+    for forged in [
+        "device-key-v1",
+        "some-other-entry",
+        "../x",
+        "",
+        "0123456789abcdef0123456789abcdeg",
+        "0123456789abcdef0123456789abcdef0",
+    ] {
+        let stored = obj(json!({
+            "type": "microsoft", "uuid": uuid(), "name": "P",
+            "encryptedCredentials": format!("{ENVELOPE_PREFIX}{forged}")
+        }));
+        // Treated as unreadable (one re-login), never read from the keyring.
+        assert!(matches!(
+            v.load_account(&stored),
+            Err(AuthError::LegacyEnvelope)
+        ));
+        // Account removal must not delete it either.
+        v.delete_credentials(&stored).unwrap();
+        // Nor may a runtime account carrying a forged cleanup key.
+        let mut acc = ms_account(Some(RT));
+        acc.legacy_keyring_key = Some(forged.to_string());
+        v.store_account(&acc).unwrap();
+        acc.msa_refresh_token = None;
+        v.store_account(&acc).unwrap();
+    }
+    let left: Vec<String> = {
+        let mut k: Vec<String> = legacy.data.lock().unwrap().keys().cloned().collect();
+        k.sort();
+        k
+    };
+    assert!(left.contains(&"device-key-v1".to_string()), "{left:?}");
+    assert!(left.contains(&"some-other-entry".to_string()), "{left:?}");
+    assert!(left.contains(&"../x".to_string()), "{left:?}");
+}
+
+#[test]
+fn legacy_key_name_shapes() {
+    for ok in [
+        "0123456789abcdef0123456789abcdef",
+        "0123456789ABCDEF0123456789ABCDEF",
+        "01234567-89ab-cdef-0123-456789abcdef",
+    ] {
+        assert!(is_legacy_key_name(ok), "{ok}");
+    }
+    for bad in [
+        "device-key-v1",
+        "",
+        "01234567-89ab-cdef-0123-456789abcde",
+        "0123456789abcdef-123456789abcdef-0",
+    ] {
+        assert!(!is_legacy_key_name(bad), "{bad}");
+    }
+}
+
+#[test]
 fn account_never_serializes_tokens_and_secrets_stay_out_of_debug_and_errors() {
     let a = ms_account(Some(RT));
     let json = serde_json::to_string(&a).unwrap();
@@ -360,26 +422,62 @@ fn public_account_expiry_and_cape() {
 #[test]
 fn authorize_url_and_redirect_parsing() {
     let ep = Endpoints::default();
-    let url = ep.build_authorize_url();
+    let url = ep.build_authorize_url("st8");
     assert!(url.starts_with("https://login.live.com/oauth20_authorize.srf?"));
     assert!(url.contains("response_type=code"));
     assert!(url.contains("prompt=select_account"));
     assert!(url.contains("MBI_SSL"));
+    assert!(url.contains("state=st8"));
     let r = "https://login.live.com/oauth20_desktop.srf";
-    assert_eq!(ep.parse_redirect("https://login.live.com/other"), None);
-    assert_eq!(ep.parse_redirect(r), None);
     assert_eq!(
-        ep.parse_redirect(&format!("{r}?code=M.abc")),
+        ep.parse_redirect("https://login.live.com/other", "st8"),
+        None
+    );
+    assert_eq!(ep.parse_redirect(r, "st8"), None);
+    assert_eq!(
+        ep.parse_redirect(&format!("{r}?code=M.abc&state=st8"), "st8"),
         Some(Redirect::Code("M.abc".into()))
     );
     assert_eq!(
-        ep.parse_redirect(&format!("{r}?error=access_denied")),
+        ep.parse_redirect(&format!("{r}?error=access_denied"), "st8"),
         Some(Redirect::Cancelled)
     );
     assert_eq!(
-        ep.parse_redirect(&format!("{r}?error=server_error&error_description=Too+bad")),
+        ep.parse_redirect(
+            &format!("{r}?error=server_error&error_description=Too+bad"),
+            "st8"
+        ),
         Some(Redirect::Error("Too bad".into()))
     );
+}
+
+#[test]
+fn redirect_with_a_wrong_missing_or_empty_state_is_refused() {
+    let ep = Endpoints::default();
+    let r = "https://login.live.com/oauth20_desktop.srf";
+    for url in [
+        format!("{r}?code=M.abc&state=other"),
+        format!("{r}?code=M.abc"),
+        format!("{r}?code=M.abc&state="),
+    ] {
+        assert!(
+            matches!(ep.parse_redirect(&url, "st8"), Some(Redirect::Error(_))),
+            "{url}"
+        );
+    }
+    // An empty expected state (no randomness) can never succeed.
+    assert!(matches!(
+        ep.parse_redirect(&format!("{r}?code=M.abc&state="), ""),
+        Some(Redirect::Error(_))
+    ));
+}
+
+#[test]
+fn oauth_states_are_random_hex() {
+    let (a, b) = (new_oauth_state(), new_oauth_state());
+    assert_eq!(a.len(), 32);
+    assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(a, b);
 }
 
 // ---- mock server -------------------------------------------------------

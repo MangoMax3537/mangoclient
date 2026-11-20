@@ -8,7 +8,7 @@ use crate::crash::{self, Base, CrashCause, CrashReport, Facts};
 use crate::error::{AppError, Res};
 use crate::media::{list_dir, read_tail, MAX_LOG_BYTES};
 use crate::models::LogKind;
-use crate::outfile::{add_bytes, validate_out_path, write_zip_atomic, FileExport};
+use crate::outfile::{add_bytes, write_zip_atomic, FileExport};
 use crate::scrub::{scrub, ScrubContext};
 use crate::service::AppService;
 use mango_core::{AccountType, ModRecord, Profile};
@@ -22,7 +22,7 @@ const DIAG_LAUNCHER_BYTES: usize = 1024 * 1024;
 const MAX_LISTED_MODS: usize = 2000;
 
 /// What the scrubber needs from the account list.
-fn scrub_context(svc: &AppService) -> ScrubContext {
+pub(crate) fn scrub_context(svc: &AppService) -> ScrubContext {
     let (names, uuids) = svc.inner.with_store(|s| {
         (
             s.accounts
@@ -126,7 +126,7 @@ impl AppService {
     ) -> Res<FileExport> {
         let profile = self.profile(&profile_id)?;
         let instance = self.inner.paths.instance_dir(&profile.id)?;
-        let out = validate_out_path(&out_path, &[&instance])?;
+        let out = self.checked_out_path(&out_path, &[&instance])?;
         let (game_dir, crash_dir, launcher) = self.log_dirs(&profile)?;
         let ctx = scrub_context(self);
         let config = self.inner.with_store(|s| s.config.clone());

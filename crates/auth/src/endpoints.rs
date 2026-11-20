@@ -60,15 +60,28 @@ pub enum Redirect {
     Error(String),
 }
 
+/// A fresh random `state` for one sign-in attempt (128 bits, hex).
+pub fn new_oauth_state() -> String {
+    let mut bytes = [0u8; 16];
+    if getrandom::getrandom(&mut bytes).is_err() {
+        // No secure randomness: a state that can never match is safer than a
+        // guessable one (the sign-in then fails closed).
+        return String::new();
+    }
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 impl Endpoints {
-    /// The page the sign-in window should open.
-    pub fn build_authorize_url(&self) -> String {
+    /// The page the sign-in window should open. `state` binds the response
+    /// to this attempt; pass the same value to [`Endpoints::parse_redirect`].
+    pub fn build_authorize_url(&self, state: &str) -> String {
         let params = [
             ("client_id", self.client_id.as_str()),
             ("response_type", "code"),
             ("redirect_uri", self.redirect_uri.as_str()),
             ("scope", SCOPE),
             ("prompt", "select_account"),
+            ("state", state),
         ];
         match Url::parse_with_params(&self.live_authorize, params) {
             Ok(u) => u.to_string(),
@@ -77,7 +90,9 @@ impl Endpoints {
     }
 
     /// Inspect a navigation. `None` while the user is still on login pages.
-    pub fn parse_redirect(&self, url: &str) -> Option<Redirect> {
+    /// A code is only returned when the response carries `expected_state`
+    /// (an empty expected state never matches).
+    pub fn parse_redirect(&self, url: &str, expected_state: &str) -> Option<Redirect> {
         if !url.starts_with(&self.redirect_uri) {
             return None;
         }
@@ -85,8 +100,10 @@ impl Endpoints {
         let mut code = None;
         let mut error = None;
         let mut desc = None;
+        let mut state = None;
         for (k, v) in parsed.query_pairs() {
             match k.as_ref() {
+                "state" => state = Some(v.into_owned()),
                 "code" => code = Some(v.into_owned()),
                 "error" => error = Some(v.into_owned()),
                 "error_description" => desc = Some(v.into_owned()),
@@ -101,7 +118,13 @@ impl Endpoints {
                 desc.filter(|d| !d.is_empty()).unwrap_or(err),
             ));
         }
-        code.filter(|c| !c.is_empty()).map(Redirect::Code)
+        let code = code.filter(|c| !c.is_empty())?;
+        if expected_state.is_empty() || state.as_deref() != Some(expected_state) {
+            return Some(Redirect::Error(
+                "The sign-in response did not belong to this sign-in".to_string(),
+            ));
+        }
+        Some(Redirect::Code(code))
     }
 
     pub(crate) fn fetch_opts(&self, headers: Vec<(String, String)>) -> FetchOptions {

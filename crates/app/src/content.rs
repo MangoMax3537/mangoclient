@@ -151,7 +151,7 @@ impl AppService {
         enabled: bool,
     ) -> Res<ToggleResult> {
         let profile = self.profile(&profile_id)?;
-        let mods = profile.mods;
+        let mods = self.contain_records(&profile_id, &profile.mods);
         let rec = mods
             .iter()
             .find(|r| record_pid(r) == project_id)
@@ -206,7 +206,7 @@ impl AppService {
         .await;
         let outcome = modrinth::uninstall(
             &self.inner.modrinth,
-            &shield_foreign(&profile.mods),
+            &shield_foreign(&self.contain_records(&profile_id, &profile.mods)),
             &project_id,
         )
         .await?;
@@ -367,7 +367,7 @@ impl AppService {
         )
         .await?;
         // Merge into the list as it is now, not as it was when we started.
-        let current = self.profile(&profile_id)?.mods;
+        let current = self.contain_records(&profile_id, &self.profile(&profile_id)?.mods);
         let touched: Vec<String> = installed
             .iter()
             .map(|r| record_pid(r).to_string())
@@ -530,6 +530,26 @@ pub(crate) fn is_curseforge(r: &ModRecord) -> bool {
 /// A copy of the list in which CurseForge records carry an (empty) dependency
 /// list when they have none stored, so Modrinth's metadata backfill never asks
 /// Modrinth about CurseForge ids.
+impl AppService {
+    /// Withhold the `file` of every record that no longer passes the store's
+    /// safety check (outside the instance, a symlink, behind a symlinked
+    /// folder), so the removal and rename code never touches such a path.
+    pub(crate) fn contain_records(&self, profile_id: &str, mods: &[ModRecord]) -> Vec<ModRecord> {
+        mods.iter()
+            .cloned()
+            .map(|mut r| {
+                if r.file.is_some()
+                    && !mango_core::mod_record_is_safe(&self.inner.paths, profile_id, &r)
+                {
+                    tracing::warn!("ignoring an unsafe content path of {:?}", r.title);
+                    r.file = None;
+                }
+                r
+            })
+            .collect()
+    }
+}
+
 pub(crate) fn shield_foreign(mods: &[ModRecord]) -> Vec<ModRecord> {
     mods.iter()
         .cloned()

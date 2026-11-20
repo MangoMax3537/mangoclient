@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use mango_net::{get_json, FetchOptions, NetError};
+use mango_net::{get_json, FetchOptions, HostPolicy, NetError};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::OnceCell;
@@ -28,9 +28,18 @@ struct Cache {
     order: VecDeque<String>,
 }
 
+/// Where `.mrpack` files may be downloaded from (the Modrinth pack spec).
+pub const MRPACK_DOWNLOAD_HOSTS: [&str; 4] = [
+    "cdn.modrinth.com",
+    "github.com",
+    "raw.githubusercontent.com",
+    "gitlab.com",
+];
+
 struct Inner {
     base: String,
     fetch: FetchOptions,
+    download_policy: HostPolicy,
     cache: Mutex<Cache>,
     pending: Mutex<HashMap<String, Flight>>,
 }
@@ -114,10 +123,32 @@ impl Client {
             inner: Arc::new(Inner {
                 base: base.trim_end_matches('/').to_string(),
                 fetch,
+                download_policy: HostPolicy::https_hosts(&MRPACK_DOWNLOAD_HOSTS),
                 cache: Mutex::new(Cache::default()),
                 pending: Mutex::new(HashMap::new()),
             }),
         }
+    }
+
+    /// Replace the host allow-list for pack file downloads (tests use
+    /// `HostPolicy::allow_all()` with local mock servers). The new client
+    /// has its own cache.
+    #[must_use]
+    pub fn with_download_policy(self, policy: HostPolicy) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                base: self.inner.base.clone(),
+                fetch: self.inner.fetch.clone(),
+                download_policy: policy,
+                cache: Mutex::new(Cache::default()),
+                pending: Mutex::new(HashMap::new()),
+            }),
+        }
+    }
+
+    /// Hosts a modpack's files may come from.
+    pub fn download_policy(&self) -> &HostPolicy {
+        &self.inner.download_policy
     }
 
     pub fn base(&self) -> &str {

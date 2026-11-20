@@ -56,6 +56,7 @@ fn fx(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
         partners: Vec::new(),
         icon_hosts: Vec::new(),
         modrinth_api: modrinth.to_string(),
+        download_policy: Some(mango_net::HostPolicy::allow_all()),
         curseforge_api: curse.to_string(),
         curseforge_key: key.map(Secret::new),
         curseforge: mango_curseforge::Options {

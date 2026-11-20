@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use mango_archive::{safe_archive_path, validate_entries, EntryInfo, Limits};
 use mango_core::{Loader, Paths, Profile};
-use mango_net::{download_file, pool, DownloadOptions, Expected};
+use mango_net::{download_file, pool, DownloadOptions, Expected, FetchOptions, HostPolicy};
 use serde::Deserialize;
 
 use crate::client::{primary_file, Client};
@@ -173,7 +173,7 @@ fn extract_overrides(pack: &Path, game_dir: &Path) -> Result<()> {
             }
             let rel = &name[prefix.len()..];
             // The launcher's own bookkeeping is never taken from a pack.
-            if rel.starts_with(".mangoclient-") {
+            if mango_archive::is_launcher_private(rel) {
                 continue;
             }
             let dest = safe_archive_path(game_dir, rel)?;
@@ -266,7 +266,14 @@ pub async fn install_modpack(
             },
         )
         .await?;
-        install_from_pack(&pack_path, paths, profile, on_progress).await
+        install_from_pack(
+            &pack_path,
+            paths,
+            profile,
+            on_progress,
+            client.download_policy(),
+        )
+        .await
     }
     .await;
     let _ = tokio::fs::remove_file(&pack_path).await;
@@ -274,14 +281,16 @@ pub async fn install_modpack(
 }
 
 /// Install a `.mrpack` file that is already on disk (an import) into a
-/// profile's instance. The file is only read, never deleted.
+/// profile's instance. The file is only read, never deleted. Pack files may
+/// only come from the hosts `policy` allows (`Client::download_policy`).
 pub async fn install_pack_file(
     pack_path: &Path,
     paths: &Paths,
     profile: &Profile,
     on_progress: Option<Arc<ProgressFn>>,
+    policy: &HostPolicy,
 ) -> Result<ModpackInfo> {
-    install_from_pack(pack_path, paths, profile, on_progress).await
+    install_from_pack(pack_path, paths, profile, on_progress, policy).await
 }
 
 async fn install_from_pack(
@@ -289,6 +298,7 @@ async fn install_from_pack(
     paths: &Paths,
     profile: &Profile,
     on_progress: Option<Arc<ProgressFn>>,
+    policy: &HostPolicy,
 ) -> Result<ModpackInfo> {
     let game_dir = paths.instance_dir(&profile.id)?;
     let (p, g) = (pack_path.to_path_buf(), game_dir.clone());
@@ -322,6 +332,16 @@ async fn install_from_pack(
             .first()
             .cloned()
             .ok_or_else(|| Error::NoDownload(f.path.clone()))?;
+        // Checked for every file before the first download starts.
+        if !policy.allows(&url) {
+            return Err(invalid(&format!(
+                "download host not allowed for {}",
+                f.path
+            )));
+        }
+        if f.hashes.sha1.is_none() && f.hashes.sha512.is_none() {
+            return Err(invalid(&format!("file {} has no hash", f.path)));
+        }
         jobs.push(Job {
             label: dest
                 .file_name()
@@ -340,14 +360,19 @@ async fn install_from_pack(
 
     let total = jobs.len();
     let done = Arc::new(AtomicUsize::new(0));
+    let fetch = FetchOptions {
+        host_policy: Some(policy.clone()),
+        ..FetchOptions::default()
+    };
     let results = pool(jobs, 8, move |job, _| {
-        let (done, on_progress) = (done.clone(), on_progress.clone());
+        let (done, on_progress, fetch) = (done.clone(), on_progress.clone(), fetch.clone());
         async move {
             download_file(
                 &job.url,
                 &job.dest,
                 &DownloadOptions {
                     expected: job.expected,
+                    fetch,
                     ..DownloadOptions::default()
                 },
             )

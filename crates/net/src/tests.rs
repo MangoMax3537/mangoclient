@@ -468,3 +468,77 @@ async fn progress_reports_done_and_total() {
         .unwrap();
     assert_eq!(*last.lock().unwrap(), (100_000, 100_000));
 }
+
+fn redirect_to(location: &str) -> Resp {
+    Resp {
+        status: 302,
+        headers: vec![format!("Location: {location}"), "Content-Length: 0".into()],
+        body: vec![],
+        chunked: false,
+    }
+}
+
+#[test]
+fn host_policy_matches_exact_https_hosts_only() {
+    let p = HostPolicy::https_hosts(&["cdn.modrinth.com", "github.com"]);
+    assert!(p.allows("https://cdn.modrinth.com/data/a.jar"));
+    assert!(p.allows("https://CDN.Modrinth.com/data/a.jar"));
+    assert!(!p.allows("http://cdn.modrinth.com/a.jar"));
+    assert!(!p.allows("https://evil.cdn.modrinth.com/a.jar"));
+    assert!(!p.allows("https://cdn.modrinth.com.evil.example/a.jar"));
+    assert!(!p.allows("https://cdn.modrinth.com@evil.example/a.jar"));
+    assert!(!p.allows("https://user:pw@github.com/a.jar"));
+    assert!(!p.allows("ftp://github.com/a.jar"));
+    assert!(!p.allows("not a url"));
+}
+
+#[tokio::test]
+async fn disallowed_initial_host_is_refused_without_a_request() {
+    let (base, hits) = serve(Arc::new(|_, _| Resp::ok(b"x"))).await;
+    let mut f = fast_fetch();
+    f.host_policy = Some(HostPolicy::https_hosts(&["cdn.modrinth.com"]));
+    let err = fetch_with_retry(&format!("{base}/a"), &f)
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), "net.host_not_allowed");
+    assert_eq!(hits.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cross_host_redirect_is_blocked_by_the_policy() {
+    // /start redirects to the same server under another host name.
+    let target = Arc::new(Mutex::new(String::new()));
+    let t = target.clone();
+    let (base, hits) = serve(Arc::new(move |_, path| {
+        if path == "/start" {
+            redirect_to(&t.lock().unwrap())
+        } else {
+            Resp::ok(b"secret")
+        }
+    }))
+    .await;
+    let port = base.rsplit(':').next().unwrap();
+    *target.lock().unwrap() = format!("http://localhost:{port}/final");
+
+    let mut f = fast_fetch();
+    f.retries = 0;
+    f.host_policy = Some(HostPolicy::https_hosts(&[]).with_http_host("127.0.0.1"));
+    let err = fetch_with_retry(&format!("{base}/start"), &f).await;
+    assert!(err.is_err(), "redirect to another host must be refused");
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        1,
+        "the second hop was never requested"
+    );
+
+    // Same redirect with both hosts allowed is followed.
+    f.host_policy = Some(
+        HostPolicy::https_hosts(&[])
+            .with_http_host("127.0.0.1")
+            .with_http_host("localhost"),
+    );
+    let res = fetch_with_retry(&format!("{base}/start"), &f)
+        .await
+        .unwrap();
+    assert_eq!(res.bytes().await.unwrap().as_ref(), b"secret");
+}

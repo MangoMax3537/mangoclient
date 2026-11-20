@@ -35,6 +35,8 @@ pub enum LoaderError {
     BadMetadata(String),
     #[error("unsafe version id: {0}")]
     UnsafeId(String),
+    #[error("the {0} installer has no usable published SHA-1 checksum and was refused")]
+    InstallerUnverified(String),
     #[error(transparent)]
     Net(#[from] NetError),
     #[error("I/O error: {0}")]
@@ -54,6 +56,7 @@ impl LoaderError {
             Self::NoProfile(_) => "loaders.no_profile",
             Self::BadMetadata(_) => "loaders.bad_metadata",
             Self::UnsafeId(_) => "loaders.unsafe_id",
+            Self::InstallerUnverified(_) => "loaders.installer_unverified",
             Self::Net(e) => e.code(),
             Self::Io(_) => "loaders.io",
             Self::Json(_) => "loaders.json",
@@ -483,8 +486,18 @@ impl Loaders {
         safe_id(&full)?;
         let jar = paths.cache().join(format!("{name}-{full}-installer.jar"));
         on_log(&format!("Downloading {name} installer..."));
+        // The installer is executed, so it must match the checksum the maven
+        // repository publishes next to it. A missing or malformed sidecar
+        // refuses the install; a cached copy is only reused when it matches.
+        let sha1 = fetch_sha1_sidecar(&url, &self.fetch)
+            .await
+            .ok_or_else(|| LoaderError::InstallerUnverified(name.into()))?;
         let opts = DownloadOptions {
             fetch: self.fetch.clone(),
+            expected: mango_net::Expected {
+                sha1: Some(sha1),
+                ..Default::default()
+            },
             ..Default::default()
         };
         download_file(&url, &jar, &opts).await?;
@@ -526,6 +539,16 @@ impl Loaders {
             .next()
             .ok_or_else(|| LoaderError::NoProfile(name.into()))
     }
+}
+
+/// The maven `<artifact>.sha1` sidecar: first token, 40 hex digits.
+async fn fetch_sha1_sidecar(artifact_url: &str, fetch: &FetchOptions) -> Option<String> {
+    let bytes = get_bytes(&format!("{artifact_url}.sha1"), fetch)
+        .await
+        .ok()?;
+    let text = String::from_utf8(bytes.to_vec()).ok()?;
+    let token = text.split_whitespace().next()?.to_ascii_lowercase();
+    (token.len() == 40 && token.bytes().all(|b| b.is_ascii_hexdigit())).then_some(token)
 }
 
 async fn pump<R: AsyncRead + Unpin>(r: R, on_log: &(dyn Fn(&str) + Send + Sync)) {

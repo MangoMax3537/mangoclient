@@ -1,7 +1,8 @@
 //! mango-updater: signed self-update logic, independent of Tauri.
 //!
 //! Flow: fetch `latest.json` -> validate -> newer? -> download with SHA-256 and
-//! size check -> verify detached Ed25519 signature -> `Installer::stage`.
+//! size check -> verify the detached Ed25519 signature over
+//! `mango-update-v1|<version>|<platform key>|<sha256>` -> `Installer::stage`.
 //! An unsigned or badly signed file is deleted and never staged.
 
 mod error;
@@ -25,7 +26,7 @@ pub use platform::Platform;
 pub use platform_install::{PlatformInstaller, ProcessSpawner, QuitFn, Spawner, Target};
 pub use state::{DisabledReason, UpdateState, UpdateStatus};
 pub use updater::{is_newer, Updater, UpdaterConfig, RECHECK_INTERVAL};
-pub use verify::{verify_bytes, verify_file_or_delete, UPDATE_PUBLIC_KEY_B64};
+pub use verify::{update_message, verify_bytes, verify_update_or_delete, UPDATE_PUBLIC_KEY_B64};
 
 #[cfg(test)]
 mod tests;

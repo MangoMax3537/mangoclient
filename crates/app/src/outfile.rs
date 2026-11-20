@@ -25,12 +25,14 @@ fn bad_path(why: &str) -> AppError {
     AppError::new("export.invalid_path", why.to_string())
 }
 
-/// An absolute path to a new or existing regular file inside an existing
-/// directory, and not inside any of `forbidden` (the instance being read).
+/// An absolute path to a new or existing regular file (not a symlink) inside
+/// an existing directory, and not inside any of `forbidden` (the instance
+/// being read, the launcher data dir, the bundled resources).
 pub(crate) fn validate_out_path(raw: &str, forbidden: &[&Path]) -> Res<PathBuf> {
     if raw.is_empty() || raw.len() > 4096 || raw.contains('\0') {
         return Err(bad_path("Invalid output path"));
     }
+    crate::path_grants::reject_special_path(raw)?;
     let out = PathBuf::from(raw);
     if !out.is_absolute() {
         return Err(bad_path("The output path must be absolute"));
@@ -47,11 +49,16 @@ pub(crate) fn validate_out_path(raw: &str, forbidden: &[&Path]) -> Res<PathBuf> 
         if meta.is_dir() {
             return Err(bad_path("The output path is a folder"));
         }
+        if meta.file_type().is_symlink() {
+            return Err(bad_path("The output path is a symbolic link"));
+        }
     }
     if let Ok(real_parent) = fs::canonicalize(parent) {
         for f in forbidden {
             if fs::canonicalize(f).is_ok_and(|f| real_parent.starts_with(f)) {
-                return Err(bad_path("The output file cannot be inside the instance"));
+                return Err(bad_path(
+                    "The output file cannot be inside the launcher data or the instance",
+                ));
             }
         }
     }

@@ -104,7 +104,8 @@ fn endpoints(base: &str) -> mango_auth::Endpoints {
 }
 
 fn redirect(ep: &mango_auth::Endpoints, query: &str) -> LoginOutcome {
-    LoginOutcome::Code(format!("{}?{query}", ep.redirect_uri))
+    // `{state}` is filled in by the canned window from the authorize URL.
+    LoginOutcome::Code(format!("{}?{query}&state={{state}}", ep.redirect_uri))
 }
 
 struct Fx {
@@ -295,6 +296,18 @@ async fn window_and_redirect_errors_are_login_failed() {
         (e.code.as_str(), e.message.as_str()),
         ("auth.login_failed", "Too bad")
     );
+
+    // A code whose `state` is not the one of this attempt is refused and
+    // never redeemed.
+    let f = fx(ok_chain(), |ep| {
+        LoginOutcome::Code(format!("{}?code=c&state=forged", ep.redirect_uri))
+    })
+    .await;
+    let e = f.svc.account_sign_in_microsoft().await.unwrap_err();
+    assert_eq!(e.code, "auth.login_failed");
+    assert!(f.calls("/live/token").is_empty());
+    let (url, _) = &f.login.requests()[0];
+    assert!(url.contains("state="), "{url}");
 
     // A foreign URL is never treated as a code.
     let f = fx(ok_chain(), |_| {
@@ -572,6 +585,29 @@ async fn startup_migrates_legacy_plaintext_and_scrubs_the_file() {
     svc.launch_credentials(UUID).await.unwrap();
     let body = String::from_utf8_lossy(&seen.lock().unwrap()[0].body).to_string();
     assert!(body.contains("refresh_token=rt-legacy"));
+}
+
+#[tokio::test]
+async fn scrubbing_migration_leaves_no_plaintext_in_the_bak_copy() {
+    let (base, _) = serve(handler(ok_chain())).await;
+    let ep = endpoints(&base);
+    let tmp = tempfile::tempdir().unwrap();
+    legacy_file(tmp.path());
+    // A previous generation from an older save still holds the plaintext.
+    std::fs::copy(
+        tmp.path().join("accounts.json"),
+        tmp.path().join("accounts.json.bak"),
+    )
+    .unwrap();
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let (_svc, _, _) = open(tmp.path(), &ep, keys, LoginOutcome::Cancelled);
+    for name in ["accounts.json", "accounts.json.bak"] {
+        let text = std::fs::read_to_string(tmp.path().join(name)).unwrap();
+        assert!(
+            !text.contains("legacy-access-SECRET") && !text.contains("rt-legacy"),
+            "{name} still has plaintext tokens"
+        );
+    }
 }
 
 #[tokio::test]

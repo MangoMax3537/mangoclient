@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use crate::error::{Error, Result};
 use crate::model::{total_ram_mb, Account, Config, ModRecord, Profile};
 use crate::paths::{validate_profile_id, Paths};
-use crate::persistence::{read_json_value, write_json_atomic};
+use crate::persistence::{read_json_value, write_json_atomic, write_json_scrubbed};
 use crate::validation::profile_patch;
 
 const CONTENT_DIRS: [&str; 4] = ["mods", "shaderpacks", "resourcepacks", "datapacks"];
@@ -78,6 +78,13 @@ fn safe_mod(paths: &Paths, profile_id: &str, mut m: ModRecord) -> Result<ModReco
     }
     m.file = Some(target.to_string_lossy().into_owned());
     Ok(m)
+}
+
+/// Re-check a record's `file` right before the launcher removes or renames
+/// it: inside the instance's content folders, not a symlink, and not
+/// reached through a symlinked folder. Records without a file pass.
+pub fn mod_record_is_safe(paths: &Paths, profile_id: &str, rec: &ModRecord) -> bool {
+    safe_mod(paths, profile_id, rec.clone()).is_ok()
 }
 
 fn safe_mods(paths: &Paths, id: &str, mods: Vec<ModRecord>) -> Result<Vec<ModRecord>> {
@@ -178,12 +185,32 @@ impl Store {
     }
 
     pub fn save_config(&self) -> Result<()> {
-        write_json_atomic(&self.paths.config_file(), &self.config)
+        let file = self.paths.config_file();
+        // A changed or removed API key must not survive in `config.json.bak`.
+        let old_key = read_json_value(&file)
+            .and_then(|v| v.get("curseforgeApiKey").cloned())
+            .filter(|v| !v.is_null());
+        let new_key = serde_json::to_value(&self.config)
+            .ok()
+            .and_then(|v| v.get("curseforgeApiKey").cloned());
+        if old_key.is_some() && old_key != new_key {
+            return write_json_scrubbed(&file, &self.config);
+        }
+        write_json_atomic(&file, &self.config)
     }
 
     /// accounts.json holds both accounts and profiles.
     pub fn save_accounts(&self) -> Result<()> {
         write_json_atomic(
+            &self.paths.accounts_file(),
+            &json!({"accounts": self.accounts, "profiles": self.profiles}),
+        )
+    }
+
+    /// Save accounts.json after secrets were removed from a record: the old
+    /// generation (with the pre-scrub tokens) is not kept as `.bak`.
+    pub fn save_accounts_scrubbed(&self) -> Result<()> {
+        write_json_scrubbed(
             &self.paths.accounts_file(),
             &json!({"accounts": self.accounts, "profiles": self.profiles}),
         )
@@ -303,6 +330,25 @@ mod tests {
 
     fn open(root: &Path) -> Store {
         Store::open(Paths::new(root)).unwrap()
+    }
+
+    #[test]
+    fn changing_the_api_key_leaves_no_old_key_in_the_config_bak() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = open(dir.path());
+        store.config.curseforge_api_key = Some(crate::model::Secret::new("OLD-KEY-123"));
+        store.save_config().unwrap();
+        store.config.curseforge_api_key = Some(crate::model::Secret::new("NEW-KEY-456"));
+        store.save_config().unwrap();
+        store.config.curseforge_api_key = None;
+        store.save_config().unwrap();
+        for name in ["config.json", "config.json.bak"] {
+            let text = std::fs::read_to_string(dir.path().join(name)).unwrap();
+            assert!(
+                !text.contains("OLD-KEY-123") && !text.contains("NEW-KEY-456"),
+                "{name}"
+            );
+        }
     }
 
     #[test]

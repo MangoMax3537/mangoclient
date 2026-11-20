@@ -339,6 +339,9 @@ impl AppService {
         let paths = &self.inner.paths;
         let mut opts = ResolveOptions::new(paths.runtimes(), paths.cache());
         opts.adoptium_base = self.inner.opts.adoptium_base.clone();
+        if let Some(policy) = &self.inner.opts.download_policy {
+            opts.link_policy = policy.clone();
+        }
         if !config.java_path.is_empty() {
             opts.custom_path = Some(PathBuf::from(&config.java_path));
         }

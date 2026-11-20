@@ -24,7 +24,7 @@ mod vault;
 mod tests;
 
 pub use account::{Account, AccountType, PublicAccount, Texture};
-pub use endpoints::{Endpoints, Redirect};
+pub use endpoints::{new_oauth_state, Endpoints, Redirect};
 pub use envelope::{open as open_envelope, seal as seal_envelope, ENVELOPE_V2_PREFIX};
 pub use error::{AuthError, StoreError};
 #[cfg(feature = "keyring")]
@@ -41,6 +41,6 @@ pub use store::CredentialStore;
 #[cfg(feature = "keyring")]
 pub use store::KeyringStore;
 pub use vault::{
-    has_plaintext_credentials, needs_migration, StoredAccount, Vault, ENVELOPE_PREFIX,
-    SECRET_FIELDS,
+    has_plaintext_credentials, is_legacy_key_name, needs_migration, StoredAccount, Vault,
+    ENVELOPE_PREFIX, SECRET_FIELDS,
 };

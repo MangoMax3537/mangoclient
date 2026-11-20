@@ -406,7 +406,7 @@ fn extract_overrides(pack: &Path, game_dir: &Path, folder: &str) -> Result<()> {
         }
         let rel = &name[prefix.len()..];
         // The launcher's own bookkeeping is never taken from a pack.
-        if rel.is_empty() || rel.starts_with(".mangoclient-") {
+        if rel.is_empty() || mango_archive::is_launcher_private(rel) {
             continue;
         }
         let dest = safe_archive_path(game_dir, rel)?;

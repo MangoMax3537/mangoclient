@@ -73,8 +73,9 @@ struct UpdFx {
 /// `trusted`. `auto` runs the launch-time check (`start_background`).
 async fn upd_fx(signer: &SigningKey, trusted: &SigningKey, auto: bool) -> UpdFx {
     let data = payload();
-    let sig = B64.encode(signer.sign(&data).to_bytes());
     let sha = hex::encode(sha2::Sha256::digest(&data));
+    let msg = mango_updater::update_message("9.0.0", "linux-x86_64-appimage", &sha);
+    let sig = B64.encode(signer.sign(&msg).to_bytes());
     let (base, _seen) = serve(move |base| {
         let manifest = json!({
             "version": "9.0.0",

@@ -189,7 +189,7 @@ impl Inner {
                         if let Some(slot) = s.accounts.iter_mut().find(|a| a.uuid == uuid) {
                             *slot = new_rec;
                         }
-                        s.save_accounts()
+                        s.save_accounts_scrubbed()
                     });
                     if saved.is_err() {
                         tracing::warn!("could not save the scrubbed accounts file");
@@ -327,12 +327,14 @@ impl AppService {
         }
         let _guard = LoginGuard(inner);
         let ep = inner.opts.auth_endpoints.clone();
-        let url = ep.build_authorize_url();
+        // Binds the redirect to this attempt; checked in `parse_redirect`.
+        let state = mango_auth::new_oauth_state();
+        let url = ep.build_authorize_url(&state);
         let outcome = inner.login.authorize(&url, &ep.redirect_uri).await;
         let code = match outcome {
             LoginOutcome::Cancelled => return Ok(None),
             LoginOutcome::Error(msg) => return Err(AppError::new("auth.login_failed", msg)),
-            LoginOutcome::Code(text) => match ep.parse_redirect(&text) {
+            LoginOutcome::Code(text) => match ep.parse_redirect(&text, &state) {
                 Some(Redirect::Code(c)) => c,
                 Some(Redirect::Cancelled) => return Ok(None),
                 Some(Redirect::Error(msg)) => return Err(AppError::new("auth.login_failed", msg)),

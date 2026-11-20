@@ -440,6 +440,11 @@ async fn pick_image_file(svc: Svc<'_>, title: Option<String>) -> Res<Option<Stri
 }
 
 #[tauri::command]
+async fn pick_import_file(svc: Svc<'_>, title: Option<String>) -> Res<Option<String>> {
+    svc.pick_import_file(title).await
+}
+
+#[tauri::command]
 async fn pick_folder(svc: Svc<'_>, title: Option<String>) -> Res<Option<String>> {
     svc.pick_folder(title).await
 }
@@ -704,6 +709,23 @@ impl FileDialog for TauriDialog {
         self.pick(title, true).await
     }
 
+    async fn pick_import(&self, title: Option<String>) -> Option<std::path::PathBuf> {
+        let app = self.0.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut dialog = app.dialog().file();
+            if let Some(t) = title {
+                dialog = dialog.set_title(t);
+            }
+            dialog
+                .add_filter("Modpacks and instances", &["mrpack", "zip"])
+                .blocking_pick_file()
+                .and_then(|p| p.into_path().ok())
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
     async fn pick_save(
         &self,
         title: Option<String>,
@@ -800,29 +822,42 @@ impl mango_app::ExternalOpener for TauriExternal {
     }
 }
 
-fn http_response(status: u16, mime: &str, body: Vec<u8>) -> tauri::http::Response<Vec<u8>> {
-    tauri::http::Response::builder()
+fn http_response(
+    status: u16,
+    mime: &str,
+    body: Vec<u8>,
+    origin: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
+    let mut b = tauri::http::Response::builder()
         .status(status)
         .header("Content-Type", mime)
         .header("X-Content-Type-Options", "nosniff")
-        .header("Access-Control-Allow-Origin", "*")
         // Heads and covers change in place; the webview must revalidate.
         .header("Cache-Control", "no-cache")
-        .body(body)
+        .header("Vary", "Origin");
+    // Only the app's own origin may read the pixels (WebGL skin textures).
+    if let Some(o) = mango_app::image_protocol::cors_allowed_origin(origin) {
+        b = b.header("Access-Control-Allow-Origin", o);
+    }
+    b.body(body)
         .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
 }
 
 /// All policy lives in `mango_app::image_protocol`; this only moves bytes.
-async fn image_response(svc: &AppService, url: &str) -> tauri::http::Response<Vec<u8>> {
+async fn image_response(
+    svc: &AppService,
+    url: &str,
+    origin: Option<&str>,
+) -> tauri::http::Response<Vec<u8>> {
     match svc.image(url).await {
-        Ok(Image::Bytes { data, mime }) => http_response(200, mime, data),
+        Ok(Image::Bytes { data, mime }) => http_response(200, mime, data, origin),
         Ok(Image::File { path, mime }) => {
             match tauri::async_runtime::spawn_blocking(move || std::fs::read(path)).await {
-                Ok(Ok(data)) => http_response(200, mime, data),
-                _ => http_response(404, "text/plain", Vec::new()),
+                Ok(Ok(data)) => http_response(200, mime, data, origin),
+                _ => http_response(404, "text/plain", Vec::new(), origin),
             }
         }
-        Err(e) => http_response(e.status(), "text/plain", Vec::new()),
+        Err(e) => http_response(e.status(), "text/plain", Vec::new(), origin),
     }
 }
 
@@ -833,18 +868,27 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("mangoimg", |ctx, request, responder| {
             let svc = ctx.app_handle().try_state::<AppService>();
             let url = request.uri().to_string();
+            let origin = request
+                .headers()
+                .get("Origin")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
             match svc {
                 Some(svc) => {
                     let svc: AppService = svc.inner().clone();
                     tauri::async_runtime::spawn(async move {
-                        responder.respond(image_response(&svc, &url).await);
+                        responder.respond(image_response(&svc, &url, origin.as_deref()).await);
                     });
                 }
-                None => responder.respond(http_response(503, "text/plain", Vec::new())),
+                None => responder.respond(http_response(503, "text/plain", Vec::new(), None)),
             }
         })
         .setup(|app| {
-            let mut opts = ServiceOptions::default();
+            // Path arguments must come from the native pickers.
+            let mut opts = ServiceOptions {
+                strict_paths: true,
+                ..ServiceOptions::default()
+            };
             // Packaged builds ship the MangoConfig jars as the `mangoconfig`
             // resource; MANGO_BUNDLE_DIR still wins, the dev checkout is the
             // fallback.
@@ -930,6 +974,7 @@ pub fn run() {
             profile_icon_use_modpack_logo,
             profile_background_clear,
             pick_image_file,
+            pick_import_file,
             pick_folder,
             pick_save_file,
             worlds_list,

@@ -991,13 +991,32 @@ impl AppService {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn rebase_records_for_test(
+    mods: Vec<ModRecord>,
+    old_dir: &str,
+    new_dir: &Path,
+) -> Vec<ModRecord> {
+    rebase_records(mods, old_dir, new_dir)
+}
+
 /// Re-base `file` paths recorded under `old_dir` onto `new_dir`.
 fn rebase_records(mods: Vec<ModRecord>, old_dir: &str, new_dir: &Path) -> Vec<ModRecord> {
     mods.into_iter()
         .map(|mut m| {
             if let Some(file) = m.file.as_deref() {
-                if let Ok(rel) = Path::new(file).strip_prefix(old_dir) {
-                    m.file = Some(new_dir.join(rel).display().to_string());
+                match Path::new(file).strip_prefix(old_dir) {
+                    // Only plain relative components: a tampered sidecar must
+                    // not rebase a record out of the instance.
+                    Ok(rel)
+                        if rel
+                            .components()
+                            .all(|c| matches!(c, std::path::Component::Normal(_))) =>
+                    {
+                        m.file = Some(new_dir.join(rel).display().to_string());
+                    }
+                    Ok(_) => m.file = None,
+                    Err(_) => {}
                 }
             }
             m

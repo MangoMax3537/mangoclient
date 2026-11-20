@@ -239,7 +239,7 @@ fn prism_root(names: &[String]) -> Option<String> {
 /// What the launcher's own work must never be overwritten with.
 fn prism_skip(rel: &str) -> bool {
     const SKIP: [&str; 4] = ["logs/", "crash-reports/", ".fabric/", ".mixin.out/"];
-    rel.starts_with(".mangoclient-") || SKIP.iter().any(|p| rel.starts_with(p))
+    mango_archive::is_launcher_private(rel) || SKIP.iter().any(|p| rel.starts_with(p))
 }
 
 // ---------------------------------------------------------------- detection
@@ -486,6 +486,7 @@ impl AppService {
     /// What importing `file_path` would create. Reads the archive (and, for
     /// CurseForge, asks the API about its files); changes nothing.
     pub async fn instance_import_plan(&self, file_path: String) -> Res<ImportPlan> {
+        self.checked_in_path(&file_path, crate::path_grants::GrantKind::File)?;
         Ok(self.prepare_import(&file_path).await?.plan)
     }
 
@@ -496,6 +497,7 @@ impl AppService {
         file_path: String,
         name: Option<String>,
     ) -> Res<ProfileView> {
+        self.checked_in_path(&file_path, crate::path_grants::GrantKind::File)?;
         let mut prepared = self.prepare_import(&file_path).await?;
         let plan = prepared.plan.clone();
         let name = name
@@ -547,6 +549,7 @@ impl AppService {
                     &self.inner.paths,
                     profile,
                     Some(progress),
+                    self.inner.modrinth.download_policy(),
                 )
                 .await?;
                 self.finish_modrinth_info(profile, &reporter, info).await?;

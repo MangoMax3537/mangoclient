@@ -26,6 +26,7 @@ mod launch;
 mod media;
 mod models;
 mod outfile;
+mod path_grants;
 mod providers;
 mod reports;
 mod scrub;
@@ -39,6 +40,8 @@ mod worlds;
 mod tests;
 #[cfg(test)]
 mod tests_p10;
+#[cfg(test)]
+mod tests_p11;
 #[cfg(test)]
 mod tests_p2;
 #[cfg(test)]
@@ -83,6 +86,7 @@ pub use models::{
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
 };
 pub use outfile::FileExport;
+pub use path_grants::DEFAULT_GRANT_TTL;
 pub use service::{resolve_bundle_dir, updates_dir, AppService, ServiceOptions};
 pub use types::{
     AppState, ConfigView, InstanceIcon, Latest, LaunchResult, LaunchState, LoaderVersion,

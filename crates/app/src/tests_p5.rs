@@ -667,6 +667,31 @@ async fn without_a_hash_the_exact_name_and_size_must_match() {
 }
 
 #[tokio::test]
+async fn without_a_hash_an_old_lookalike_file_is_never_installed() {
+    let f = setup().await;
+    let p = f.install().await;
+    let mut st = WatchState::default();
+    let old = f.dl.join("nohash-1.jar");
+    std::fs::write(&old, NOHASH).unwrap();
+    // Written long before this watcher started.
+    let long_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 24 * 3600);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(long_ago)
+        .unwrap();
+    f.ticks(&p.id, &mut st, 4).await;
+    assert_eq!(f.state(&p.id, "nohash-1.jar"), BlockedState::Pending);
+    assert!(!f.instance(&p.id).join("mods/nohash-1.jar").exists());
+    // The same bytes downloaded now are taken.
+    std::fs::remove_file(&old).unwrap();
+    std::fs::write(&old, NOHASH).unwrap();
+    f.ticks(&p.id, &mut st, 3).await;
+    assert_eq!(f.state(&p.id, "nohash-1.jar"), BlockedState::Installed);
+}
+
+#[tokio::test]
 async fn shader_files_land_in_their_own_folder() {
     let f = setup().await;
     let p = f.install().await;

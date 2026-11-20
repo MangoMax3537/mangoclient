@@ -192,6 +192,10 @@ impl AppService {
         } else {
             text.clone()
         };
+        // The log goes to a third party: strip tokens, home paths, account
+        // names and the like first (the same scrubber as diagnostics).
+        let ctx = crate::reports::scrub_context(self);
+        let body = tokio::task::spawn_blocking(move || crate::scrub::scrub(&body, &ctx)).await?;
         upload_to_mclogs(&self.inner.opts, &body).await
     }
 

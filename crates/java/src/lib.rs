@@ -9,7 +9,7 @@ mod platform;
 mod probe;
 mod resolve;
 
-pub use adoptium::{download_runtime, DEFAULT_ADOPTIUM_BASE};
+pub use adoptium::{default_link_policy, download_runtime, DEFAULT_ADOPTIUM_BASE};
 pub use discover::{
     find_system_javas, java_executable, launch_executable, list_managed_runtimes, SearchRoots,
 };

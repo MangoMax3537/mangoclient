@@ -3,7 +3,7 @@ use crate::installer::Installer;
 use crate::manifest::{UpdateManifest, UrlPolicy};
 use crate::platform::Platform;
 use crate::state::{DisabledReason, UpdateState, UpdateStatus};
-use crate::verify::{verify_file_or_delete, UPDATE_PUBLIC_KEY_B64};
+use crate::verify::{verify_update_or_delete, UPDATE_PUBLIC_KEY_B64};
 use mango_net::{download_file, get_bytes, DownloadOptions, Expected, FetchOptions};
 use semver::Version;
 use std::future::Future;
@@ -209,9 +209,9 @@ impl Updater {
             return Ok(UpdateState::Current);
         }
         let keys = cfg.platform.manifest_keys();
-        let entry = keys
+        let (platform_key, entry) = keys
             .iter()
-            .find_map(|k| manifest.platforms.get(k))
+            .find_map(|k| manifest.platforms.get(k).map(|e| (k.as_str(), e)))
             .ok_or_else(|| UpdateError::NoPlatformBuild(keys.join("|")))?;
 
         let version = manifest.version.to_string();
@@ -249,8 +249,16 @@ impl Updater {
             fetch: cfg.fetch.clone(),
         };
         download_file(&entry.url, &dest, &opts).await?;
-        // Hash and size match; now require the publisher's signature.
-        verify_file_or_delete(&cfg.public_key_b64, &entry.signature, &dest).await?;
+        // Hash and size match; now require the publisher's signature over
+        // version + platform + hash (not just the file bytes).
+        verify_update_or_delete(
+            &cfg.public_key_b64,
+            &entry.signature,
+            &version,
+            platform_key,
+            &dest,
+        )
+        .await?;
         if let Err(e) = self.inner.installer.stage(&dest) {
             let _ = tokio::fs::remove_file(&dest).await;
             return Err(e);

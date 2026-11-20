@@ -202,6 +202,8 @@ impl AppService {
         id: String,
         file_path: String,
     ) -> Res<ProfileView> {
+        self.profile(&id)?;
+        self.checked_in_path(&file_path, crate::path_grants::GrantKind::Image)?;
         self.set_background_png(id, BgSource::File(PathBuf::from(file_path)))
             .await
     }

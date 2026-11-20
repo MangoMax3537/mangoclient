@@ -450,6 +450,12 @@ fn strict_mode_only_trusts_the_curseforge_cdn() {
         "https://user@edge.forgecdn.net/a.jar",
         "https://edge.forgecdn.net:444/a.jar",
         "file:///etc/passwd",
+        // Backslash is a path separator to the HTTP client: the host is evil.example.
+        "https://evil.example\\.forgecdn.net/x.jar",
+        "https://evil.example\\@edge.forgecdn.net/x.jar",
+        "https://evil.example%5c.forgecdn.net/x.jar",
+        "https://evil.example/\\.forgecdn.net/x.jar",
+        "not a url",
     ] {
         assert!(!is_trusted_cdn_url(bad), "{bad}");
     }
@@ -695,6 +701,8 @@ async fn install_downloads_files_and_extracts_overrides() {
             ("manifest.json", &pack_manifest()),
             ("overrides/config/x.toml", b"x = 1"),
             ("overrides/options.txt", b"lang:de"),
+            ("overrides/mods/.mangoclient-performance.json", b"{}"),
+            ("overrides/MODS/.MANGOCLIENT-x", b"{}"),
         ],
     );
     let manifest = read_manifest(&zip).unwrap();
@@ -716,6 +724,9 @@ async fn install_downloads_files_and_extracts_overrides() {
     assert!(!game.join("mods/b.jar").exists());
     assert_eq!(std::fs::read(game.join("config/x.toml")).unwrap(), b"x = 1");
     assert_eq!(std::fs::read(game.join("options.txt")).unwrap(), b"lang:de");
+    // The launcher's bookkeeping is skipped at any depth and in any letter case.
+    assert!(!game.join("mods/.mangoclient-performance.json").exists());
+    assert!(!game.join("MODS/.MANGOCLIENT-x").exists());
     assert_eq!(*steps.lock().unwrap(), [(1, 1)]);
     // The API key never went to the CDN.
     assert!(seen

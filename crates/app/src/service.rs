@@ -4,6 +4,7 @@ use crate::accounts::Session;
 use crate::error::{AppError, Res};
 use crate::events::{Event, EventSink, LaunchStateEvent, ProgressThrottle};
 use crate::host::{Host, LoginWindow};
+use crate::path_grants::GrantKind;
 use crate::types::{
     installed_versions, AppState, ConfigView, Latest, LaunchState, LoaderVersion, ProfileView,
     PublicAccount, VersionEntry, VersionManifest,
@@ -54,6 +55,10 @@ pub struct ServiceOptions {
     pub resources_url: String,
     /// Adoptium API base for the automatic Java download.
     pub adoptium_base: String,
+    /// Replaces the built-in host allow-lists for modpack files and the
+    /// Adoptium download. `None` = production lists. Tests with local mock
+    /// servers use `Some(HostPolicy::allow_all())`.
+    pub download_policy: Option<mango_net::HostPolicy>,
     /// Server list ping settings.
     pub ping: PingOptions,
     /// Partner servers, shown first and starred.
@@ -88,6 +93,12 @@ pub struct ServiceOptions {
     pub icon_allow_http: bool,
     /// Microsoft / Xbox / Minecraft services endpoints.
     pub auth_endpoints: mango_auth::Endpoints,
+    /// Path-taking commands (import, export, picture, watch folder) accept
+    /// only paths a `pick_*` command returned recently. On in the Tauri
+    /// shell, off in the dev server and tests (the browser flow types paths).
+    pub strict_paths: bool,
+    /// How long a picked path stays usable.
+    pub path_grant_ttl: Duration,
 }
 
 impl Default for ServiceOptions {
@@ -106,6 +117,7 @@ impl Default for ServiceOptions {
             fetch: FetchOptions::default(),
             resources_url: mango_minecraft::RESOURCES_URL.to_string(),
             adoptium_base: mango_java::DEFAULT_ADOPTIUM_BASE.to_string(),
+            download_policy: None,
             ping: PingOptions::default(),
             partners: mango_servers::featured_servers(),
             update_manifest_url: std::env::var("MANGO_UPDATE_URL")
@@ -128,6 +140,8 @@ impl Default for ServiceOptions {
             ],
             icon_allow_http: false,
             auth_endpoints: mango_auth::Endpoints::default(),
+            strict_paths: false,
+            path_grant_ttl: crate::path_grants::DEFAULT_GRANT_TTL,
         }
     }
 }
@@ -158,9 +172,22 @@ pub fn resolve_bundle_dir(
             return packaged;
         }
     }
+    dev_bundle_dir()
+}
+
+/// The checkout's `bundle/mangoconfig`. Debug builds only: a release build
+/// must never point at the build machine's source tree.
+#[cfg(debug_assertions)]
+fn dev_bundle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("bundle/mangoconfig")
+}
+
+/// Release: no bundle (nothing is injected) rather than a build-machine path.
+#[cfg(not(debug_assertions))]
+fn dev_bundle_dir() -> PathBuf {
+    std::env::temp_dir().join("mangoclient-no-bundle")
 }
 
 /// Build-time key first (`option_env!`), then the environment at startup.
@@ -209,6 +236,8 @@ pub(crate) struct Inner {
     pub pano_busy: Mutex<HashSet<String>>,
     /// Serializes creating, pruning, restoring and deleting backups.
     pub backup_gate: Mutex<()>,
+    /// Paths the user picked in native dialogs (see `path_grants`).
+    pub grants: crate::path_grants::PathGrants,
 }
 
 impl Drop for Inner {
@@ -275,11 +304,16 @@ impl AppService {
         host: Host,
     ) -> Res<AppService> {
         let store = Store::open(paths.clone())?;
-        let modrinth = mango_modrinth::Client::with_options(&opts.modrinth_api, opts.fetch.clone());
+        let mut modrinth =
+            mango_modrinth::Client::with_options(&opts.modrinth_api, opts.fetch.clone());
+        if let Some(policy) = &opts.download_policy {
+            modrinth = modrinth.with_download_policy(policy.clone());
+        }
         let icons = Arc::new(ServerIcons::in_root(paths.root()));
         let updater = build_updater(&paths, &opts, host.installer.clone());
         let (host_vault, host_login) = (host.vault.clone(), host.login.clone());
         let host_dialog = host.dialog.clone();
+        let grants = crate::path_grants::PathGrants::new(opts.strict_paths, opts.path_grant_ttl);
         let svc = AppService {
             inner: Arc::new(Inner {
                 paths,
@@ -308,6 +342,7 @@ impl AppService {
                 blocks_run: Mutex::new(crate::block_icons::BlocksRun::default()),
                 pano_busy: Mutex::new(HashSet::new()),
                 backup_gate: Mutex::new(()),
+                grants,
             }),
         };
         // Migrates legacy plaintext tokens into envelopes and scrubs them.
@@ -349,6 +384,18 @@ impl AppService {
     }
 
     pub fn config_set(&self, patch: Value) -> Res<ConfigView> {
+        // New watched folders must come from the folder picker.
+        if let Some(Value::Array(dirs)) = patch.get("blockedModsWatchDirs") {
+            let current = self
+                .inner
+                .with_store(|s| s.config.blocked_mods_watch_dirs.clone());
+            for d in dirs.iter().filter_map(Value::as_str) {
+                if !current.iter().any(|c| c == d) {
+                    crate::path_grants::reject_special_path(d)?;
+                    self.inner.grants.consume(GrantKind::Folder, d)?;
+                }
+            }
+        }
         let view = self
             .inner
             .with_store(|s| s.set_config(&patch).map(ConfigView::from))?;
@@ -595,20 +642,32 @@ impl AppService {
     /// which validate it themselves.
     pub async fn pick_image_file(&self, title: Option<String>) -> Res<Option<String>> {
         let dialog = self.inner.dialog.clone();
-        Ok(dialog
-            .pick_image(title)
-            .await
-            .map(|p| p.display().to_string()))
+        let picked = dialog.pick_image(title).await;
+        Ok(self.grant_picked(GrantKind::Image, picked))
+    }
+
+    /// Native picker for a file to import (`.mrpack`, CurseForge `.zip`,
+    /// Prism/MultiMC `.zip`); `None` = cancelled. The path goes to
+    /// `instance_import_plan` / `instance_import`.
+    pub async fn pick_import_file(&self, title: Option<String>) -> Res<Option<String>> {
+        let dialog = self.inner.dialog.clone();
+        let picked = dialog.pick_import(title).await;
+        Ok(self.grant_picked(GrantKind::File, picked))
+    }
+
+    /// Remember a path a dialog returned (see `path_grants`).
+    fn grant_picked(&self, kind: GrantKind, picked: Option<PathBuf>) -> Option<String> {
+        let p = picked?;
+        self.inner.grants.grant(kind, &p);
+        Some(p.display().to_string())
     }
 
     /// Native folder picker; `None` = cancelled. The caller stores the path
     /// through `config_set` (`blockedModsWatchDirs`), which validates it.
     pub async fn pick_folder(&self, title: Option<String>) -> Res<Option<String>> {
         let dialog = self.inner.dialog.clone();
-        Ok(dialog
-            .pick_folder(title)
-            .await
-            .map(|p| p.display().to_string()))
+        let picked = dialog.pick_folder(title).await;
+        Ok(self.grant_picked(GrantKind::Folder, picked))
     }
 
     /// Native "save as" picker; `None` = cancelled. `default_name` is only a
@@ -633,10 +692,30 @@ impl AppService {
             name
         };
         let dialog = self.inner.dialog.clone();
-        Ok(dialog
-            .pick_save(title, name)
-            .await
-            .map(|p| p.display().to_string()))
+        let picked = dialog.pick_save(title, name).await;
+        Ok(self.grant_picked(GrantKind::Save, picked))
+    }
+
+    /// A user-chosen output file: absolute, not a UNC/device path, not in the
+    /// launcher data dir, the bundled resources or `forbidden`, not a
+    /// symlink, and (when strict) picked with `pick_save_file`.
+    pub(crate) fn checked_out_path(&self, raw: &str, forbidden: &[&Path]) -> Res<PathBuf> {
+        crate::path_grants::reject_special_path(raw)?;
+        let root = self.inner.paths.root();
+        let bundle = self.inner.opts.bundle_dir.as_path();
+        let mut all: Vec<&Path> = forbidden.to_vec();
+        all.push(root);
+        all.push(bundle);
+        let out = crate::outfile::validate_out_path(raw, &all)?;
+        self.inner.grants.consume(GrantKind::Save, raw)?;
+        Ok(out)
+    }
+
+    /// A user-chosen file to read: not a UNC/device path and (when strict)
+    /// picked with the matching `pick_*` command.
+    pub(crate) fn checked_in_path(&self, raw: &str, kind: GrantKind) -> Res<()> {
+        crate::path_grants::reject_special_path(raw)?;
+        self.inner.grants.consume(kind, raw)
     }
 
     /// Returns the path; opens the OS file manager when enabled.

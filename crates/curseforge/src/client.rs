@@ -131,13 +131,21 @@ fn form_encode(pairs: &[(&str, String)]) -> String {
 
 /// Hosts CurseForge serves files and images from.
 pub fn is_trusted_cdn_url(raw: &str) -> bool {
-    let Some(rest) = raw.strip_prefix("https://") else {
+    // Parsed the way the HTTP client will parse it (so `\` and other
+    // spellings cannot disagree with a hand-written splitter).
+    let Ok(url) = reqwest::Url::parse(raw) else {
         return false;
     };
-    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
-    if host.contains('@') || host.contains(':') {
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+    {
         return false;
     }
+    let Some(host) = url.host_str() else {
+        return false;
+    };
     let host = host.to_ascii_lowercase();
     ["forgecdn.net", "curseforge.com"]
         .iter()

@@ -73,6 +73,19 @@ pub fn is_symlink_mode(mode: Option<u32>) -> bool {
     mode.is_some_and(|m| m & S_IFMT == S_IFLNK)
 }
 
+/// True when any path component of an archive entry starts with
+/// `.mangoclient-` (case-insensitive), at any depth: the launcher's own
+/// bookkeeping files (for example `mods/.mangoclient-performance.json`) are
+/// never taken from a pack, whatever the folder or letter case.
+pub fn is_launcher_private(rel: &str) -> bool {
+    const PREFIX: &[u8] = b".mangoclient-";
+    rel.split(['/', '\\']).any(|part| {
+        part.as_bytes()
+            .get(..PREFIX.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(PREFIX))
+    })
+}
+
 /// Resolve `relative` under `root`, rejecting absolute paths, NUL, escapes via
 /// `..` and any existing symlink along the way. Does not touch the disk beyond
 /// `symlink_metadata` lookups; non-existent components are fine.
@@ -366,6 +379,34 @@ pub fn extract_tar_gz<R: Read>(
         total += n;
     }
     Ok(total)
+}
+
+#[cfg(test)]
+mod private_name_tests {
+    use super::is_launcher_private;
+
+    #[test]
+    fn launcher_bookkeeping_is_recognised_at_any_depth_and_case() {
+        for p in [
+            ".mangoclient-x",
+            "mods/.mangoclient-performance.json",
+            "MODS/.MANGOCLIENT-x",
+            "a/b/c/.MangoClient-state",
+            ".mangoclient-dir/inside.txt",
+            "mods\\.mangoclient-x",
+        ] {
+            assert!(is_launcher_private(p), "{p}");
+        }
+        for p in [
+            "mods/a.jar",
+            "config/mangoclient-x.toml",
+            "x.mangoclient-y",
+            ".mangoclient",
+            "",
+        ] {
+            assert!(!is_launcher_private(p), "{p}");
+        }
+    }
 }
 
 #[cfg(test)]

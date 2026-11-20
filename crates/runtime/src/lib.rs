@@ -22,4 +22,7 @@ pub use instance::{
     GameState, SpawnOptions, ADOPT_POLL, RUNNING_FALLBACK,
 };
 pub use logparse::{LogLevel, LogParser, Utf8Chunker};
-pub use process::{is_game_alive, is_java_name, terminate_java};
+pub use process::{
+    is_game_alive, is_java_name, process_start_ms, start_time_matches, terminate_java,
+    terminate_java_started, START_TOLERANCE_MS,
+};

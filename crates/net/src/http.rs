@@ -10,6 +10,64 @@ pub const UA: &str = concat!(
     " (+https://github.com/MangoMax3537/mangoclient)"
 );
 
+/// Which hosts a request may reach, including every redirect hop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostPolicy {
+    /// Exact host names (case-insensitive). `None` = any host (tests).
+    hosts: Option<Vec<String>>,
+    allow_http: bool,
+}
+
+impl HostPolicy {
+    /// https only, and only these exact hosts.
+    pub fn https_hosts(hosts: &[&str]) -> Self {
+        Self {
+            hosts: Some(hosts.iter().map(|h| h.to_ascii_lowercase()).collect()),
+            allow_http: false,
+        }
+    }
+
+    /// Any host over http or https. For tests with local mock servers.
+    pub fn allow_all() -> Self {
+        Self {
+            hosts: None,
+            allow_http: true,
+        }
+    }
+
+    /// Allow one more exact host and plain http (tests with a mock server).
+    #[must_use]
+    pub fn with_http_host(mut self, host: &str) -> Self {
+        self.allow_http = true;
+        if let Some(h) = &mut self.hosts {
+            h.push(host.to_ascii_lowercase());
+        }
+        self
+    }
+
+    pub fn allows_url(&self, url: &reqwest::Url) -> bool {
+        let scheme_ok = match url.scheme() {
+            "https" => true,
+            "http" => self.allow_http,
+            _ => false,
+        };
+        if !scheme_ok || !url.username().is_empty() || url.password().is_some() {
+            return false;
+        }
+        let Some(host) = url.host_str() else {
+            return false;
+        };
+        match &self.hosts {
+            None => true,
+            Some(list) => list.iter().any(|h| h.eq_ignore_ascii_case(host)),
+        }
+    }
+
+    pub fn allows(&self, url: &str) -> bool {
+        reqwest::Url::parse(url).is_ok_and(|u| self.allows_url(&u))
+    }
+}
+
 /// Options for [`fetch_with_retry`]. Defaults: 5 attempts, 400ms * 2^n
 /// backoff, 60s timeout until response headers arrive.
 #[derive(Debug, Clone)]
@@ -20,6 +78,8 @@ pub struct FetchOptions {
     pub backoff: Duration,
     /// Extra headers; they override the defaults (including User-Agent).
     pub headers: Vec<(String, String)>,
+    /// When set, the URL and every redirect hop must satisfy the policy.
+    pub host_policy: Option<HostPolicy>,
 }
 
 impl Default for FetchOptions {
@@ -29,6 +89,7 @@ impl Default for FetchOptions {
             timeout: Duration::from_secs(60),
             backoff: Duration::from_millis(400),
             headers: Vec::new(),
+            host_policy: None,
         }
     }
 }
@@ -44,6 +105,24 @@ fn client() -> Result<Client, NetError> {
         .map_err(NetError::Client)?;
     let _ = CLIENT.set(c.clone());
     Ok(c)
+}
+
+/// A client whose redirect policy re-checks every hop against `policy`.
+fn restricted_client(policy: &HostPolicy) -> Result<Client, NetError> {
+    let policy = policy.clone();
+    Client::builder()
+        .user_agent(UA)
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= 10 {
+                attempt.error("too many redirects")
+            } else if policy.allows_url(attempt.url()) {
+                attempt.follow()
+            } else {
+                attempt.error("redirect to a host that is not allowed")
+            }
+        }))
+        .build()
+        .map_err(NetError::Client)
 }
 
 async fn attempt(
@@ -94,7 +173,15 @@ async fn send_with_retry(
     opts: &FetchOptions,
     body: Option<&[u8]>,
 ) -> Result<Response, NetError> {
-    let client = client()?;
+    let client = match &opts.host_policy {
+        Some(policy) => {
+            if !policy.allows(url) {
+                return Err(NetError::HostNotAllowed { url: url.into() });
+            }
+            restricted_client(policy)?
+        }
+        None => client()?,
+    };
     let mut n: u32 = 0;
     loop {
         match attempt(&client, url, opts, body).await {

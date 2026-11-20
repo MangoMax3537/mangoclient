@@ -10,13 +10,14 @@
 //!   *aarch64*.app.zip                -> darwin-aarch64
 //!   *x64*.app.zip                    -> darwin-x86_64
 //!   *.AppImage                       -> linux-x86_64-appimage
+//! Each signature covers `mango-update-v1|<version>|<platform key>|<sha256>`.
 //! The result is validated with the exact parser the launcher uses, and the
 //! signatures are verified against the derived public key. The private key is
 //! never printed. Exits non-zero when no artifact matched.
 
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
-use mango_updater::{PlatformEntry, UpdateManifest, UrlPolicy};
+use mango_updater::{update_message, PlatformEntry, UpdateManifest, UrlPolicy};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -87,6 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     names.sort();
 
+    // Must equal `Version::to_string()`, which is what the launcher signs against.
+    let parsed: semver::Version = version.trim_start_matches('v').parse()?;
+    let version_str = parsed.to_string();
     let mut platforms = BTreeMap::new();
     for name in names {
         let Some(platform) = platform_key(&name) else {
@@ -102,13 +106,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(format!("two artifacts for {platform}: {name}").into());
         }
         let bytes = std::fs::read(Path::new(&dir).join(&name))?;
+        let sha256 = hex::encode(Sha256::digest(&bytes));
+        let message = update_message(&version_str, platform, &sha256);
         platforms.insert(
             platform.to_string(),
             PlatformEntry {
                 url: format!("{}/{name}", base.trim_end_matches('/')),
-                sha256: hex::encode(Sha256::digest(&bytes)),
+                sha256,
                 size: bytes.len() as u64,
-                signature: B64.encode(key.sign(&bytes).to_bytes()),
+                signature: B64.encode(key.sign(&message).to_bytes()),
             },
         );
         eprintln!("signed {name} -> {platform}");
@@ -118,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let manifest = UpdateManifest {
-        version: version.trim_start_matches('v').parse()?,
+        version: parsed,
         pub_date: Some(rfc3339_now()),
         notes,
         platforms,

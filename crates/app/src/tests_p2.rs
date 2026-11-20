@@ -54,6 +54,7 @@ fn fx_host(host: Option<Host>, tweak: impl FnOnce(&mut ServiceOptions)) -> Fx {
             ..mango_net::FetchOptions::default()
         },
         partners: Vec::new(),
+        download_policy: Some(mango_net::HostPolicy::allow_all()),
         ..ServiceOptions::default()
     };
     tweak(&mut opts);
@@ -1849,6 +1850,39 @@ async fn logs_upload_posts_the_last_25000_lines_to_mclogs() {
         .await
         .unwrap();
     assert_eq!(decode_form_content(&seen.lock().unwrap()[1].body), "a\nb\n");
+}
+
+#[tokio::test]
+async fn logs_upload_scrubs_secrets_and_paths_before_sending() {
+    let (base, seen) = serve(|_| {
+        Arc::new(|_: &Req| json_ok(json!({"success": true, "url": "https://mclo.gs/x", "id": "x"})))
+    })
+    .await;
+    let f = fx_host(None, |o| o.mclogs_api = format!("{base}/1/log"));
+    std::fs::create_dir_all(f.dir().join("logs")).unwrap();
+    let token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop";
+    let log = format!(
+        "[main/INFO]: Setting user: Steve\n\
+         [main/INFO]: --accessToken SUPERSECRETTOKEN123\n\
+         Authorization: Bearer {token}\n\
+         Loading from /home/someuser/.mangoclient/instances/x\n\
+         contact me@example.com\n"
+    );
+    std::fs::write(f.dir().join("logs/latest.log"), log).unwrap();
+    f.svc
+        .logs_upload(f.pid.clone(), "game:latest.log".into())
+        .await
+        .unwrap();
+    let body = decode_form_content(&seen.lock().unwrap()[0].body);
+    for leak in [
+        "SUPERSECRETTOKEN123",
+        token,
+        "/home/someuser",
+        "me@example.com",
+    ] {
+        assert!(!body.contains(leak), "leaked {leak}: {body}");
+    }
+    assert!(body.contains("Setting user"), "ordinary lines stay");
 }
 
 #[tokio::test]

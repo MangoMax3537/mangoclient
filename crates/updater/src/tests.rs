@@ -88,10 +88,30 @@ fn routes_for(
     sign_with: SigningKey,
     sha_override: Option<String>,
 ) -> impl FnOnce(u16) -> HashMap<String, (u16, Vec<u8>)> {
+    routes_signed_for(
+        version,
+        version,
+        "linux-x86_64-appimage",
+        sign_with,
+        sha_override,
+    )
+}
+
+/// Like `routes_for`, but the signature commits to `signed_version` and
+/// `signed_platform` (which may differ from what the manifest claims).
+fn routes_signed_for(
+    version: &'static str,
+    signed_version: &'static str,
+    signed_platform: &'static str,
+    sign_with: SigningKey,
+    sha_override: Option<String>,
+) -> impl FnOnce(u16) -> HashMap<String, (u16, Vec<u8>)> {
     move |port| {
         let data = payload();
-        let sig = B64.encode(sign_with.sign(&data).to_bytes());
-        let sha = sha_override.unwrap_or_else(|| sha256_hex(&data));
+        let real_sha = sha256_hex(&data);
+        let msg = update_message(signed_version, signed_platform, &real_sha);
+        let sig = B64.encode(sign_with.sign(&msg).to_bytes());
+        let sha = sha_override.unwrap_or(real_sha);
         let mut m = HashMap::new();
         m.insert(
             "/latest.json".to_string(),
@@ -212,6 +232,81 @@ async fn bad_signature_refused_and_file_deleted() {
     assert!(!st.applying);
     assert!(dir_is_empty(dir.path()));
     assert!(rec.0.lock().unwrap().is_empty());
+}
+
+async fn assert_refused(
+    routes: impl FnOnce(u16) -> HashMap<String, (u16, Vec<u8>)>,
+    k: &SigningKey,
+) {
+    let srv = Server::start(routes).await;
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Arc::new(Recorder::default());
+    let u = updater(srv.port, dir.path(), "1.3.4", pub_b64(k), rec.clone());
+    let st = u.check(true).await;
+    assert_eq!(error_code(&st), ErrorCode::Other);
+    assert!(dir_is_empty(dir.path()), "refused file must be deleted");
+    assert!(rec.0.lock().unwrap().is_empty(), "nothing may be staged");
+}
+
+#[tokio::test]
+async fn signature_for_another_version_is_refused() {
+    // A genuinely signed 1.3.5 artifact replayed under a manifest claiming 1.9.0.
+    let k = key(1);
+    assert_refused(
+        routes_signed_for("1.9.0", "1.3.5", "linux-x86_64-appimage", k.clone(), None),
+        &k,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn signature_for_another_platform_is_refused() {
+    let k = key(1);
+    assert_refused(
+        routes_signed_for("1.4.0", "1.4.0", "windows-x86_64", k.clone(), None),
+        &k,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn replayed_older_signed_artifact_is_refused() {
+    // The old installer (signed as 1.2.0) served with a higher manifest version.
+    let k = key(1);
+    assert_refused(
+        routes_signed_for("2.0.0", "1.2.0", "linux-x86_64-appimage", k.clone(), None),
+        &k,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn legacy_signature_over_raw_file_bytes_is_refused() {
+    let k = key(1);
+    let data = payload();
+    let sig = B64.encode(k.sign(&data).to_bytes());
+    let sha = sha256_hex(&data);
+    let routes = move |port: u16| {
+        let mut m = HashMap::new();
+        m.insert(
+            "/latest.json".to_string(),
+            (
+                200,
+                manifest_json(port, "1.4.0", &sha, data.len() as u64, &sig),
+            ),
+        );
+        m.insert("/update.AppImage".to_string(), (200, data));
+        m
+    };
+    assert_refused(routes, &k).await;
+}
+
+#[test]
+fn signed_message_is_domain_separated() {
+    assert_eq!(
+        update_message("1.4.0", "windows-x86_64", "ABCD"),
+        b"mango-update-v1|1.4.0|windows-x86_64|abcd".to_vec()
+    );
 }
 
 #[tokio::test]

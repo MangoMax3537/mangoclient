@@ -834,7 +834,7 @@ impl AppService {
 
         // Keep the records of everything that did land on disk, even when a
         // later download failed, so no jar is left unknown to the profile.
-        let mut merged = self.profile(&profile_id)?.mods;
+        let mut merged = self.contain_records(&profile_id, &self.profile(&profile_id)?.mods);
         if !installed.is_empty() {
             let touched: Vec<String> = installed
                 .iter()

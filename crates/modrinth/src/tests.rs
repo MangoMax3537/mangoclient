@@ -61,7 +61,8 @@ async fn serve(make: impl FnOnce(&str) -> Handler) -> (Client, String, Arc<Atomi
             retries: 0,
             ..FetchOptions::default()
         },
-    );
+    )
+    .with_download_policy(mango_net::HostPolicy::allow_all());
     (client, base, hits)
 }
 
@@ -858,6 +859,85 @@ async fn mrpack_with_traversal_entry_is_rejected() {
     assert!(!root.path().join("instances/evil.txt").exists());
     assert!(!root.path().join("evil.txt").exists());
     assert!(!paths.cache().join("pack.mrpack").exists());
+}
+
+/// A client with the production host allow-list against a local mock server.
+fn strict_client(base: &str) -> Client {
+    Client::with_options(
+        base,
+        FetchOptions {
+            retries: 0,
+            ..FetchOptions::default()
+        },
+    )
+}
+
+#[tokio::test]
+async fn mrpack_download_hosts_are_allow_listed_before_any_download() {
+    let a = b"jar-a".to_vec();
+    for url in [
+        // Plain http, and a host that is not on the list.
+        "http://127.0.0.1:1/files/a.jar".to_string(),
+        "https://evil.example/a.jar".to_string(),
+        "https://cdn.modrinth.com.evil.example/a.jar".to_string(),
+    ] {
+        let index = json!({"name": "P", "dependencies": {"minecraft": "1.21"}, "files": [
+            {"path": "mods/a.jar", "hashes": {"sha512": sha512(&a)},
+             "downloads": [url], "fileSize": a.len()}]});
+        let pack = build_pack(&index, &[]);
+        let (_, base, hits) = serve(pack_server(pack, vec![])).await;
+        let client = strict_client(&base);
+        let root = tempfile::tempdir().unwrap();
+        let paths = Paths::new(root.path());
+        let err = install_modpack(&client, &paths, &profile(&paths), "pack-v1", &|_| {}, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), "modrinth.invalid_modpack", "{url}: {err}");
+        assert!(err.to_string().contains("host not allowed"), "{err}");
+        assert!(!paths.instance_dir(PID).unwrap().join("mods/a.jar").exists());
+        // Only the version lookup and the pack itself were fetched.
+        assert!(hits.load(Ordering::SeqCst) <= 2);
+    }
+}
+
+#[tokio::test]
+async fn mrpack_file_without_any_hash_is_refused() {
+    let index = json!({"name": "P", "dependencies": {}, "files": [
+        {"path": "mods/a.jar", "downloads": ["https://cdn.modrinth.com/data/a.jar"]}]});
+    let pack = build_pack(&index, &[]);
+    let (client, _, _) = serve(pack_server(pack, vec![])).await;
+    let root = tempfile::tempdir().unwrap();
+    let paths = Paths::new(root.path());
+    let err = install_modpack(&client, &paths, &profile(&paths), "pack-v1", &|_| {}, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), "modrinth.invalid_modpack");
+    assert!(err.to_string().contains("no hash"), "{err}");
+}
+
+#[tokio::test]
+async fn mrpack_never_takes_launcher_bookkeeping_from_overrides_at_any_depth() {
+    let index = json!({"name": "P", "dependencies": {}, "files": []});
+    let pack = build_pack(
+        &index,
+        &[
+            ("overrides/mods/.mangoclient-performance.json", b"evil"),
+            ("overrides/MODS/.MANGOCLIENT-x", b"evil"),
+            ("client-overrides/config/.MangoClient-y", b"evil"),
+            ("overrides/config/ok.toml", b"ok"),
+        ],
+    );
+    let (client, _, _) = serve(pack_server(pack, vec![])).await;
+    let root = tempfile::tempdir().unwrap();
+    let paths = Paths::new(root.path());
+    install_modpack(&client, &paths, &profile(&paths), "pack-v1", &|_| {}, None)
+        .await
+        .unwrap();
+    let game = paths.instance_dir(PID).unwrap();
+    assert_eq!(std::fs::read(game.join("config/ok.toml")).unwrap(), b"ok");
+    assert!(!game.join("mods/.mangoclient-performance.json").exists());
+    assert!(!game.join("MODS/.MANGOCLIENT-x").exists());
+    assert!(!game.join("config/.MangoClient-y").exists());
 }
 
 #[tokio::test]

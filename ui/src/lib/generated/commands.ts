@@ -145,6 +145,7 @@ export type CommandMap = {
   "profile_icon_use_modpack_logo": { args: IdArgs; result: ProfileView };
   "profile_background_clear": { args: ProfileBackgroundClearArgs; result: ProfileView };
   "pick_image_file": { args: PickArgs; result: string | null };
+  "pick_import_file": { args: PickArgs; result: string | null };
   "pick_folder": { args: PickArgs; result: string | null };
   "pick_save_file": { args: PickSaveArgs; result: string | null };
   "worlds_list": { args: ProfileIdArgs; result: Array<World> };

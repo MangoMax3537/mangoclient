@@ -361,6 +361,7 @@ table! {
     "profile_background_clear": ProfileBackgroundClearArgs => ProfileView =
         |s, a| s.profile_background_clear(a.id, a.none.unwrap_or(false));
     "pick_image_file": PickArgs => Option<String> = |s, a| s.pick_image_file(a.title).await;
+    "pick_import_file": PickArgs => Option<String> = |s, a| s.pick_import_file(a.title).await;
     "pick_folder": PickArgs => Option<String> = |s, a| s.pick_folder(a.title).await;
     "pick_save_file": PickSaveArgs => Option<String> =
         |s, a| s.pick_save_file(a.title, a.default_name).await;

@@ -40,6 +40,7 @@ fn fx_with(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
         partners: Vec::new(),
         icon_hosts: Vec::new(),
         modrinth_api: modrinth.to_string(),
+        download_policy: Some(mango_net::HostPolicy::allow_all()),
         curseforge_api: curse.to_string(),
         curseforge_key: key.map(Secret::new),
         curseforge: mango_curseforge::Options {
@@ -55,7 +56,7 @@ fn fx_with(modrinth: &str, curse: &str, key: Option<&str>) -> Fx {
         },
         ..ServiceOptions::default()
     };
-    let svc = AppService::new(Paths::new(tmp.path()), sink.clone(), opts).unwrap();
+    let svc = AppService::new(Paths::new(tmp.path().join("data")), sink.clone(), opts).unwrap();
     Fx { tmp, svc, sink }
 }
 
@@ -65,7 +66,7 @@ fn fx() -> Fx {
 
 impl Fx {
     fn paths(&self) -> Paths {
-        Paths::new(self.tmp.path())
+        Paths::new(self.tmp.path().join("data"))
     }
     fn inst(&self, id: &str) -> PathBuf {
         self.paths().instance_dir(id).unwrap()
@@ -169,7 +170,7 @@ fn groups_and_tags_are_edited_through_profile_update() {
     assert_eq!(json["tags"], json!(["smp", "pvp"]));
     // It survives a reload from disk.
     let again = AppService::new(
-        Paths::new(f.tmp.path()),
+        Paths::new(f.tmp.path().join("data")),
         Arc::new(Sink::default()),
         ServiceOptions {
             open_folders: false,
@@ -313,6 +314,14 @@ fn prism_zip(dir: &Path, name: &str, prefix: &str, game: &str, loader: Value) ->
         (format!("{prefix}{game}/logs/latest.log"), b"noise".to_vec()),
         (
             format!("{prefix}{game}/.mangoclient-blocked.json"),
+            b"{}".to_vec(),
+        ),
+        (
+            format!("{prefix}{game}/mods/.mangoclient-performance.json"),
+            b"{}".to_vec(),
+        ),
+        (
+            format!("{prefix}{game}/MODS/.MANGOCLIENT-x"),
             b"{}".to_vec(),
         ),
     ];
@@ -802,6 +811,8 @@ async fn importing_a_prism_instance_creates_the_profile_and_its_files() {
     assert_eq!(std::fs::read(inst.join("config/x.toml")).unwrap(), b"x=1");
     assert!(!inst.join("logs").exists(), "logs are not imported");
     assert!(!inst.join(".mangoclient-blocked.json").exists());
+    assert!(!inst.join("mods/.mangoclient-performance.json").exists());
+    assert!(!inst.join("MODS/.MANGOCLIENT-x").exists());
     assert_eq!(view.mod_count, 1, "the pack's jars are ordinary records");
     // icon.png of the archive is the instance icon.
     assert!(view.cover_url.is_some());
@@ -840,6 +851,8 @@ async fn importing_a_modrinth_pack_downloads_checks_and_cleans_up_after_failure(
             ),
             ("overrides/options.txt", b"lang:en_us"),
             ("overrides/.mangoclient-blocked.json", b"{\"files\": []}"),
+            ("overrides/mods/.mangoclient-performance.json", b"{}"),
+            ("overrides/MODS/.MANGOCLIENT-x", b"{}"),
             ("icon.png", &png),
         ],
     );
@@ -867,6 +880,8 @@ async fn importing_a_modrinth_pack_downloads_checks_and_cleans_up_after_failure(
         !inst.join(".mangoclient-blocked.json").exists(),
         "bookkeeping is never taken from a pack"
     );
+    assert!(!inst.join("mods/.mangoclient-performance.json").exists());
+    assert!(!inst.join("MODS/.MANGOCLIENT-x").exists());
     assert_eq!(view.mod_count, 1);
     assert!(view.cover_url.is_some());
     assert_eq!(f.install_events(&view.id).last(), Some(&(1, 1)));
