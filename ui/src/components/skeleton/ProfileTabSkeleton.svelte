@@ -40,7 +40,7 @@
 <style>
   .ct { height: 100%; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   .b { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .list { flex: 1; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; min-height: 0; background: var(--ink-1); }
+  .list { flex: 1; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
   .hd { display: flex; align-items: center; margin-bottom: 10px; min-height: 22px; }
   .hd.between { justify-content: space-between; }
   .hd.g { margin-top: var(--s-6); }
@@ -48,7 +48,7 @@
   .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; align-content: start; }
   .files li { display: grid; gap: 3px; padding: 8px 10px; }
   .view { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-  .out { flex: 1; min-height: 0; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .out { flex: 1; min-height: 0; background: var(--ink-1); border: 1px solid var(--line); overflow: hidden; }
   .rows { display: grid; max-width: 760px; }
   .r { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
   .tx { display: grid; }

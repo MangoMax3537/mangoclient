@@ -50,7 +50,7 @@
   .idtext { display: grid; gap: 14px; justify-items: start; min-width: 0; }
   .h1 { display: flex; align-items: center; height: calc(var(--fs-hero) * 0.95); }
   .actions { display: flex; gap: 8px 16px; align-items: center; margin-top: 6px; }
-  .phero { position: relative; min-height: 190px; border-radius: var(--r-l); overflow: hidden; border: 1px solid var(--line); display: flex; background: var(--hero-bg); }
+  .phero { position: relative; min-height: 190px; overflow: hidden; border: 1px solid var(--line); display: flex; background: var(--hero-bg); }
   .inner { width: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 10px 24px 18px 28px; gap: 12px; }
   .row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   .id { display: grid; gap: 10px; flex: 1; min-width: 0; }

@@ -138,16 +138,16 @@
   .stats span { display: inline-flex; align-items: center; gap: 5px; }
   .cta { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
   section { margin-top: 16px; }
-  .big { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--ink-1); overflow: hidden; }
+  .big { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--line); background: var(--ink-1); overflow: hidden; }
   .thumbs { display: flex; gap: 6px; list-style: none; margin: 8px 0 0; padding: 0; overflow: auto; }
-  .thumbs button { width: 84px; aspect-ratio: 16 / 9; border-radius: var(--r-s); overflow: hidden; border: 2px solid transparent; }
+  .thumbs button { width: 84px; aspect-ratio: 16 / 9; overflow: hidden; border: 2px solid transparent; }
   .thumbs button.on { border-color: var(--mango); }
   .body :global(p) { margin: 0 0 10px; color: var(--paper-dim); }
   .body h3 { margin: 14px 0 6px; font-size: 17px; }
   .body h3.h1 { font-size: 20px; }
   .body ul { margin: 0 0 10px; padding-left: 20px; color: var(--paper-dim); }
-  .body code { font-family: var(--font-mono); font-size: 12.5px; background: var(--ink-4); padding: 1px 5px; border-radius: 3px; }
-  pre { margin: 0 0 10px; padding: 10px 12px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; overflow: auto; white-space: pre-wrap; }
+  .body code { font-family: var(--font-mono); font-size: 12.5px; background: var(--ink-4); padding: 1px 5px; }
+  pre { margin: 0 0 10px; padding: 10px 12px; background: var(--ink-1); border: 1px solid var(--line); font-size: 12.5px; overflow: auto; white-space: pre-wrap; }
   .facts { margin: 12px 0 0; display: grid; gap: 4px; }
   .facts div { display: flex; gap: 12px; }
   dt { width: 80px; flex: none; color: var(--paper-mute); font-size: 13px; }
@@ -159,6 +159,6 @@
   .ok.no { color: var(--mango); }
   .vm { min-width: 0; }
   .vm .hint { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tag { font-size: 11.5px; padding: 1px 6px; border-radius: var(--r-s); background: var(--ink-4); color: var(--paper-dim); margin-left: 6px; }
+  .tag { font-size: 11.5px; padding: 1px 6px; background: var(--ink-4); color: var(--paper-dim); margin-left: 6px; }
   .tag.beta, .tag.alpha { background: rgba(255, 173, 50, 0.16); color: var(--mango); }
 </style>

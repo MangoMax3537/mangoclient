@@ -118,7 +118,7 @@
   }
 </script>
 
-<dialog bind:this={dlg} class="dlg" aria-labelledby="np-title" onclose={close} oncancel={close}>
+<dialog bind:this={dlg} class="dlg nb" aria-labelledby="np-title" onclose={close} oncancel={close}>
   <header>
     <h2 id="np-title">{t('new.title')}</h2>
     <button class="btn ghost" type="button" aria-label={t('common.close')} onclick={close}><XIcon weight="bold" size={16} aria-hidden="true" /></button>
@@ -242,7 +242,7 @@
 {/if}
 
 <style>
-  .dlg { width: min(640px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); padding: 0; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); }
+  .dlg { width: min(640px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); position: fixed; --n: 16px; padding: 1px; color: var(--paper); overflow: hidden; }
   .dlg[open] { display: flex; flex-direction: column; }
   .dlg::backdrop { background: rgba(5, 6, 7, 0.7); }
   header, .steps, footer { flex: none; }
@@ -250,7 +250,7 @@
   h2 { font-size: 22px; }
   .steps { display: flex; gap: 20px; list-style: none; margin: 0; padding: 14px 20px; border-bottom: 1px solid var(--line); color: var(--paper-mute); font-size: 13px; }
   .steps li { display: flex; align-items: center; gap: 8px; }
-  .n { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+  .n { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); font-size: 12px; }
   .cur { color: var(--paper); font-weight: 600; }
   .cur .n { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); }
   .done .n { border-color: var(--leaf); color: var(--leaf); }
@@ -260,24 +260,24 @@
   .itxt { flex: 1; display: grid; gap: 2px; min-width: 0; }
   .lbl { font-size: 13px; font-weight: 600; color: var(--paper-dim); margin-top: 4px; }
   .swatches, .loaders { display: flex; gap: 6px; flex-wrap: wrap; }
-  .sw { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-s); border: 2px solid transparent; }
+  .sw { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid transparent; }
   .sw.on { border-color: var(--paper); }
-  .lo { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-s); color: var(--paper-dim); font-size: 13px; text-transform: capitalize; }
+  .lo { height: 30px; padding: 0 12px; border: 1px solid var(--line); color: var(--paper-dim); font-size: 13px; text-transform: capitalize; }
   .lo.on { background: var(--paper); color: var(--ink-0); border-color: var(--paper); font-weight: 600; }
   .vrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .search { position: relative; flex: 1; min-width: 180px; }
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
-  .vlist { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .vlist { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; border: 1px solid var(--line); }
   .vlist button { display: flex; justify-content: space-between; width: 100%; padding: 7px 12px; text-align: left; }
   .vlist li + li button { border-top: 1px solid var(--line-soft); }
   .vlist button:hover { background: var(--ink-3); }
   .vlist button.on { background: rgba(255, 173, 50, 0.14); }
   .more { color: var(--mango); justify-content: center !important; }
   .tags { display: flex; gap: 6px; }
-  em { font-style: normal; font-size: 12px; padding: 0 6px; border-radius: 3px; background: var(--ink-4); color: var(--paper-dim); }
+  em { font-style: normal; font-size: 12px; padding: 0 6px; background: var(--ink-4); color: var(--paper-dim); }
   em.inst { color: var(--leaf); }
-  .sum { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .sum { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); }
   .sum dt { color: var(--paper-mute); } .sum dd { margin: 0; }
   footer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
   .sp { flex: 1; }

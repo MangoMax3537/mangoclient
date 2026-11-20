@@ -12,5 +12,5 @@
 
 <style>
   ul { display: grid; list-style: none; margin: 0; padding: 0; }
-  li { aspect-ratio: 16 / 9; border-radius: var(--r-m); }
+  li { aspect-ratio: 16 / 9; }
 </style>

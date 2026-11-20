@@ -69,16 +69,16 @@
     position: relative; z-index: 20; height: 36px; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr); align-items: center;
     padding: 0 0 0 calc(10px + var(--inset)); background: var(--ink-0); border-bottom: 1px solid var(--line-soft); font-size: 12px; color: var(--paper-dim);
     user-select: none; -webkit-user-select: none;
-  }
+ }
   .strip[data-mode='browser'], .strip[data-mode='mac'] { padding-right: 14px; }
   .left { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .brandbtn { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; border-radius: var(--r-s); transition: background var(--dur) var(--ease); }
+  .brandbtn { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; transition: background var(--dur) var(--ease); }
   .brandbtn:hover { background: var(--ink-3); }
   .arrows { display: flex; gap: 2px; }
-  .ab { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-s); color: var(--paper-dim); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
+  .ab { width: 28px; height: 28px; display: grid; place-items: center; color: var(--paper-dim); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
   .ab:hover:not(:disabled) { background: var(--ink-3); color: var(--paper); }
   .ab:disabled { opacity: 0.35; }
-  .dev { padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; }
+  .dev { padding: 0 6px; border: 1px solid var(--line); }
   .mid { min-width: 0; max-width: 40vw; text-align: center; padding: 0 12px; }
   .ttl { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--paper-dim); }
   .right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; height: 100%; }
@@ -86,8 +86,7 @@
   .wc { display: flex; height: 100%; margin-left: 4px; }
   .c { width: 46px; height: 100%; display: grid; place-items: center; color: var(--paper-dim); transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
   .c:hover { background: var(--ink-3); color: var(--paper); }
-  .c:focus-visible { outline-offset: -3px; border-radius: 0; }
+  .c:focus-visible { outline-offset: -3px; }
   .c.close:hover { background: #c42b1c; color: #fff; }
   .dim .c, .dim .ttl, .dim .ver { opacity: 0.55; }
-  button { cursor: default; }
 </style>

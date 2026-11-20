@@ -51,7 +51,7 @@
 </script>
 
 <div class="ov">
-  <dl class="tiles">
+  <dl class="tiles nb" style:--n="16px" style:--fill="var(--ink-1)">
     <div><dt>{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
     <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
     <div><dt>{t('home.lastPlayed')}</dt><dd class="mono">{profile.lastPlayed ? fmtRelative(profile.lastPlayed, lang()) : t('home.never')}</dd></div>
@@ -103,7 +103,7 @@
 
 <style>
   .ov { display: grid; gap: 22px; max-width: 980px; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; padding: 1px; overflow: hidden; }
   .tiles > div { padding: 12px 16px; border-right: 1px solid var(--line-soft); background: var(--ink-1); }
   .tiles > div:last-child { border-right: 0; }
   dt { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
@@ -112,10 +112,10 @@
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; min-height: 36px; }
   .dim { color: var(--paper-mute); text-transform: none; letter-spacing: 0; font-weight: 400; }
   .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
-  .strip button { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); }
+  .strip button { display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line); }
   .strip button:hover { border-color: var(--mango); }
-  .skpre { background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
-  pre { margin: 0; padding: 10px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; line-height: 1.55; overflow: auto; user-select: text; }
+  .skpre { background: var(--ink-1); border: 1px solid var(--line); }
+  pre { margin: 0; padding: 10px 14px; background: var(--ink-1); border: 1px solid var(--line); font-size: 12.5px; line-height: 1.55; overflow: auto; user-select: text; }
   .ln { color: var(--paper-dim); }
   .ln.warn { color: var(--mango); }
   .ln.error { color: var(--tomato); }

@@ -135,7 +135,7 @@
           {:else if st.state === 'preparing'}
             <div class="state" role="status">
               <div class="skgrid" aria-hidden="true">{#each Array(14) as _, i (i)}<span class="skel sk"></span>{/each}</div>
-              <div class="bar" aria-hidden="true"><span></span></div>
+              <div class="bar step-end" aria-hidden="true"><span></span></div>
               <p><b>{t('icons.preparing')}</b></p>
               <p class="hint">{t('icons.privacy')}</p>
             </div>
@@ -184,19 +184,19 @@
   .main { min-width: 0; display: grid; align-content: start; gap: 10px; }
   .panel { display: grid; gap: 10px; align-content: start; min-height: 260px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; padding: 6px; }
-  .cell { display: grid; gap: 4px; justify-items: stretch; text-align: center; padding: 6px 6px 8px; border: 1px solid transparent; border-radius: var(--r-m); }
+  .cell { display: grid; gap: 4px; justify-items: stretch; text-align: center; padding: 6px 6px 8px; border: 1px solid transparent; }
   .cell:hover { background: var(--ink-3); }
   .cell.on { border-color: var(--accent-fill); background: var(--ink-3); }
   .cell:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   .th { position: relative; display: block; aspect-ratio: 1; }
-  .chk { position: absolute; right: 4px; top: 4px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); }
+  .chk { position: absolute; right: 4px; top: 4px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); }
   .lbl { font-size: var(--fs-xs); font-weight: 600; line-height: 1.2; }
   .sub { font-size: var(--fs-xs); color: var(--paper-mute); line-height: 1.1; margin-top: -2px; }
   .state { display: grid; justify-items: center; align-content: center; gap: 10px; min-height: 260px; text-align: center; }
   .state p { margin: 0; max-width: 44ch; }
   .mk { width: 56px; height: 56px; opacity: 0.9; }
   .skgrid { width: 100%; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
-  .sk { aspect-ratio: 1; border-radius: var(--r-m); }
+  .sk { aspect-ratio: 1; }
   .bar { width: 60%; height: 4px; background: var(--ink-4); overflow: hidden; }
   .bar span { display: block; width: 40%; height: 100%; background: var(--accent-fill); animation: slide 1.2s var(--ease) infinite; }
   .logo { grid-auto-flow: column; justify-content: start; align-items: center; gap: 16px; min-height: 0; padding-top: 8px; }

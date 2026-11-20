@@ -185,6 +185,8 @@ export class SkinRenderer {
   pitch = 0;
   autoRotate = true;
   pose: Pose = 'idle';
+  /** Cape sway on (default); off = the cape hangs still. */
+  capeAnim = true;
   time = 0;
   ready = false;
   destroyed = false;
@@ -254,6 +256,7 @@ export class SkinRenderer {
 
   setSlim(slim: boolean): void { if (this.slim !== slim) { this.slim = slim; this.#buildParts(); } }
   setPose(p: Pose): void { this.pose = p; }
+  setCapeAnim(on: boolean): void { this.capeAnim = on; }
 
   #upload(tex: WebGLTexture | null, src: TextureSource): void {
     const gl = this.gl;
@@ -377,7 +380,7 @@ export class SkinRenderer {
     for (const p of this.#parts) if (!p.def.overlay) draw(p, place(p.def.name, p.def.pivot));
     if (this.#hasCape && this.#cape && this.#capeTex) {
       // hangs from the shoulders, leans back a little; the outer face (front of the cuboid) is turned to the back of the player
-      const lean = walking ? 0.28 + Math.abs(Math.sin(this.time * 6)) * 0.22 : 0.09 + Math.sin(this.time * 1.2) * 0.03;
+      const lean = !this.capeAnim ? (walking ? 0.3 : 0.09) : walking ? 0.28 + Math.abs(Math.sin(this.time * 6)) * 0.22 : 0.09 + Math.sin(this.time * 1.2) * 0.03;
       let m = translate(root, 0, bob, 0);
       m = translate(m, 0, 24, -2.5);
       m = rotateX(m, lean);

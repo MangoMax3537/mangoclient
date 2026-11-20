@@ -14,7 +14,7 @@
 </SkeletonRegion>
 
 <style>
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; border: 1px solid var(--line); overflow: hidden; }
   .tiles > div { padding: 12px 16px; background: var(--ink-1); border-right: 1px solid var(--line-soft); }
   .tiles > div:last-child { border-right: 0; }
   .v { display: block; margin-top: 4px; }

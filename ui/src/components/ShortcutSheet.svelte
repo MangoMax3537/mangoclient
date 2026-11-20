@@ -9,9 +9,9 @@
 
 <Modal title={t('keys.title')} size="lg" {onclose}>
   <div class="sheet">
-    {#each SHORTCUT_GROUPS as g (g.title)}
-      <section aria-labelledby="kg-{g.title}">
-        <h3 id="kg-{g.title}" class="eyebrow">{t(g.title)}</h3>
+    {#each SHORTCUT_GROUPS as g (g.id)}
+      <section aria-labelledby="kg-{g.id}">
+        <h3 id="kg-{g.id}" class="eyebrow">{t(g.title)}</h3>
         <dl>
           {#each g.items as it (it.id)}
             <div class="row">
@@ -44,7 +44,7 @@
   .or { color: var(--paper-mute); font-size: var(--fs-xs); }
   kbd {
     display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 7px; font: 500 12px var(--font-mono); color: var(--paper);
-    background: var(--ink-3); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r-s);
-  }
+    background: var(--ink-3); border: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--line); 
+ }
   .note { margin: 0; }
 </style>

@@ -48,7 +48,7 @@
     </EmptyState>
   {:else}
   {#if data}
-    <dl class="tiles">
+    <dl class="tiles nb" style:--n="16px" style:--fill="var(--ink-1)">
       <div><dt>{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
       <div><dt>{t('stats.sessions')}</dt><dd class="mono">{data.sessions}</dd></div>
       <div><dt>{t('stats.longest')}</dt><dd class="mono">{fmtDuration(data.longestMs)}</dd></div>
@@ -98,7 +98,7 @@
           <li>
             <InstanceIcon profile={prof} id={p.profileId} size={36} radius={6} />
             <div class="nm"><b>{p.name}</b><span class="hint mono">{t('stats.sessionsN', { n: p.sessions })}</span></div>
-            <div class="meter" role="presentation"><span style:transform="scaleX({top && top.ms ? p.ms / top.ms : 0})"></span></div>
+            <div class="meter step-end" role="presentation"><span style:transform="scaleX({top && top.ms ? p.ms / top.ms : 0})"></span></div>
             <span class="mono val">{fmtDuration(p.ms)}</span>
             <span class="mono pct">{data.totalMs ? Math.round((p.ms / data.totalMs) * 100) : 0}%</span>
           </li>
@@ -113,19 +113,19 @@
   .st { height: 100%; overflow: auto; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: var(--fs-3xl); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; padding: 1px; overflow: hidden; }
   .tiles > div { padding: 12px 16px; background: var(--ink-1); border-right: 1px solid var(--line-soft); }
   .tiles > div:last-child { border-right: 0; }
   dt { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
   dd { margin: 4px 0 0; font-size: 18px; }
   .big { color: var(--mango); font-size: 22px; }
   h2 { margin-bottom: 8px; }
-  .chart { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 180px 22px 18px; column-gap: 8px; padding: 14px 14px 8px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .chart { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 180px 22px 18px; column-gap: 8px; padding: 14px 14px 8px; background: var(--ink-1); border: 1px solid var(--line); }
   .axis { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-size: 12px; color: var(--paper-mute); }
   .bars { display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--line); background: linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 50%; }
   .col { flex: 1; min-width: 0; display: flex; align-items: flex-end; }
   .col:hover { background: rgba(255, 173, 50, 0.07); }
-  .bar { width: 100%; background: var(--accent-fill); border-radius: 2px 2px 0 0; min-height: 1px; }
+  .bar { width: 100%; background: var(--accent-fill); min-height: 1px; }
   .bar.zero { background: var(--ink-4); }
   .tip { grid-column: 2; font-size: 12.5px; color: var(--paper-dim); padding-top: 4px; }
   .xl { grid-column: 2; display: flex; justify-content: space-between; font-size: 12px; color: var(--paper-mute); }
@@ -134,7 +134,7 @@
   .nm { display: grid; line-height: 1.25; min-width: 0; }
   .nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nm .hint { font-size: 12px; }
-  .meter { height: 8px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
+  .meter { height: 8px; background: var(--ink-3); overflow: hidden; }
   .meter span { display: block; height: 100%; background: var(--accent-fill); transform-origin: left; }
   .val, .pct { text-align: right; font-size: 13.5px; }
   .pct { color: var(--paper-mute); }

@@ -132,7 +132,7 @@ export function createSkinsMock(ctx: SkinsMockCtx): { api: SkinsApi; init: () =>
     const online = a.type === 'microsoft';
     const capes: CapeInfo[] = online && !ctx.noCapes ? [0, 1, 2].map((i) => ({ id: `cape-${i}`, alias: CAPE_NAMES[i], url: `${capeUrls[i]}`, active: s.capeId === `cape-${i}` })) : [];
     const active = capes.find((c) => c.active);
-    return { skinUrl: s.skinUrl, capeUrl: active?.url ?? null, slim: s.slim, source: online ? 'account' : 'default', capes, canEdit: online };
+    return { skinUrl: s.skinUrl, capeUrl: active?.url ?? null, slim: s.slim, source: online ? 'account' : 'default', capes, canEdit: online, stale: false };
   };
   const editable = (uuid: string): PublicAccount => {
     const a = account(uuid);

@@ -132,6 +132,12 @@ export const ui = $state({
   shortcuts: false,
   /** Instance whose game the user asked to stop with the keyboard (a confirm is shown first). */
   confirmStop: null as string | null,
+  /** Instance whose rename dialog is open (Library, Home, rail menus; F2 on a page without a title to edit). */
+  rename: null as string | null,
+  /** The profile page edits its title in place for this instance. */
+  renameInline: null as string | null,
+  /** Instance whose delete confirmation is open (from a context menu). */
+  confirmDelete: null as string | null,
   /** UI preference (localStorage): Home crossfades through the background pool while the instance background is `auto`. */
   cycleBackgrounds: true,
 });
@@ -426,7 +432,7 @@ export function resetStores(): void {
   for (const k of Object.keys(consoles)) delete consoles[k];
   nav.view = 'home'; nav.newProfile = false; nav.newProfilePrefill = null; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
   nav.discoverProfile = null; nav.discoverType = 'mod'; nav.iconPicker = null; nav.backgroundPicker = null; nav.contentQuery = null;
-  navHistory.clear(); syncHist(); ui.shortcuts = false; ui.confirmStop = null;
+  navHistory.clear(); syncHist(); ui.shortcuts = false; ui.confirmStop = null; ui.rename = null; ui.renameInline = null; ui.confirmDelete = null;
   blocks.status = null; blocks.requested = false; panoramaAsked.clear(); panoramaPool.sets = []; panoramaPool.loaded = false;
   for (const k of Object.keys(skinRev)) delete skinRev[k];
   for (const k of Object.keys(panoramas)) delete panoramas[k];

@@ -34,7 +34,6 @@
 <span
   class="bt" class:notch={notch > 0} style:--n="{notch}px" style:--tint={tint}
   style:width={fill ? '100%' : `${size}px`} style:height={fill ? '100%' : `${size}px`}
-  style:border-radius={notch ? undefined : `${radius}px`}
   role={label ? 'img' : undefined} aria-label={label || undefined} aria-hidden={label ? undefined : 'true'}
 >
   {#if !ready}<span class="skel fill" aria-hidden="true"></span>{/if}
@@ -56,7 +55,7 @@
     background:
       radial-gradient(72% 62% at 50% 44%, color-mix(in srgb, var(--tint, var(--sky)) 26%, transparent), transparent 72%),
       color-mix(in srgb, var(--ink-3) 80%, var(--tint, var(--sky)));
-  }
+ }
   .fill { position: absolute; inset: 0; display: block; }
   .scene { opacity: 0; transition: opacity var(--dur) var(--ease); }
   .scene.ready { opacity: 1; }
@@ -67,7 +66,7 @@
   @supports (width: round(down, 1px, 1px)) {
     .scene { --a: round(nearest, calc(62cqmin * 0.57735), 1px); transform: none;
       left: round(down, calc(50cqw - var(--a) * 0.866025), 1px); top: round(down, calc(50cqh - var(--a) * 1.04), 1px); }
-  }
+ }
   .cube { position: absolute; inset: 0; transition: transform var(--dur) var(--ease); }
   /* Backing silhouette under the three faces, in a neutral that belongs to the surface (not black): whatever anti-aliasing leaves between
      two faces shows this instead of a dark hairline. */
@@ -90,7 +89,7 @@
     position: absolute; left: -6%; width: 112%; top: calc(var(--a) * 1.5); height: calc(var(--a) * 0.7);
     background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18) 62%, transparent);
     transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
-  }
+ }
   .bt:hover .cube, :global(:is(button, .card, li):hover) .bt .cube { transform: translateY(-6cqmin); }
   .bt:hover .shadow, :global(:is(button, .card, li):hover) .bt .shadow { transform: scale(0.88); opacity: 0.7; }
   @media (prefers-reduced-motion: reduce) { .cube, .shadow { transition: none; } }

@@ -14,7 +14,7 @@
 
 <style>
   .body { margin-top: 16px; }
-  .big { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); }
+  .big { display: block; width: 100%; aspect-ratio: 16 / 9; }
   .thumbs { display: flex; gap: 6px; margin-top: 8px; }
   .p { display: grid; margin-top: 14px; }
 </style>

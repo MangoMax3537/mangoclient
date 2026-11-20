@@ -47,16 +47,16 @@
 
 <style>
   .msg { margin: 0 0 8px; color: var(--paper-dim); }
-  .facts { margin: 6px 0 10px; display: grid; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .facts { margin: 6px 0 10px; display: grid; border: 1px solid var(--line); }
   .facts div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); }
   .facts div:last-child { border-bottom: 0; }
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
-  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 14px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
+  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 14px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; color: var(--tomato); }
-  .chk { display: flex; gap: 10px; align-items: flex-start; cursor: default; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .chk { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); }
   .chk input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
   .chk span { display: grid; gap: 2px; }
   .b { margin-top: 14px; }
-  .err { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
+  .err { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
 </style>

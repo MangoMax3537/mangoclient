@@ -117,7 +117,7 @@
   .ram.off { opacity: 0.6; }
   .top { display: flex; align-items: baseline; gap: 12px; }
   .now { font-size: 22px; font-weight: 500; color: var(--mango); font-family: var(--font-mono); }
-  .src { font-size: 12px; font-weight: 600; padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--r-s); color: var(--paper-dim); }
+  .src { font-size: 12px; font-weight: 600; padding: 2px 8px; border: 1px solid var(--line); color: var(--paper-dim); }
   .src.s-modpack { border-color: var(--leaf); color: var(--leaf); }
   .src.s-user { border-color: var(--mango); color: var(--mango); }
   .trackrow { display: flex; align-items: flex-start; gap: 16px; }
@@ -136,10 +136,10 @@
   .unit { color: var(--paper-mute); font-size: 13px; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; list-style: none; margin: 0; padding: 0; font-size: 12.5px; color: var(--paper-dim); }
   .legend li { display: inline-flex; align-items: center; gap: 6px; }
-  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+  .sw { display: inline-block; width: 10px; height: 10px; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; }
   .warns { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .warns li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: var(--ink-1); font-size: 13.5px; line-height: 1.4; }
+  .warns li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); background: var(--ink-1); font-size: 13.5px; line-height: 1.4; }
   .warns li :global(svg) { flex: none; margin-top: 1px; color: var(--mango); }
   .warns li.w-cap, .warns li.w-min { border-color: var(--tomato); }
   .warns li.w-cap :global(svg), .warns li.w-min :global(svg) { color: var(--tomato); }

@@ -88,7 +88,7 @@
 
 <style>
   .lead { margin: 0 0 10px; }
-  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); }
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 20px; gap: 12px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .row:last-child { border-bottom: 0; }
   .row.off .t { opacity: 0.5; }

@@ -82,7 +82,7 @@
     position: absolute; left: 50%; top: 50%; width: calc(var(--p) * 2); height: calc(var(--p) * 2); margin: calc(var(--p) * -1) 0 0 calc(var(--p) * -1);
     transform-style: preserve-3d; transform: translateZ(var(--p)) rotateX(-5deg) rotateY(var(--a0));
     animation: spin var(--dur) linear infinite; animation-delay: calc(var(--d) * 1s); will-change: transform;
-  }
+ }
   .cube.paused { animation-play-state: paused; }
   .face { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; backface-visibility: hidden; }
   .front { transform: translateZ(calc(var(--p) * -1)) scale(1.003); }
@@ -101,5 +101,5 @@
   @media (prefers-reduced-motion: reduce) {
     .cube { animation: none; }
     .art, .mark { animation: none; }
-  }
+ }
 </style>

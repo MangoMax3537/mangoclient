@@ -45,15 +45,15 @@
 
 <style>
   .msg { margin: 0 0 8px; color: var(--paper-dim); }
-  .facts { margin: 6px 0 10px; display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .facts { margin: 6px 0 10px; display: grid; gap: 0; border: 1px solid var(--line); }
   .facts div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); }
   .facts div:last-child { border-bottom: 0; }
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
-  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
+  .warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); font-size: var(--fs-sm); }
   .warn :global(svg) { flex: none; margin-top: 2px; color: var(--tomato); }
   .note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; }
   .note :global(svg) { flex: none; margin-top: 3px; color: var(--paper-mute); }
   .items { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
-  .items li { padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--ink-3); font-size: 13px; }
+  .items li { padding: 3px 9px; border: 1px solid var(--line); background: var(--ink-3); font-size: 13px; }
 </style>

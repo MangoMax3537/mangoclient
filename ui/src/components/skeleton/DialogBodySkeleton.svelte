@@ -9,5 +9,5 @@
 </div>
 
 <style>
-  .fr { border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--ink-2); }
+  .fr { border: 1px solid var(--line); overflow: hidden; background: var(--ink-2); }
 </style>

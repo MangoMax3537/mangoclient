@@ -30,7 +30,7 @@
           <span class="t">
             <b>{run.kind === 'update' ? j.title : (prof(j.profileId)?.name ?? run.title)}</b>
             {#if j.status === 'running'}
-              <span class="bar" role="progressbar" aria-label={run.title} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct(j.projectId)}><span style:transform="scaleX({pct(j.projectId) / 100})"></span></span>
+              <span class="bar step-end" role="progressbar" aria-label={run.title} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct(j.projectId)}><span style:transform="scaleX({pct(j.projectId) / 100})"></span></span>
               <span class="hint mono">{label(j.projectId)}</span>
             {:else if j.status === 'error'}
               <span class="err">{errorText({ code: j.error ?? 'unknown' })}</span>
@@ -64,7 +64,7 @@
 {/if}
 
 <style>
-  .jobs { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .jobs { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); }
   .job { display: grid; grid-template-columns: auto minmax(0, 1fr) 24px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .job:last-child { border-bottom: 0; }
   .t { display: grid; gap: 4px; min-width: 0; }
@@ -76,7 +76,7 @@
   .error .st { color: var(--tomato); }
   .running .st { color: var(--mango); }
   .queued { opacity: 0.7; }
-  .sum { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--leaf) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--leaf) 10%, transparent); }
+  .sum { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--leaf) 45%, transparent); background: color-mix(in srgb, var(--leaf) 10%, transparent); }
   .sum.bad { border-color: var(--tomato); background: color-mix(in srgb, var(--tomato) 10%, transparent); }
   .bg { margin: 12px 0 0; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }

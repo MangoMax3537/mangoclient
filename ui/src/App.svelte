@@ -8,14 +8,17 @@
   import Library from './components/Library.svelte';
   import ProfilePage from './components/ProfilePage.svelte';
   import Toasts from './components/Toasts.svelte';
+  import ContextMenu from './components/ContextMenu.svelte';
   import Lazy from './components/Lazy.svelte';
   import { BusyGate } from './lib/loadState.svelte';
   import DropHint from './components/DropHint.svelte';
   import { dialogs, screens, skeletons } from './lib/lazy';
   import { pf, watchDrops } from './lib/portability.svelte';
-  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, t, ui, updates } from './lib/stores.svelte';
+  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, t, toast, ui, updates, lang } from './lib/stores.svelte';
   import { inTauri, kind } from './lib/api';
   import { installShortcuts } from './lib/shortcutActions';
+  import { installNativeMenuGuard } from './lib/contextMenu.svelte';
+  import { fmtDuration, fmtRelative } from './lib/format';
   import { enter } from './lib/motion';
 
   // Dev: `?view=library|discover|servers|stats|settings` opens that view at start (used to look at the skeletons).
@@ -30,8 +33,9 @@
     initTheme();
     void init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); });
     const off = installShortcuts();
+    const noNative = installNativeMenuGuard();
     const stop = watchDrops({ tauri: inTauri(), mock: kind === 'mock' });
-    return () => { off(); stop(); };
+    return () => { off(); noNative(); stop(); };
   });
   $effect(() => { document.documentElement.dataset.shell = platform.mode; });
   const stopName = $derived(app.profiles.find((p) => p.id === ui.confirmStop)?.name ?? '');
@@ -40,6 +44,17 @@
     ui.confirmStop = null;
     if (id) await actions.stop(id);
   }
+  const delP = $derived(app.profiles.find((p) => p.id === ui.confirmDelete) ?? null);
+  let deleting = $state(false);
+  async function confirmDelete() {
+    const p = delP;
+    if (!p) return;
+    deleting = true;
+    try { await actions.deleteProfile(p.id); toast(t('psettings.deleted', { name: p.name }), 'ok'); ui.confirmDelete = null; }
+    catch (e) { toast(errorText(e), 'error'); }
+    deleting = false;
+  }
+  $effect(() => { if (ui.confirmDelete && !delP) ui.confirmDelete = null; });
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
 
@@ -88,7 +103,17 @@
   {#if ui.confirmStop}
     <ConfirmDialog danger title={t('keys.stopTitle', { name: stopName })} body={t('keys.stopBody')} confirmLabel={t('home.stop')} onconfirm={confirmStop} oncancel={() => (ui.confirmStop = null)} />
   {/if}
+  {#if ui.rename}<Lazy load={dialogs.renameDialog} props={{ id: ui.rename }} />{/if}
+  {#if delP}
+    <ConfirmDialog danger busy={deleting} title={t('psettings.confirmTitle', { name: delP.name })} body={t('psettings.confirmBody')}
+      facts={[
+        { label: t('psettings.lose.playtime'), value: fmtDuration(delP.playTimeMs) },
+        { label: t('psettings.lose.mods'), value: String(delP.modCount) },
+        { label: t('psettings.lose.last'), value: fmtRelative(delP.lastPlayed, lang()) ?? t('home.never') },
+      ]} warn={t('psettings.lose.warn')} confirmLabel={t('profile.delete')} onconfirm={confirmDelete} oncancel={() => (ui.confirmDelete = null)} />
+  {/if}
   {#if pf.dragging}<DropHint />{/if}
+  <ContextMenu />
   <ResizeBorders />
   <Toasts />
 </div>
@@ -98,5 +123,5 @@
   .body { flex: 1; display: flex; min-height: 0; }
   main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); }
   .view { height: 100%; min-height: 0; }
-  .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); border-radius: var(--r-m); color: var(--paper); }
+  .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); color: var(--paper); }
 </style>

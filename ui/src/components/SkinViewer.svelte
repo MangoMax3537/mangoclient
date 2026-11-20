@@ -12,13 +12,15 @@
     capeUrl?: string | null;
     slim: boolean;
     pose?: Pose;
+    /** The cape sways (default) or hangs still. */
+    capeAnim?: boolean;
     label: string;
     /** `loading` until the skin is on screen; `gl` / `flat` afterwards; `error` when the skin image could not be loaded. */
     mode?: 'loading' | 'gl' | 'flat' | 'error';
     /** Which texture path delivered the skin (diagnostics / the report). */
     path?: TexPath | null;
   }
-  let { skinUrl, capeUrl = null, slim, pose = 'idle', label, mode = $bindable('loading'), path = $bindable(null) }: Props = $props();
+  let { skinUrl, capeUrl = null, slim, pose = 'idle', capeAnim = true, label, mode = $bindable('loading'), path = $bindable(null) }: Props = $props();
 
   let glCanvas: HTMLCanvasElement | undefined = $state();
   let front: HTMLCanvasElement | undefined = $state();
@@ -77,6 +79,9 @@
   });
   $effect(() => { renderer?.setSlim(slim); });
   $effect(() => { renderer?.setPose(pose); });
+  $effect(() => { renderer?.setCapeAnim(capeAnim); });
+  /** Back to the start angle (the toolbar button next to the box). */
+  export function resetView(): void { renderer?.resetView(); }
   // leaving GL: free the context
   $effect(() => { if (!useGl && renderer) { renderer.destroy(); renderer = null; } });
 
@@ -110,7 +115,7 @@
   .viewer { position: relative; width: 100%; height: 100%; min-height: 0; }
   .gl { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity var(--dur) var(--ease); outline-offset: -4px; }
   .gl.ready { opacity: 1; }
-  .wait { position: absolute; left: 50%; top: 8%; bottom: 8%; width: min(34%, 150px); transform: translateX(-50%); border-radius: var(--r-m); }
+  .wait { position: absolute; left: 50%; top: 8%; bottom: 8%; width: min(34%, 150px); transform: translateX(-50%); }
   .figures { display: flex; gap: 6%; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4% 5% 14%; }
   .fig { width: 45%; max-height: 100%; height: auto; aspect-ratio: 1 / 2; image-rendering: pixelated; min-width: 0; object-fit: contain; }
 </style>

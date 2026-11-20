@@ -45,11 +45,11 @@
 
 <style>
   .res { display: grid; gap: 10px; }
-  .hd { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); background: color-mix(in srgb, var(--leaf) 8%, transparent); border-radius: var(--r-m); }
+  .hd { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); background: color-mix(in srgb, var(--leaf) 8%, transparent); }
   .hd > :global(svg) { flex: none; color: var(--leaf); margin-top: 2px; }
   .tx { display: grid; gap: 2px; min-width: 0; flex: 1; }
   .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); color: var(--paper-dim); }
-  .warn { border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
+  .warn { border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
   .tog { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; text-align: left; }
   .tog :global(svg:first-child) { color: var(--mango); }
   .tog b { flex: 1; }

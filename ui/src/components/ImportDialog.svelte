@@ -67,7 +67,7 @@
 
       {#if importing}
         <div class="prog" role="status">
-          <span class="bar" role="progressbar" aria-label={t('import.progress', { name: name.trim() })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style:transform="scaleX({pct / 100})"></span></span>
+          <span class="bar step-end" role="progressbar" aria-label={t('import.progress', { name: name.trim() })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style:transform="scaleX({pct / 100})"></span></span>
           <span class="hint mono">{pct}%</span>
         </div>
         <p class="hint">{t('flow.run.background')}</p>
@@ -103,14 +103,14 @@
   .kind.prism { border-color: var(--sky); }
   .lbl { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--paper-dim); margin-bottom: 4px; }
   .field { width: 100%; }
-  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 14px 0 0; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 14px 0 0; border: 1px solid var(--line); }
   .facts div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); min-height: 40px; }
   .facts div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
   .facts div:nth-last-child(-n + 2) { border-bottom: 0; }
   dt { color: var(--paper-dim); }
   dd { margin: 0; }
   .creates { margin: 12px 0 0; }
-  .box { margin: 14px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
+  .box { margin: 14px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
   :global(.skl-imp) { display: grid; gap: 10px; align-content: start; min-height: 220px; }
   .ln { height: 14px; width: 60%; }
   .prog { display: flex; align-items: center; gap: 12px; margin-top: 14px; }

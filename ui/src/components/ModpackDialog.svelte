@@ -68,7 +68,7 @@
 
     {#if run}
       <div class="prog" role="status">
-        <span class="bar" role="progressbar" aria-label={t('flow.pack.installing')} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style:transform="scaleX({pct / 100})"></span></span>
+        <span class="bar step-end" role="progressbar" aria-label={t('flow.pack.installing')} aria-valuemin="0" aria-valuemax="100" aria-valuenow={pct}><span style:transform="scaleX({pct / 100})"></span></span>
         <span class="hint mono">{pct}%</span>
       </div>
       <p class="hint">{t('flow.run.background')}</p>
@@ -88,7 +88,7 @@
   h3 { font-size: var(--fs-xl); }
   .lbl { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--paper-dim); margin-bottom: 4px; }
   .field { width: 100%; }
-  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 14px 0 0; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 14px 0 0; border: 1px solid var(--line); }
   .facts div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
   .facts div:nth-child(odd) { border-right: 1px solid var(--line-soft); }
   .facts div:nth-last-child(-n + 2) { border-bottom: 0; }

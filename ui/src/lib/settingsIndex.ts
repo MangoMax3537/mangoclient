@@ -2,6 +2,7 @@
 // synonyms ("meta keywords") the search also matches, and the id of the row element it scrolls to and focuses (`set-<id>`, set by SettingRow).
 // Aliases are search data, not UI text, so they are not translated and may mix German and English on purpose.
 import type { Key } from './i18n';
+import { SHORTCUT_ALIASES, SHORTCUT_GROUPS, comboText } from './keybinds';
 
 export type SettingsScope = 'app' | 'instance';
 export interface SectionDef { id: string; scope: SettingsScope; label: Key }
@@ -22,6 +23,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: 'accounts', scope: 'app', label: 'nav.accounts' },
   { id: 'game', scope: 'app', label: 'settings.group.game' },
   { id: 'backups', scope: 'app', label: 'settings.group.backups' },
+  { id: 'keys', scope: 'app', label: 'keys.sectionLabel' },
   { id: 'storage', scope: 'app', label: 'storage.title' },
   { id: 'updates', scope: 'app', label: 'update.title' },
   { id: 'general', scope: 'instance', label: 'psettings.group.general' },
@@ -31,6 +33,10 @@ export const SECTIONS: readonly SectionDef[] = [
 
 const e = (scope: SettingsScope, section: string, id: string, label: Key, aliases: string[], desc?: Key): SettingEntry =>
   ({ id, scope, section, label, aliases, target: `set-${id}`, ...(desc ? { desc } : {}) });
+
+/** One entry per shortcut, from the same data as the shortcut sheet; found by its name, its key combination and the words tastenkürzel / shortcut / hotkey / keybinds / tastatur / keyboard. */
+const SHORTCUT_ENTRIES: SettingEntry[] = SHORTCUT_GROUPS.flatMap((g) => g.items.map((it) =>
+  e('app', 'keys', `key-${g.id}-${it.id}`, it.label, [...SHORTCUT_ALIASES, ...(it.aliases ?? []), ...it.keys(false).map((c) => comboText(c, false)), ...it.keys(true).map((c) => comboText(c, true))])));
 
 export const SETTINGS_INDEX: readonly SettingEntry[] = [
   /* ---- launcher settings ---- */
@@ -46,6 +52,7 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   e('app', 'game', 'windowSize', 'settings.windowSize', ['resolution', 'auflösung', 'size', 'größe', 'width', 'height', 'breite', 'höhe', 'fenster', 'window', 'pixel'], 'settings.windowSizeHint'),
   e('app', 'backups', 'autoSnapshot', 'settings.autoSnapshot', ['backup', 'snapshot', 'sicherung', 'restore', 'wiederherstellen', 'rollback', 'zurück'], 'settings.autoSnapshotHint'),
   e('app', 'backups', 'backupKeep', 'settings.backupKeep', ['backup', 'backups', 'sicherung', 'keep', 'behalten', 'aufbewahren', 'anzahl', 'rotation'], 'settings.backupKeepHint'),
+  ...SHORTCUT_ENTRIES,
   e('app', 'storage', 'storage', 'storage.title', ['storage', 'speicherplatz', 'cache', 'festplatte', 'disk', 'aufräumen', 'cleanup', 'clean', 'platz', 'größe', 'leeren']),
   e('app', 'updates', 'updates', 'update.title', ['update', 'updates', 'aktualisieren', 'aktualisierung', 'version', 'release', 'upgrade', 'neue version', 'check', 'suchen']),
 

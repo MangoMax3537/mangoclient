@@ -161,28 +161,28 @@
   .meta .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 22px; }
   .sum { margin: 6px 0 0; font-size: var(--fs-lg); line-height: 1.4; }
   .causes { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
-  .cause { padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); display: grid; gap: 8px; }
+  .cause { padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); display: grid; gap: 8px; }
   .cause.high { border-color: var(--tomato); }
   .cause.medium { border-color: var(--mango); }
   .ch { display: flex; align-items: center; gap: 10px; }
-  .rank { flex: none; width: 24px; height: 24px; display: grid; place-items: center; background: var(--ink-4); color: var(--paper); font-weight: 700; font-size: var(--fs-sm); border-radius: var(--r-s); }
+  .rank { flex: none; width: 24px; height: 24px; display: grid; place-items: center; background: var(--ink-4); color: var(--paper); font-weight: 700; font-size: var(--fs-sm); }
   h4 { flex: 1; font: 700 var(--fs-lg) var(--font-display); min-width: 0; }
   .conf { flex: none; }
   .detail { margin: 0; color: var(--paper-dim); }
-  .quote { margin: 0; padding: 6px 10px; background: var(--ink-2); border-radius: var(--r-s); font-size: var(--fs-sm); color: var(--paper-dim); word-break: break-word; }
+  .quote { margin: 0; padding: 6px 10px; background: var(--ink-2); font-size: var(--fs-sm); color: var(--paper-dim); word-break: break-word; }
   .tips { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-  .tips label { display: flex; align-items: flex-start; gap: 10px; cursor: default; padding: 4px 0; }
+  .tips label { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; }
   .tips input { margin-top: 3px; width: 16px; height: 16px; flex: none; }
   .tips .done { color: var(--paper-mute); text-decoration: line-through; }
   .mods { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .modbtn { cursor: default; color: var(--paper); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+  .modbtn { color: var(--paper); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
   .modbtn:hover { border-color: var(--accent-fill); background: var(--ink-3); }
   .tog { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--paper-dim); height: 32px; }
   .tog:hover { color: var(--paper); }
-  .ex { margin: 6px 0 0; padding: 10px 12px; max-height: 260px; overflow: auto; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; user-select: text; }
-  .box { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
+  .ex { margin: 6px 0 0; padding: 10px 12px; max-height: 260px; overflow: auto; background: var(--ink-1); border: 1px solid var(--line); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; user-select: text; }
+  .box { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
   :global(.skl-crash) { display: grid; gap: 12px; }
-  .res { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); border-radius: var(--r-m); }
+  .res { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, var(--line)); }
   .res .field { flex: 1; height: 32px; }
   .grow { margin-right: auto; }
 </style>

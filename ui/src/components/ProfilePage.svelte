@@ -15,6 +15,9 @@
   import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
   import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import { tip } from '../lib/tooltip';
+  import { contextmenu } from '../lib/contextMenu.svelte';
+  import { pageMenu } from '../lib/instanceMenu';
+  import { checkName, problemKey } from '../lib/rename';
   import { enter } from '../lib/motion';
   import { rememberScroll } from '../lib/scrollMemory';
   import NoAccountHint from './NoAccountHint.svelte';
@@ -23,7 +26,7 @@
   import { untrack } from 'svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { CONTENT_TAB_TYPE, effectiveTab, isContentTab, profileTabs } from '../lib/profileTabs';
-  import { actions, app, contentRev, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, t, type ProfileTab } from '../lib/stores.svelte';
+  import { actions, app, contentRev, errorText, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, t, toast, ui, type ProfileTab } from '../lib/stores.svelte';
   import type { ContentItem, ContentType, UpdateInfo } from '../lib/types';
 
   let { id }: { id: string } = $props();
@@ -59,6 +62,32 @@
     return { value: k, label: t(`profile.tab.${k}` as Key), ...(ty && items && counts[ty] > 0 ? { count: counts[ty] } : {}) };
   }));
 
+  /* inline rename of the title: double click, F2 or the menu; Enter saves, Esc cancels, the problem shows under the field */
+  let draft = $state('');
+  let nameInput: HTMLInputElement | undefined = $state();
+  let renameErr = $state('');
+  let saving = false;
+  const editing = $derived(!!p && ui.renameInline === p.id);
+  $effect(() => {
+    if (editing && p) { draft = p.name; renameErr = ''; queueMicrotask(() => { nameInput?.focus(); nameInput?.select(); }); }
+  });
+  const stopRename = () => { ui.renameInline = null; renameErr = ''; };
+  async function commitRename() {
+    if (!p || saving || ui.renameInline !== p.id) return;
+    const c = checkName(draft);
+    if (!c.ok) { renameErr = t(problemKey(c.problem)); return; }
+    if (c.name === p.name) { stopRename(); return; }
+    saving = true;
+    try { await actions.updateProfile(p.id, { name: c.name }); toast(t('rename.done', { name: c.name }), 'ok', 2500); stopRename(); }
+    catch (e) { renameErr = errorText(e); }
+    saving = false;
+  }
+  function renameKey(e: KeyboardEvent) {
+    if (e.isComposing) return;
+    if (e.key === 'Enter') { e.preventDefault(); void commitRename(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); stopRename(); }
+  }
+
   $effect(() => { if (!p && app.ready) { nav.view = 'library'; } });
   function toggle() {
     if (!p) return;
@@ -75,14 +104,14 @@
 
 {#if p}
   <div class="page">
-    <section class="hero on-stage">
+    <section class="hero on-stage notch" style:--n="18px" use:contextmenu={() => pageMenu(p)}>
       <PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />
       <div class="inner">
         <div class="top">
           <button class="btn ghost back" type="button" onclick={() => (nav.view = 'library')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('nav.library')}</button>
           <div class="tools">
             <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
-            <ProfileMoreMenu profileId={p.id} name={p.name} />
+            <ProfileMoreMenu profile={p} />
           </div>
         </div>
         <div class="row">
@@ -91,7 +120,15 @@
             <span class="pen" aria-hidden="true"><PencilSimpleIcon weight="bold" size={12} /></span>
           </button>
           <div class="id">
-            <h1>{p.name}</h1>
+            {#if editing}
+              <div class="rn">
+                <input bind:this={nameInput} class="field rn-in" type="text" bind:value={draft} maxlength="256" spellcheck="false" autocomplete="off" aria-label={t('rename.inline', { name: p.name })}
+                  aria-invalid={renameErr ? 'true' : undefined} onkeydown={renameKey} oninput={() => (renameErr = '')} onblur={() => void commitRename().then(() => { if (renameErr) stopRename(); })} />
+                {#if renameErr}<div class="err" role="alert">{renameErr}</div>{/if}
+              </div>
+            {:else}
+              <h1 title={t('rename.hint')} ondblclick={() => (ui.renameInline = p.id)}>{p.name}</h1>
+            {/if}
             <ul class="chips" aria-label={p.name}>
               <li class="chip mono"><CubeIcon weight="bold" size={14} aria-hidden="true" />{p.mcVersion}</li>
               <li class="chip">{loaderLabel}</li>
@@ -129,7 +166,7 @@
   .page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 16px 20px 0; gap: 12px; }
   /* The hero is the same on every tab: back/tools row on top, identity and Play below. Nothing is positioned absolutely, so nothing can overlap,
      and the Play column wraps under the identity when the window is narrow. */
-  .hero { position: relative; flex: none; border-radius: var(--r-l); overflow: hidden; border: 1px solid var(--line); display: flex; }
+  .hero { position: relative; flex: none; overflow: hidden; display: flex; }
   .inner { position: relative; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 10px 20px 18px 28px; }
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .back { height: 28px; margin-left: -10px; }
@@ -138,10 +175,12 @@
   .row { display: flex; align-items: flex-end; gap: 16px 20px; flex-wrap: wrap; min-width: 0; }
   .id { display: grid; gap: 10px; min-width: 0; flex: 1 1 320px; }
   .iconbtn { position: relative; flex: none; display: block; }
-  .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--r-s); }
-  .pen { position: absolute; right: 3px; bottom: 3px; width: 20px; height: 20px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+  .pen { position: absolute; right: 3px; bottom: 3px; width: 20px; height: 20px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   .iconbtn:hover .pen, .iconbtn:focus-visible .pen { opacity: 1; transform: none; }
   h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .rn { display: grid; gap: 4px; min-width: 0; }
+  .rn-in { height: 48px; font: 700 clamp(24px, 3.4vw, 36px)/1.05 var(--font-display); letter-spacing: -0.015em; color: var(--paper); background: rgba(var(--scrim), 0.6); border-color: var(--hero-line); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
   .playcol { display: grid; gap: var(--s-2); justify-items: end; flex: 0 1 auto; max-width: min(100%, 300px); }
   /* short windows (960x600): the same hero, a little tighter, so the tab content keeps its room */

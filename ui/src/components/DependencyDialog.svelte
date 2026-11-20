@@ -164,21 +164,20 @@
   .who .hint { margin-left: auto; }
   .to { margin: 0 0 8px; }
   .eyebrow { margin: 14px 0 4px; }
-  .deps { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .deps { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 34px; gap: 12px; align-items: center; padding: 8px 12px; }
-  .item.req { grid-template-columns: auto minmax(0, 1fr) auto; background: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .item.req { grid-template-columns: auto minmax(0, 1fr) auto; background: var(--ink-3); border: 1px solid var(--line); }
   .deps .item { border-bottom: 1px solid var(--line-soft); }
   .deps .item:last-child { border-bottom: 0; }
   .item.done { opacity: 0.6; }
-  .t { display: grid; gap: 1px; min-width: 0; cursor: default; }
+  .t { display: grid; gap: 1px; min-width: 0; }
   .t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .t .hint { font-size: var(--fs-xs); }
-  label.t { cursor: default; }
   .sz { font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; }
   .lock { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--paper-mute); }
   .lock input { width: 16px; height: 16px; margin: 0; }
   .item.done .lock { color: var(--leaf); }
-  .warn { display: flex; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
+  .warn { display: flex; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); background: color-mix(in srgb, var(--mango) 9%, transparent); font-size: var(--fs-sm); }
   .warn > :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
   .warn ul { margin: 4px 0; padding-left: 18px; }
   .tot { margin-right: auto; align-self: center; font-size: var(--fs-sm); color: var(--paper-dim); }

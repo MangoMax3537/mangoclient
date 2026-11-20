@@ -213,7 +213,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     dev: { ...portabilityMock.dev },
     async appState(): Promise<AppState> {
       return {
-        version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram) })), accounts: structuredClone(accounts),
+        version: '2.0.0', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram) })), accounts: structuredClone(accounts),
         totalRamMb: 16384, defaultRamMb: 4096, ramLimits: { minMb: 1024, maxMb: 14336, totalMb: 16384 }, running: [...running], rootDir: '~/.mangoclient',
       };
     },

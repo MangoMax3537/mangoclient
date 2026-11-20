@@ -13,6 +13,8 @@
   import LoadError from '../LoadError.svelte';
   import ScreenshotGridSkeleton from '../skeleton/ScreenshotGridSkeleton.svelte';
   import { createLoadState } from '../../lib/loadState.svelte';
+  import { contextmenu } from '../../lib/contextMenu.svelte';
+  import { screenshotMenu } from '../../lib/menus';
   import { wb } from '../../lib/worlds.svelte';
   import { fallbackImage } from '../../lib/fallbackImage';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
@@ -23,7 +25,6 @@
   let shots = $state<Screenshot[] | null>(null);
   const shotsLoad = createLoadState<Screenshot[]>({ isEmpty: () => false });
   let open = $state<number | null>(null);
-  let confirmDel = $state(false);
 
   $effect(() => {
     const id = profile.id;
@@ -41,26 +42,29 @@
     open = (open + d + shots.length) % shots.length;
   }
   function onKey(e: KeyboardEvent) {
-    if (open === null || confirmDel) return;
+    if (open === null || delName) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
   }
-  async function act(action: 'copy' | 'reveal') {
-    if (!cur) return;
-    try { await getApi().screenshotAction({ profileId: profile.id, name: cur.name, action }); toast(t(action === 'copy' ? 'media.copied' : 'media.revealed'), 'ok'); }
+  /** Copy / reveal a screenshot by name (lightbox button or context menu). */
+  async function actOn(name: string, action: 'copy' | 'reveal') {
+    try { await getApi().screenshotAction({ profileId: profile.id, name, action }); toast(t(action === 'copy' ? 'media.copied' : 'media.revealed'), 'ok'); }
     catch (e) { toast(errorText(e), 'error'); }
   }
+  const act = (action: 'copy' | 'reveal') => { if (cur) void actOn(cur.name, action); };
+  /** Name of the screenshot the delete confirmation is about. */
+  let delName = $state<string | null>(null);
   async function del() {
-    if (!cur || !shots) return;
-    const name = cur.name;
+    const name = delName;
+    if (!name || !shots) return;
     try {
       await getApi().screenshotAction({ profileId: profile.id, name, action: 'delete' });
       const i = open ?? 0;
       shots = shots.filter((s) => s.name !== name);
-      open = shots.length ? Math.min(i, shots.length - 1) : null;
+      open = open === null ? null : shots.length ? Math.min(i, shots.length - 1) : null;
       toast(t('media.deleted'), 'ok');
     } catch (e) { toast(errorText(e), 'error'); }
-    confirmDel = false;
+    delName = null;
   }
 </script>
 
@@ -85,7 +89,7 @@
     {:else if shots.length > 0}
     <ul class="grid">
       {#each shots as s, i (s.name)}
-        <li>
+        <li use:contextmenu={() => screenshotMenu(s, { open: () => (open = i), act: (a) => (a === 'delete' ? (delName = s.name) : void actOn(s.name, a)) })}>
           <button type="button" onclick={() => (open = i)} aria-label={t('media.open', { name: s.name })}>
             <Img src={s.url} lazy fallback={fallbackImage('world', s.name, 420)} />
             <span class="cap mono">{fmtDateTime(s.taken, lang())}</span>
@@ -110,26 +114,26 @@
     {#snippet footer()}
       <button class="btn" type="button" onclick={() => act('copy')}><CopyIcon weight="bold" size={16} aria-hidden="true" />{t('media.copy')}</button>
       <button class="btn" type="button" onclick={() => act('reveal')}><FolderOpenIcon weight="bold" size={16} aria-hidden="true" />{t('media.reveal')}</button>
-      <button class="btn danger" type="button" onclick={() => (confirmDel = true)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('media.delete')}</button>
+      <button class="btn danger" type="button" onclick={() => (delName = cur.name)}><TrashIcon weight="bold" size={16} aria-hidden="true" />{t('media.delete')}</button>
     {/snippet}
   </Modal>
 {/if}
-{#if confirmDel && cur}
-  <ConfirmDialog danger title={t('media.deleteTitle')} body={t('media.deleteBody', { name: cur.name })} confirmLabel={t('media.delete')} onconfirm={del} oncancel={() => (confirmDel = false)} />
+{#if delName}
+  <ConfirmDialog danger title={t('media.deleteTitle')} body={t('media.deleteBody', { name: delName })} confirmLabel={t('media.delete')} onconfirm={del} oncancel={() => (delName = null)} />
 {/if}
 
 <style>
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
-  .grid button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); background: var(--ink-2); }
+  .grid button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line); background: var(--ink-2); }
   .grid button :global(.im) { transition: transform 200ms var(--ease); }
   .grid button:hover :global(.im) { transform: scale(1.04); }
   .grid button:hover { border-color: var(--mango); }
   .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; font-size: 12px; color: var(--paper); background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), transparent); text-align: left; }
   .lb { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
-  .nav { height: 56px; border-radius: var(--r-m); display: grid; place-items: center; color: var(--paper-dim); }
+  .nav { height: 56px; display: grid; place-items: center; color: var(--paper-dim); }
   .nav:hover { background: var(--ink-3); color: var(--paper); }
   figure { margin: 0; display: grid; gap: 8px; justify-items: center; }
-  .shot { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 300px); border-radius: var(--r-s); background: var(--ink-1); overflow: hidden; }
+  .shot { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 300px); background: var(--ink-1); overflow: hidden; }
   figcaption { font-size: 12.5px; color: var(--paper-mute); }
 </style>

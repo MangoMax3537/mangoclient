@@ -44,6 +44,7 @@ export const dialogs = {
   reloginDialog: memo(() => import('../components/ReloginDialog.svelte')),
   updateOverlay: memo(() => import('../components/UpdateOverlay.svelte')),
   shortcutSheet: memo(() => import('../components/ShortcutSheet.svelte')),
+  renameDialog: memo(() => import('../components/RenameDialog.svelte')),
 } satisfies Record<string, Loader>;
 
 export const tabs = {

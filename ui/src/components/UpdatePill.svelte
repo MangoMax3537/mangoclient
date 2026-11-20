@@ -17,7 +17,7 @@
 {/if}
 
 <style>
-  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border-radius: 11px; border: 1px solid var(--line); color: var(--paper-dim); font-size: 12px; font-weight: 600; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border: 1px solid var(--line); color: var(--paper-dim); font-size: 12px; font-weight: 600; }
   .pill.ready { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); }
   .pill.ready:hover { background: #ffbd57; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }

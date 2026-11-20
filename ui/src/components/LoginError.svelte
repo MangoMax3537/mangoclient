@@ -23,7 +23,7 @@
 </div>
 
 <style>
-  .le { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--tomato); border-radius: var(--r-m); background: rgba(237, 102, 92, 0.08); color: var(--paper); text-align: left; font-size: 13.5px; line-height: 1.4; }
+  .le { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--tomato); background: rgba(237, 102, 92, 0.08); color: var(--paper); text-align: left; font-size: 13.5px; line-height: 1.4; }
   .le > :global(svg) { flex: none; color: var(--tomato); margin-top: 1px; }
   .txt { display: grid; gap: 3px; justify-items: start; min-width: 0; }
   .txt span { color: var(--paper-dim); }

@@ -38,5 +38,5 @@
   .flat.fill { width: 100%; height: auto; }
   canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity var(--dur) var(--ease); }
   canvas.ready { opacity: 1; }
-  .skel { position: absolute; inset: 0; border-radius: var(--r-s); }
+  .skel { position: absolute; inset: 0; }
 </style>

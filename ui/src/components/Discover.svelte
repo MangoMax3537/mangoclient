@@ -227,7 +227,7 @@
   .by { color: var(--paper-mute); font-size: var(--fs-sm); white-space: nowrap; }
   .desc { margin: 0; color: var(--paper-dim); font-size: var(--fs-sm); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .cats { display: flex; gap: 6px; flex-wrap: wrap; }
-  .tag { font-size: var(--fs-xs); padding: 1px 6px; border: 1px solid var(--line); border-radius: var(--r-s); color: var(--paper-dim); }
+  .tag { font-size: var(--fs-xs); padding: 1px 6px; border: 1px solid var(--line); color: var(--paper-dim); }
   .tag.inst { color: var(--leaf); border-color: color-mix(in srgb, var(--leaf) 45%, transparent); }
   .stats { display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--paper-dim); justify-items: end; }
   .stats span { display: inline-flex; align-items: center; gap: 5px; }

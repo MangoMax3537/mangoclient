@@ -19,7 +19,7 @@
 </SkeletonRegion>
 
 <style>
-  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
+  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); background: var(--ink-2); }
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .row:last-child { border-bottom: 0; }
   .t { display: grid; gap: 5px; min-width: 0; }
@@ -30,5 +30,5 @@
     .row { grid-template-columns: auto minmax(0, 1fr) auto; }
     .when { grid-column: 2; grid-row: 2; display: flex; gap: 12px; justify-items: start; }
     .acts { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
-  }
+ }
 </style>

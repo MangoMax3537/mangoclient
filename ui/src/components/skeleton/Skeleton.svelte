@@ -34,19 +34,16 @@
 {#if variant === 'card' || variant === 'row'}
   <div class="sk-{variant} {cls}" class:notch={notch > 0} style:--n="{notch}px" style:width={dim.w} style:height={dim.h} {style} aria-hidden="true">{@render children?.()}</div>
 {:else if lh && (variant === 'line' || variant === 'bar')}
-  <span class="sk-lh" style:height="{lh}px" style:width={dim.w} aria-hidden="true"><span class="skel sk-{variant} {cls}" style:width="100%" style:height={dim.h} style:border-radius={typeof radius === 'number' ? `${radius}px` : radius} {style}></span></span>
+  <span class="sk-lh" style:height="{lh}px" style:width={dim.w} aria-hidden="true"><span class="skel sk-{variant} {cls}" style:width="100%" style:height={dim.h} {style}></span></span>
 {:else}
   <span
-    class="skel sk-{variant} {cls}" class:notch={notch > 0} style:--n="{notch}px" style:width={dim.w} style:height={dim.h}
-    style:border-radius={notch > 0 ? undefined : typeof radius === 'number' ? `${radius}px` : radius} {style} aria-hidden="true"
+    class="skel sk-{variant} {cls}" class:notch={notch > 0} style:--n="{notch}px" style:width={dim.w} style:height={dim.h} {style} aria-hidden="true"
   ></span>
 {/if}
 
 <style>
   .sk-lh { display: flex; align-items: center; max-width: 100%; flex: none; }
-  .sk-line, .sk-bar, .sk-box, .sk-circle, .sk-avatar { display: block; flex: none; max-width: 100%; border-radius: var(--r-s); }
-  .sk-box { border-radius: var(--r-m); }
-  .sk-circle, .sk-avatar { border-radius: 50%; }
+  .sk-line, .sk-bar, .sk-box, .sk-circle, .sk-avatar { display: block; flex: none; max-width: 100%; }
   .sk-card { background: var(--ink-2); display: grid; gap: var(--s-3); }
   .sk-row { display: flex; align-items: center; gap: var(--s-3); }
 </style>

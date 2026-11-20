@@ -98,9 +98,9 @@
 </div>
 
 <style>
-  .pop { position: absolute; left: 60px; bottom: 0; z-index: 30; width: 360px; max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; box-sizing: border-box; padding: 14px; background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); text-align: left; }
+  .pop { position: absolute; left: 60px; bottom: 0; z-index: 30; width: 360px; max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; box-sizing: border-box; padding: 15px; text-align: left; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  li { display: grid; gap: 2px; padding-bottom: 6px; border-radius: var(--r-m); }
+  li { display: grid; gap: 2px; padding-bottom: 6px; }
   li.active { background: rgba(255, 173, 50, 0.08); }
   .line { display: flex; align-items: center; }
   .pick { flex: 1; min-width: 0; width: auto; height: auto; display: flex; align-items: center; gap: 10px; padding: 6px 8px; text-align: left; color: var(--paper); justify-content: flex-start; }
@@ -108,10 +108,10 @@
   .who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ic { width: 32px; height: 32px; padding: 0; justify-content: center; flex: none; }
   .badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 0 54px; }
-  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--ink-3); color: var(--paper-dim); font-size: 12px; font-weight: 500; line-height: 1; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border: 1px solid var(--line); background: var(--ink-3); color: var(--paper-dim); font-size: 12px; font-weight: 500; line-height: 1; }
   .badge.use { color: var(--mango); border-color: rgba(255, 173, 50, 0.4); }
   .badge.warn { color: var(--mango); border-color: rgba(255, 173, 50, 0.5); background: rgba(255, 173, 50, 0.08); }
-  button.badge.act { cursor: default; color: var(--mango-ink); background: var(--mango); border-color: var(--mango); font-weight: 700; }
+  button.badge.act { color: var(--mango-ink); background: var(--mango); border-color: var(--mango); font-weight: 700; }
   button.badge.act:hover:not(:disabled) { background: #ffbd57; }
   button.badge.act:disabled { opacity: 0.5; }
   .spin { display: inline-flex; animation: spin 1s linear infinite; }

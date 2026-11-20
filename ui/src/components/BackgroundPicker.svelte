@@ -180,7 +180,7 @@
 
 <style>
   .bp { display: grid; gap: 14px; }
-  .mini { position: relative; height: 148px; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); display: flex; align-items: flex-end; }
+  .mini { position: relative; height: 148px; overflow: hidden; border: 1px solid var(--line); display: flex; align-items: flex-end; }
   .mt { position: relative; display: grid; gap: 2px; padding: 12px 16px 12px 20px; color: var(--paper); }
   .mt b { font-size: var(--fs-2xl); }
   .mt .mono { font-size: var(--fs-sm); color: var(--paper-dim); }
@@ -189,13 +189,13 @@
   .panel p { margin: 0; }
   .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; grid-auto-rows: max-content; max-height: 250px; overflow-y: auto; overflow-x: hidden; padding: 6px; scroll-padding: 6px; align-content: start; }
   .ar { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; }
-  .th { position: relative; display: block; padding: 0; overflow: hidden; border-radius: var(--r-m); border: 2px solid transparent; background: var(--ink-3); }
+  .th { position: relative; display: block; padding: 0; overflow: hidden; border: 2px solid transparent; background: var(--ink-3); }
   .th:hover { border-color: var(--line); }
   .th.on { border-color: var(--accent-fill); }
   .th:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 4px; font-size: var(--fs-xs); text-align: left; color: #f4f1ea; background: linear-gradient(0deg, rgba(11, 12, 14, 0.8), transparent); }
-  .chk { position: absolute; right: 6px; top: 6px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); }
-  .sh { aspect-ratio: 16 / 9; border-radius: var(--r-m); display: block; }
+  .chk { position: absolute; right: 6px; top: 6px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); }
+  .sh { aspect-ratio: 16 / 9; display: block; }
   .chip { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-dim); font-size: var(--fs-sm); }
   .reset { margin-right: auto; }
   .look { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }

@@ -36,6 +36,6 @@
   .st { display: grid; gap: 2px; }
   .ln { display: flex; align-items: center; gap: 12px; }
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }
-  .card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px; background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px; background: var(--ink-2); border: 1px solid var(--line); }
   .info { min-width: 0; display: grid; gap: 2px; }
 </style>

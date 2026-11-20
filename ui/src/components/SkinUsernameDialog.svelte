@@ -74,8 +74,8 @@
   .body { display: grid; gap: 8px; }
   p { margin: 0; }
   .lbl { font-weight: 500; }
-  .keep { display: flex; align-items: flex-start; gap: 12px; margin-top: 6px; cursor: default; }
+  .keep { display: flex; align-items: flex-start; gap: 12px; margin-top: 6px; }
   .res { display: flex; gap: 12px; }
-  .fig { width: 84px; height: 168px; background: var(--ink-3); border-radius: var(--r-s); padding: 4px; }
+  .fig { width: 84px; height: 168px; background: var(--ink-3); padding: 4px; }
   .ok { color: var(--leaf); }
 </style>

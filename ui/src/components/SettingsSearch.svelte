@@ -83,9 +83,9 @@
   .box > :global(svg) { position: absolute; left: 12px; color: var(--paper-mute); pointer-events: none; }
   .field { width: 100%; padding-left: 36px; padding-right: 40px; }
   .ic { position: absolute; right: 4px; width: 30px; height: 30px; padding: 0; }
-  .res { list-style: none; margin: 0; padding: 4px; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
+  .res { list-style: none; margin: 0; padding: 4px; display: grid; gap: 2px; border: 1px solid var(--line); background: var(--ink-2); }
   .res li.on button { background: var(--ink-4); }
-  .res button { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'l c' 'm m'; gap: 0 12px; width: 100%; text-align: left; padding: 7px 10px; border-radius: var(--r-s); }
+  .res button { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'l c' 'm m'; gap: 0 12px; width: 100%; text-align: left; padding: 7px 10px; }
   .res button:hover { background: var(--ink-3); }
   .l { grid-area: l; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .c { grid-area: c; font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); align-self: center; }

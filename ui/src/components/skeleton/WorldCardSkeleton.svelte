@@ -23,7 +23,7 @@
 
 <style>
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
-  .card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
+  .card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; padding: 12px; border: 1px solid var(--line); background: var(--ink-2); }
   .info { display: grid; gap: 6px; min-width: 0; align-content: start; }
   .chips { display: flex; gap: 6px; }
   .acts { grid-column: 1 / -1; display: flex; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft); margin-top: 4px; }

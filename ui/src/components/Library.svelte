@@ -7,8 +7,6 @@
   import EmptyState from './EmptyState.svelte';
   import XIcon from 'phosphor-svelte/lib/XIcon';
   import DotsThreeIcon from 'phosphor-svelte/lib/DotsThreeIcon';
-  import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
-  import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
   import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
   import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
@@ -19,7 +17,10 @@
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
   import { writeLibraryLayout } from '../lib/layoutHint';
   import { pickAndImport } from '../lib/portability.svelte';
-  import { app, lang, openBackgroundPicker, openIconPicker, openProfile, nav, t, tp } from '../lib/stores.svelte';
+  import { cardHandlers } from '../lib/instanceCard';
+  import { instanceMenu } from '../lib/instanceMenu';
+  import { cm, contextmenu, openMenuFor } from '../lib/contextMenu.svelte';
+  import { actions, app, lang, openProfile, nav, selectedProfile, t, tp } from '../lib/stores.svelte';
   import type { ProfileView } from '../lib/types';
 
   let query = $state('');
@@ -50,14 +51,12 @@
     collapsed = { ...collapsed, [key]: !collapsed[key] };
     try { globalThis.localStorage?.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch { /* ignore */ }
   }
-  const open = (id: string) => openProfile(id);
-  let menu = $state<string | null>(null);
-  function pick(fn: (id: string) => void, id: string) { menu = null; fn(id); }
-  function onDoc(e: MouseEvent) { if (menu && !(e.target as Element | null)?.closest('.cm')) menu = null; }
-  function onKey(e: KeyboardEvent) { if (menu && e.key === 'Escape') menu = null; }
+  const selId = $derived(selectedProfile()?.id ?? null);
+  /** Single click selects (the Home instance), double click or Enter opens the page. */
+  const ops = { select: (id: string) => void actions.selectProfile(id), open: (id: string) => openProfile(id), isSelected: (id: string) => selectedProfile()?.id === id };
+  const hand = (id: string) => cardHandlers(id, ops);
 </script>
 
-<svelte:document onclick={onDoc} onkeydown={onKey} />
 <div class="lib">
   <header>
     <div>
@@ -145,8 +144,8 @@
 {/snippet}
 
 {#snippet card(p: ProfileView)}
-  <li class="cell">
-    <button class="card notch" style:--n="16px" type="button" onclick={() => open(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
+  <li class="cell" use:contextmenu={() => instanceMenu(p)}>
+    <button class="card notch" class:sel={p.id === selId} style:--n="16px" type="button" aria-pressed={p.id === selId} {...hand(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
       <span class="cover"><InstanceIcon profile={p} fill radius={0} /></span>
       <span class="info">
         <b>{p.name}</b>
@@ -156,21 +155,15 @@
       </span>
     </button>
     <div class="cm">
-      <button class="kebab" type="button" aria-haspopup="menu" aria-expanded={menu === p.id} aria-label={t('library.menu', { name: p.name })} onclick={() => (menu = menu === p.id ? null : p.id)}><DotsThreeIcon weight="bold" size={18} aria-hidden="true" /></button>
-      {#if menu === p.id}
-        <ul class="pop menu-list" role="menu" aria-label={t('library.menu', { name: p.name })}>
-          <li role="none"><button type="button" role="menuitem" onclick={() => pick(openIconPicker, p.id)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('icons.change')}</button></li>
-          <li role="none"><button type="button" role="menuitem" onclick={() => pick(openBackgroundPicker, p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('bg.change')}</button></li>
-          <li role="none"><button type="button" role="menuitem" onclick={() => pick((id) => openProfile(id, 'settings'), p.id)}><TagIcon weight="bold" size={16} aria-hidden="true" />{t('library.menu.group')}</button></li>
-        </ul>
-      {/if}
+      <button class="kebab" type="button" aria-haspopup="menu" aria-expanded={cm.open && cm.anchor?.dataset.menuFor === p.id} data-menu-for={p.id} aria-label={t('library.menu', { name: p.name })}
+        onclick={(e) => openMenuFor(e.currentTarget, instanceMenu(p), t('library.menu', { name: p.name }))}><DotsThreeIcon weight="bold" size={18} aria-hidden="true" /></button>
     </div>
   </li>
 {/snippet}
 
 {#snippet row(p: ProfileView)}
-  <li>
-    <button class="row" type="button" onclick={() => open(p.id)}>
+  <li use:contextmenu={() => instanceMenu(p)}>
+    <button class="row" class:sel={p.id === selId} type="button" aria-pressed={p.id === selId} {...hand(p.id)}>
       <InstanceIcon profile={p} size={36} notch={6} />
       <span class="nmc"><b class="nm">{p.name}</b>{@render tagChips(p, 4)}</span>
       <span class="mono">{p.mcVersion}</span>
@@ -192,7 +185,7 @@
   .gh button:hover { color: var(--paper); }
   .gh .gn { font: 700 var(--fs-lg) var(--font-display); color: var(--paper); }
   .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-  .tg { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-s); font-size: 11px; color: var(--paper-dim); }
+  .tg { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border: 1px solid var(--line); font-size: 11px; color: var(--paper-dim); }
   .nmc { display: grid; min-width: 0; }
   .nmc .tags { margin: 2px 0 0; }
   .bar { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; }
@@ -200,7 +193,7 @@
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
   .sort { display: flex; align-items: center; gap: var(--s-2); }
-  .seg { display: flex; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .seg { display: flex; border: 1px solid var(--line); overflow: hidden; }
   .seg button { width: 38px; height: 34px; display: grid; place-items: center; color: var(--paper-dim); position: relative; }
   .seg button:hover { color: var(--paper); background: var(--ink-3); }
   .seg button.on { background: var(--ink-4); color: var(--paper); }
@@ -210,12 +203,13 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: var(--s-4); }
   .cell { position: relative; display: grid; }
   .cm { position: absolute; right: 8px; top: 8px; z-index: 3; }
-  .kebab { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-s); background: rgba(11, 12, 14, 0.62); color: #f4f1ea; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .kebab { width: 30px; height: 30px; display: grid; place-items: center; background: rgba(11, 12, 14, 0.62); color: #f4f1ea; opacity: 0; transition: opacity var(--dur) var(--ease); }
   .cell:hover .kebab, .cell:focus-within .kebab, .kebab[aria-expanded='true'] { opacity: 1; }
   .kebab:hover { background: rgba(11, 12, 14, 0.85); }
-  .cm .pop { position: absolute; right: 0; top: 34px; min-width: 190px; }
   .card { display: grid; grid-template-rows: auto 1fr; width: 100%; text-align: left; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
+  .card.sel { box-shadow: inset 0 0 0 2px var(--accent-fill); }
+  .card.sel .info { background: color-mix(in srgb, var(--accent-fill) 9%, var(--ink-2)); }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 14px 14px; min-width: 0; }
@@ -226,6 +220,7 @@
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 64px 76px 124px 120px; gap: var(--s-3); align-items: center; width: 100%; padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); }
   button.row { transition: background var(--dur) var(--ease); }
   button.row:hover { background: var(--ink-2); }
+  button.row.sel { background: color-mix(in srgb, var(--accent-fill) 11%, var(--ink-1)); box-shadow: inset 3px 0 0 var(--accent-fill); }
   button.row:focus-visible { outline-offset: -2px; }
   .row.head { padding-inline: 8px; border-top: 1px solid var(--line); padding-block: 8px; font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; border-bottom: 1px solid var(--line); }
   .nm { font: 600 var(--fs-lg) var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

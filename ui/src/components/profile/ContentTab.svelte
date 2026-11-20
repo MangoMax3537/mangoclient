@@ -15,6 +15,8 @@
   import EmptyState from '../EmptyState.svelte';
   import LoadError from '../LoadError.svelte';
   import ListRowSkeleton from '../skeleton/ListRowSkeleton.svelte';
+  import { contextmenu } from '../../lib/contextMenu.svelte';
+  import { contentMenu } from '../../lib/menus';
   import type { Key } from '../../lib/i18n';
   import type { LoadState } from '../../lib/loadState.svelte';
   import { app, errorText, getApi, installs, nav, openDiscover, startInstall, t, toast, tp } from '../../lib/stores.svelte';
@@ -133,7 +135,7 @@
       <VirtualList separators items={shown} rowHeight={62} key={(i) => i.projectId} label={t(`content.type.${type}` as Key)}>
         {#snippet row(it)}
           {@const inst = installs[it.projectId]}
-          <div class="item" class:off={!it.enabled}>
+          <div class="item" class:off={!it.enabled} use:contextmenu={() => contentMenu(it, { toggle: (x, on) => askToggle(x, on), update: (x) => update(x), remove: (x) => askUninstall(x) })}>
             <Tile kind="mod" id={it.projectId} src={it.iconUrl} size={40} radius={6} />
             <div class="main">
               <div class="l1">
@@ -187,9 +189,9 @@
   .search { position: relative; flex: 1; min-width: 160px; }
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
-  .note { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; background: rgba(255, 173, 50, 0.08); border: 1px solid rgba(255, 173, 50, 0.3); border-radius: var(--r-m); color: var(--mango); }
+  .note { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; background: rgba(255, 173, 50, 0.08); border: 1px solid rgba(255, 173, 50, 0.3); color: var(--mango); }
   .note span { flex: 1; color: var(--paper); }
-  .list { flex: 1; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; min-height: 0; background: var(--ink-1); }
+  .list { flex: 1; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
   .item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 44px 36px; gap: 12px; align-items: center; height: 100%; padding: 0 10px 0 12px; }
   .item:hover { background: var(--ink-2); }
   .item.off .nm, .item.off .ver { opacity: 0.5; }
@@ -197,7 +199,7 @@
   .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ver { color: var(--paper-mute); font-size: 12.5px; white-space: nowrap; }
-  .tag { font-size: 11.5px; padding: 1px 6px; border-radius: var(--r-s); background: var(--ink-4); color: var(--paper-dim); white-space: nowrap; }
+  .tag { font-size: 11.5px; padding: 1px 6px; background: var(--ink-4); color: var(--paper-dim); white-space: nowrap; }
   .tag.dep { background: rgba(111, 168, 214, 0.16); color: #9cc4e6; }
   .l2 { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--paper-mute); font-size: 12.5px; overflow: hidden; }
   .rb { color: var(--paper-mute); }

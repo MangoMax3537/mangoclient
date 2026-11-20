@@ -41,7 +41,7 @@
               <button type="button" class="it" onclick={() => go(it)}>
                 <span class="k" aria-hidden="true">{#if it.kind === 'install'}<DownloadSimpleIcon weight="bold" size={16} />{:else}<PlayIcon weight="bold" size={16} />{/if}</span>
                 <span class="t"><b>{it.title}</b><span class="hint">{it.detail}</span></span>
-                {#if it.fraction !== null}<span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(it.fraction * 100)} aria-label={it.title}><span style:transform="scaleX({it.fraction})"></span></span>{/if}
+                {#if it.fraction !== null}<span class="bar step-end" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(it.fraction * 100)} aria-label={it.title}><span style:transform="scaleX({it.fraction})"></span></span>{/if}
               </button>
             </li>
           {/each}
@@ -53,15 +53,15 @@
 
 <style>
   .act { position: relative; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border-radius: 11px; border: 1px solid var(--line); color: var(--paper-dim); font-size: var(--fs-xs); font-weight: 600; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border: 1px solid var(--line); color: var(--paper-dim); font-size: var(--fs-xs); font-weight: 600; }
   .pill:hover { color: var(--paper); border-color: var(--paper-mute); }
   .pill.busy { color: var(--mango); border-color: color-mix(in srgb, var(--mango) 55%, transparent); }
   .ic { display: inline-flex; }
   .pulse { animation: pulse 1.4s ease-in-out infinite; }
-  .pop { position: absolute; z-index: 60; right: 0; top: 30px; width: 340px; padding: 12px; background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: var(--shadow-float); animation: pop-in var(--dur) var(--ease); }
+  .pop { position: absolute; z-index: 60; right: 0; top: 30px; width: 340px; padding: 13px; }
   .pop h2 { margin-bottom: 6px; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-  .it { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; padding: 8px; border-radius: var(--r-s); text-align: left; }
+  .it { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; padding: 8px; text-align: left; }
   .it:hover { background: var(--ink-4); }
   .k { color: var(--paper-dim); display: inline-flex; }
   .t { display: grid; min-width: 0; }

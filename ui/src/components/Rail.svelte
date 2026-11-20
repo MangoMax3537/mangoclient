@@ -12,6 +12,9 @@
   import Skeleton from './skeleton/Skeleton.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
   import { tip } from '../lib/tooltip';
+  import { cardHandlers } from '../lib/instanceCard';
+  import { instanceMenu } from '../lib/instanceMenu';
+  import { contextmenu } from '../lib/contextMenu.svelte';
   import { shortcutLabel, type ShortcutAction } from '../lib/keybinds';
   import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, platform, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
 
@@ -30,6 +33,7 @@
     { v: 'skins', a: 'skins', label: t('nav.skins'), icon: TShirtIcon, go: () => (nav.view = 'skins') },
     { v: 'stats', a: 'stats', label: t('nav.stats'), icon: ChartBarIcon, go: () => (nav.view = 'stats') },
   ] as { v: string; a: ShortcutAction; label: string; icon: typeof HouseIcon; go: () => void }[]);
+  const ops = { select: (id: string) => void actions.selectProfile(id), open: (id: string) => openProfile(id), isSelected: (id: string) => selectedProfile()?.id === id };
   const withKey = (label: string, a: ShortcutAction): string => `${label} (${shortcutLabel(a, platform.mac)})`;
 </script>
 
@@ -51,9 +55,8 @@
     {#each recent as p (p.id)}
       <!-- highlighted only where that instance is the subject: its own page, or Home while Home shows it. Never in Library, Discover, Servers, Stats, Settings. -->
       {@const sel = nav.view === 'profile' ? p.id === nav.profileId : nav.view === 'home' && p.id === selectedProfile()?.id}
-      <li class:sel class:on={nav.view === 'profile' && p.id === nav.profileId}>
-        <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined}
-          onclick={() => { actions.selectProfile(p.id); openProfile(p.id); }}>
+      <li class:sel class:picked={!sel && p.id === selectedProfile()?.id} class:on={nav.view === 'profile' && p.id === nav.profileId} use:contextmenu={() => instanceMenu(p)}>
+        <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined} {...cardHandlers(p.id, ops)}>
           <span class="ring notch" style:--n="9px"><InstanceIcon profile={p} size={40} notch={7} /></span>
         </button>
         {#if isBusy(p.id)}<span class="sq ok pulse" aria-hidden="true"></span><span class="sr-only">{t('home.running')}</span>{/if}
@@ -86,14 +89,15 @@
   button { position: relative; width: 44px; height: 44px; display: grid; place-items: center; color: var(--paper-dim); transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
   .nav { clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
   .nav:hover { background: var(--ink-3); color: var(--paper); }
-  .nav:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: 0; }
+  .nav:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
   li.on .nav { color: var(--mango); background: var(--ink-3); }
   /* active indicator: a bar flush with the rail edge */
   li.on::before { content: ''; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; background: var(--accent-fill); z-index: 1; }
   .ring { display: block; width: 44px; height: 44px; padding: 2px; background: transparent; transition: background var(--dur) var(--ease); }
   .prof:hover .ring, .avatar:hover .ring { background: var(--line); }
   li.sel .ring { background: var(--accent-fill); }
-  .prof:focus-visible, .avatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
+  li.picked .ring { background: var(--paper-mute); }
+  .prof:focus-visible, .avatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
   .recent li .sq { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border: 2px solid var(--ink-1); box-sizing: border-box; }
   .ph { display: block; width: 40px; height: 40px; }
   .pulse { animation: pulse 1.6s ease-in-out infinite; }

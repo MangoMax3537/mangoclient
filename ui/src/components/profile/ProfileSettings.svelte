@@ -248,7 +248,7 @@
                 <div class="jinst">
                   <span class="hint">{t('psettings.java.missing', { major: needMajor })}</span>
                   {#if installing}
-                    <span class="jbar" role="progressbar" aria-label={t('psettings.java.installing', { major: installing.major })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(installing.fraction * 100)}><span style:transform="scaleX({installing.fraction})"></span></span>
+                    <span class="jbar step-end" role="progressbar" aria-label={t('psettings.java.installing', { major: installing.major })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(installing.fraction * 100)}><span style:transform="scaleX({installing.fraction})"></span></span>
                     <span class="hint mono">{Math.round(installing.fraction * 100)}%</span>
                   {:else}
                     <button class="btn small" type="button" disabled={locked} onclick={installJava}><DownloadSimpleIcon weight="bold" size={14} aria-hidden="true" />{t('psettings.java.install', { major: needMajor })}</button>
@@ -342,7 +342,7 @@
 
 <style>
   .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
-  .bgthumb { position: relative; flex: none; width: 100px; height: 56px; border-radius: var(--r-s); overflow: hidden; border: 1px solid var(--line); }
+  .bgthumb { position: relative; flex: none; width: 100px; height: 56px; overflow: hidden; border: 1px solid var(--line); }
   .delcol { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 260px; }
   .ps { max-width: 760px; display: grid; gap: 14px; }
   .top { display: grid; gap: 4px; }
@@ -350,7 +350,7 @@
   .ok { color: var(--leaf); }
   .cust { display: grid; }
   .jinst { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .jbar { width: 160px; height: 6px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
+  .jbar { width: 160px; height: 6px; background: var(--ink-3); overflow: hidden; }
   .jbar span { display: block; height: 100%; background: var(--mango); transform-origin: left; transition: transform var(--dur) var(--ease); }
   .dims { display: flex; gap: 8px; align-items: center; }
   .dims .field { width: 96px; text-align: center; }

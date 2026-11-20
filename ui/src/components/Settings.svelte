@@ -20,9 +20,10 @@
   import { fmtBytes, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { entriesFor } from '../lib/settingsIndex';
+  import { SHORTCUT_GROUPS } from '../lib/keybinds';
   import { jumpTo } from '../lib/settingsJump';
   import { parseWindowSize } from '../lib/windowSize';
-  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
+  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
@@ -200,6 +201,29 @@
         </SettingSection>
       {/if}
 
+      {#if sec('keys')}
+        <SettingSection id="keys" title={t('keys.sectionLabel')}>
+          <p class="hint kh">{t('keys.settingsHint')}<button class="btn text" type="button" onclick={() => (ui.shortcuts = true)}>{t('keys.openSheet')}</button></p>
+          {#each SHORTCUT_GROUPS as g (g.id)}
+            {#if g.items.some((it) => show(`key-${g.id}-${it.id}`))}
+              <div class="set-row kg" role="presentation"><span class="eyebrow">{t(g.title)}</span></div>
+              {#each g.items as it (it.id)}
+                {#if show(`key-${g.id}-${it.id}`)}
+                  <SettingRow id="key-{g.id}-{it.id}" label={t(it.label)}>
+                    <span class="caps">
+                      {#each it.keys(platform.mac) as combo, i (i)}
+                        {#if i > 0}<span class="or">{t('keys.or')}</span>{/if}
+                        <span class="combo">{#each combo as k, j (j)}<kbd>{k}</kbd>{/each}</span>
+                      {/each}
+                    </span>
+                  </SettingRow>
+                {/if}
+              {/each}
+            {/if}
+          {/each}
+        </SettingSection>
+      {/if}
+
       {#if sec('storage')}
         <SettingSection id="storage" title={t('storage.title')}>
           <div class="set-row stack" id="set-storage">
@@ -218,7 +242,7 @@
                 {#each usage as u (u.key)}
                   <li>
                     <div class="lbl"><span>{t(`storage.${u.key}` as Key)}</span><span class="mono dim">{fmtBytes(u.bytes, lang())}</span></div>
-                    <div class="bar" role="meter" aria-label={t(`storage.${u.key}` as Key)} aria-valuemin="0" aria-valuemax={totalBytes} aria-valuenow={u.bytes}><span style:transform="scaleX({totalBytes ? u.bytes / totalBytes : 0})"></span></div>
+                    <div class="bar step-end" role="meter" aria-label={t(`storage.${u.key}` as Key)} aria-valuemin="0" aria-valuemax={totalBytes} aria-valuenow={u.bytes}><span style:transform="scaleX({totalBytes ? u.bytes / totalBytes : 0})"></span></div>
                     <button class="btn" type="button" disabled={!u.clearable || gameActive || u.bytes === 0 || clearing !== null} title={gameActive ? t('storage.gameRunning') : ''} onclick={() => (confirmKey = u.key)}>
                       <BroomIcon weight="bold" size={14} aria-hidden="true" />{t('storage.clear')}
                     </button>
@@ -273,9 +297,15 @@
   .usage li { display: grid; grid-template-columns: minmax(0, 1fr) 36% auto; gap: 16px; align-items: center; padding: 8px 0; }
   .lbl { display: flex; justify-content: space-between; gap: 8px; }
   .dim { color: var(--paper-mute); }
-  .bar { height: 8px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
+  .bar { height: 8px; background: var(--ink-3); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--mango); transform-origin: left; }
   .total { margin: 0; }
   .totsk { margin: 0 0 4px; }
+  .kh { margin: 4px 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+  .kg { padding: 14px 0 2px; border-top: 0; }
+  .caps { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .combo { display: inline-flex; gap: 4px; }
+  .or { color: var(--paper-mute); font-size: var(--fs-xs); }
+  kbd { display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 7px; font: 500 12px var(--font-mono); color: var(--paper); background: var(--ink-3); border: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--line); }
   b.ver { display: inline-flex; align-items: center; gap: 8px; }
 </style>

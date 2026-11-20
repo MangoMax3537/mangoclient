@@ -1,7 +1,8 @@
 // Runs the global shortcuts (lib/keybinds.ts) against the stores, and installs the window listeners (keyboard + mouse side buttons).
 import { tick } from 'svelte';
 import { isTypingTarget, matchShortcut, mouseNav, type ShortcutAction } from './keybinds';
-import { actions, app, goView, isBusy, nav, navBack, navForward, platform, selectedAccount, selectedProfile, toast, ui, t, type View } from './stores.svelte';
+import { actions, app, getApi, goView, isBusy, nav, navBack, navForward, platform, selectedAccount, selectedProfile, toast, ui, t, type View } from './stores.svelte';
+import { windowControls } from './titlebar';
 
 const VIEW_OF: Partial<Record<ShortcutAction, View>> = {
   home: 'home', library: 'library', discover: 'discover', servers: 'servers', skins: 'skins', stats: 'stats', settings: 'settings',
@@ -33,6 +34,14 @@ export function playStop(): void {
   void actions.play(p.id);
 }
 
+/** F2: rename the open instance (inline on its page) or the selected one (dialog). */
+export function renameCurrent(): void {
+  if (!app.ready) return;
+  if (nav.view === 'profile' && nav.profileId) { ui.renameInline = nav.profileId; return; }
+  const p = selectedProfile();
+  if (p) ui.rename = p.id;
+}
+
 export function runShortcut(a: ShortcutAction): void {
   const v = VIEW_OF[a];
   if (v) { goView(v); return; }
@@ -43,6 +52,8 @@ export function runShortcut(a: ShortcutAction): void {
     case 'back': navBack(); break;
     case 'forward': navForward(); break;
     case 'shortcuts': ui.shortcuts = !ui.shortcuts; break;
+    case 'rename': renameCurrent(); break;
+    case 'maximize': void windowControls(getApi()).toggleMaximize(); break;
   }
 }
 
@@ -53,6 +64,7 @@ export function installShortcuts(win: Window = window): () => void {
   const onKey = (e: KeyboardEvent) => {
     const a = matchShortcut(e, { mac: platform.mac, typing: isTypingTarget(e.target), modalOpen: modalOpen() });
     if (!a) return;
+    if (a === 'maximize' && platform.mode === 'browser') return; // the browser's own F11
     e.preventDefault(); e.stopPropagation();
     runShortcut(a);
   };

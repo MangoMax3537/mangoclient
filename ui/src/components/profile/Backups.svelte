@@ -12,6 +12,8 @@
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import BackupDialog from '../BackupDialog.svelte';
   import RestoreDialog from '../RestoreDialog.svelte';
+  import { contextmenu } from '../../lib/contextMenu.svelte';
+  import { backupMenu } from '../../lib/menus';
   import { backupTitle, reasonKey } from '../../lib/backups';
   import { fmtBytes, fmtDateTime } from '../../lib/format';
   import { deleteBackup, loadBackups, loadWorlds, wb } from '../../lib/worlds.svelte';
@@ -72,7 +74,7 @@
         <li class="row pend"><Skeleton variant="box" w={44} h={44} notch={8} /><BusyBar label={t(`backups.busy.${pending.kind}`)} /></li>
       {/if}
       {#each list as b (b.id)}
-        <li class="row">
+        <li class="row" use:contextmenu={() => backupMenu(b, { restore: (x) => (restoreOf = x), remove: (x) => { deleteError = ''; deleteOf = x; }, busy: !!pending, running })}>
           <Tile kind="world" id={b.worldId ?? b.id} src={iconFor(b)} size={44} notch={8} />
           <div class="t">
             <b title={titleOf(b)}>{titleOf(b)}</b>
@@ -110,9 +112,9 @@
 <style>
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .h { display: flex; align-items: baseline; gap: 12px; }
-  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
   .note :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
-  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
+  .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); background: var(--ink-2); }
   .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
   .row:last-child { border-bottom: 0; }
   .row.pend { grid-template-columns: auto minmax(0, 1fr); }
@@ -127,5 +129,5 @@
     .row { grid-template-columns: auto minmax(0, 1fr) auto; }
     .when { grid-column: 2; grid-row: 2; display: flex; gap: 12px; }
     .acts { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
-  }
+ }
 </style>

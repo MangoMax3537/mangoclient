@@ -93,7 +93,7 @@
   .row { display: flex; gap: 20px; align-items: flex-start; }
   .prev { display: flex; gap: 10px; flex: none; }
   .prev:empty { display: none; }
-  .fig { width: 72px; height: 144px; background: var(--ink-3); border-radius: var(--r-s); padding: 4px; }
+  .fig { width: 72px; height: 144px; background: var(--ink-3); padding: 4px; }
   .opts { display: grid; gap: 8px; justify-items: start; min-width: 0; flex: 1; }
   .opts .field { width: 100%; }
   .lbl { font-weight: 500; }

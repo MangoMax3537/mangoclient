@@ -62,11 +62,11 @@
 <style>
   .grow { margin-right: auto; min-width: 0; }
   .lead { margin: 0 0 12px; color: var(--paper-dim); }
-  .in { padding: 10px 12px; background: var(--ink-1); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+  .in { padding: 10px 12px; background: var(--ink-1); border: 1px solid var(--line-soft); }
   .in h3 { margin-bottom: 6px; }
   .in ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--paper-dim); }
-  .scrub { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--leaf) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--leaf) 9%, transparent); font-size: var(--fs-sm); }
+  .scrub { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--leaf) 45%, transparent); background: color-mix(in srgb, var(--leaf) 9%, transparent); font-size: var(--fs-sm); }
   .scrub > :global(svg) { flex: none; color: var(--leaf); margin-top: 1px; }
   .busy { margin-top: 12px; }
-  .box { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
+  .box { margin: 12px 0 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--tomato) 45%, transparent); background: color-mix(in srgb, var(--tomato) 10%, transparent); color: var(--paper); }
 </style>

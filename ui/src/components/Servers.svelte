@@ -12,7 +12,9 @@
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
   import { stripMotd } from '../lib/format';
-  import { actions, app, isBusy, nav, selectedProfile, servers, t } from '../lib/stores.svelte';
+  import { contextmenu } from '../lib/contextMenu.svelte';
+  import { serverMenu } from '../lib/menus';
+  import { actions, app, applyPinged, errorText, getApi, isBusy, nav, selectedProfile, servers, t, toast } from '../lib/stores.svelte';
   import type { ServerEntry } from '../lib/types';
 
   let profileId = $state<string>('');
@@ -36,6 +38,9 @@
   });
   $effect(() => { if (!profileId && selectedProfile()) profileId = selectedProfile()?.id ?? ''; });
 
+  async function pingOne(s: ServerEntry) {
+    try { applyPinged(await getApi().serversPing({ address: s.address })); } catch (e) { toast(errorText(e), 'error'); }
+  }
   function join(s: ServerEntry) {
     if (!prof) return;
     actions.selectProfile(prof.id);
@@ -71,7 +76,7 @@
       {#each sorted as s (s.id)}
         {@const st = servers.status[s.id]}
         {@const icon = st?.iconUrl ?? s.iconUrl}
-        <li class="card" class:off={st && !st.online}>
+        <li class="card nb" style:--n="12px" class:off={st && !st.online} use:contextmenu={() => serverMenu(s, { join, ping: pingOne, canJoin: !!prof && app.accounts.length > 0 })}>
           <!-- icon: the stored favicon at once, the one a ping returns as soon as it arrives; the fallback only when there is no icon at all -->
           {#if !icon && !st && !pingLate}
             <span class="slot">{#if pingGate.show}<Skeleton variant="box" w={64} h={64} radius={8} />{/if}</span>
@@ -120,19 +125,19 @@
   .ctrl { display: flex; gap: 10px; align-items: flex-end; }
   .f { display: grid; gap: 2px; font-size: 12px; }
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }
-  .card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px; background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px; }
   .card.off { opacity: 0.72; }
   .info { min-width: 0; display: grid; gap: 2px; }
   .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .nm { font: 700 17px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .star { color: var(--mango); display: inline-flex; }
-  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 1px 7px; border-radius: var(--r-s); background: rgba(255, 173, 50, 0.14); color: var(--mango); white-space: nowrap; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 1px 7px; background: rgba(255, 173, 50, 0.14); color: var(--mango); white-space: nowrap; }
   .addr { font-size: 12.5px; color: var(--paper-mute); }
   .motd { font-size: 13.5px; color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.45em; }
   .stat { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: 12.5px; color: var(--paper-dim); }
   .stat span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .ver { color: var(--paper-mute); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tomato); }
+  .dot { width: 8px; height: 8px; background: var(--tomato); }
   .dot.on { background: var(--leaf); }
   .dot.unk { background: var(--paper-mute); }
   .ic { display: inline-flex; }

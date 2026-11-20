@@ -17,6 +17,8 @@
   import BusyBar from '../BusyBar.svelte';
   import BackupDialog from '../BackupDialog.svelte';
   import WorldDeleteDialog from '../WorldDeleteDialog.svelte';
+  import { contextmenu } from '../../lib/contextMenu.svelte';
+  import { worldMenu } from '../../lib/menus';
   import { modeKey, versionDiffers } from '../../lib/backups';
   import { fmtBytes, fmtRelative } from '../../lib/format';
   import { loadWorlds, wb } from '../../lib/worlds.svelte';
@@ -79,7 +81,7 @@
     <ul class="grid">
       {#each worlds as w (w.id)}
         {@const Mode = w.gameMode ? MODE_ICON[w.gameMode] : null}
-        <li class="card">
+        <li class="card nb" style:--n="12px" use:contextmenu={() => worldMenu(w, { backup: (x) => (backupOf = x), reveal, remove: (x) => (deleteOf = x), busy: !!pending, running })}>
           <Tile kind="world" id={w.id} src={w.iconUrl} size={64} notch={10} />
           <div class="info">
             <h3 title={w.name}>{w.name}</h3>
@@ -115,11 +117,11 @@
 <style>
   .ws { margin-bottom: var(--s-6); }
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
-  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
+  .note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--mango) 45%, transparent); background: color-mix(in srgb, var(--mango) 10%, transparent); font-size: var(--fs-sm); }
   .note :global(svg) { flex: none; margin-top: 2px; color: var(--mango); }
   .pend { margin-bottom: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
-  .card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-2); }
+  .card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; padding: 13px; }
   .info { display: grid; gap: 6px; min-width: 0; align-content: start; }
   h3 { font-size: var(--fs-lg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }

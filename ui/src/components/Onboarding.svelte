@@ -38,7 +38,7 @@
 
 <div class="ob" bind:this={root} role="dialog" aria-modal="true" aria-labelledby="ob-h" style:--bg="url({brandIcon(512)})">
   <div class="bg px" aria-hidden="true"></div>
-  <div class="card">
+  <div class="card nb" style:--n="20px">
     <ol class="dots" aria-label={t('onb.progress', { n: step + 1, total: STEPS.length })}>
       {#each STEPS as s, i (s)}<li class:on={i === step} class:done={i < step} aria-current={i === step ? 'step' : undefined}><span class="sr-only">{t(`onb.step.${s}` as Key)}</span></li>{/each}
     </ol>
@@ -100,7 +100,7 @@
   .ob { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--ink-0); overflow: auto; }
   .bg { position: absolute; inset: 0; background: var(--bg) right 10% center / min(460px, 50%) no-repeat; opacity: 0.1; image-rendering: pixelated; }
   .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--ink-0) 0%, transparent 70%); }
-  .card { position: relative; width: min(540px, calc(100% - 48px)); display: grid; gap: 14px; padding: 28px 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-modal); margin: 24px; justify-self: start; margin-left: clamp(24px, 12vw, 160px); }
+  .card { position: relative; width: min(540px, calc(100% - 48px)); display: grid; gap: 14px; padding: 29px 33px; margin: 24px; justify-self: start; margin-left: clamp(24px, 12vw, 160px); }
   h1 { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -0.03em; line-height: 0.98; }
   h1:focus { outline: none; }
   .lead { margin: 0; color: var(--paper-dim); font-size: 15px; }
@@ -109,7 +109,7 @@
   .dots li.done { background: var(--paper-mute); }
   .dots li.on { background: var(--mango); }
   .langs { display: grid; gap: 8px; }
-  .langs button { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--ink-1); font-size: 16px; }
+  .langs button { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border: 1px solid var(--line); background: var(--ink-1); font-size: 16px; }
   .langs button:hover { background: var(--ink-3); }
   .langs button.on { border-color: var(--mango); color: var(--mango); }
   form { display: grid; gap: 6px; }

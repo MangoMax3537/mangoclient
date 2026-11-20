@@ -42,7 +42,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<dialog bind:this={dlg} class="{variant} {size}" aria-labelledby={uid} oncancel={cancel} onclick={backdrop} onkeydown={key} out:leaveDialog|global={{ drawer: variant === 'drawer' }}>
+<dialog bind:this={dlg} class="nb {variant} {size}" aria-labelledby={uid} oncancel={cancel} onclick={backdrop} onkeydown={key} out:leaveDialog|global={{ drawer: variant === 'drawer' }}>
   <header>
     <h2 id={uid}>{title}</h2>
     <div class="acts">
@@ -57,14 +57,15 @@
 </dialog>
 
 <style>
-  dialog { padding: 0; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-modal); max-height: min(86vh, 760px); overflow: hidden; }
+  /* a notched box with a hard 1px border (.nb): the border is the dialog's own background, the fill is the ::before inside it */
+  dialog { position: fixed; --n: 16px; --fill: var(--ink-2); padding: 1px; color: var(--paper); max-height: min(86vh, 760px); overflow: hidden; }
   dialog[open] { display: flex; flex-direction: column; animation: pop var(--dur-slow) var(--ease); }
   dialog::backdrop { background: var(--backdrop); transition: opacity var(--dur) var(--ease); animation: fade var(--dur-slow) var(--ease); }
   dialog:global(.closing)::backdrop { opacity: 0; }
   dialog.dialog { width: min(480px, calc(100vw - 48px)); }
   dialog.dialog.lg { width: min(640px, calc(100vw - 48px)); }
-  dialog.drawer { width: min(560px, 100vw); height: 100vh; max-height: none; margin: 0 0 0 auto; border-radius: var(--r-l) 0 0 var(--r-l); border-right: 0; animation: slide var(--dur-slow) var(--ease); }
-  dialog.lightbox { width: min(1100px, calc(100vw - 40px)); max-height: calc(100vh - 40px); background: var(--ink-1); }
+  dialog.drawer { --n: 0px; width: min(560px, 100vw); height: 100vh; max-height: none; margin: 0 0 0 auto; animation: slide var(--dur-slow) var(--ease); }
+  dialog.lightbox { --fill: var(--ink-1); width: min(1100px, calc(100vw - 40px)); max-height: calc(100vh - 40px); }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px 20px; border-bottom: 1px solid var(--line-soft); flex: none; }
   h2 { font-size: var(--fs-xl); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { display: flex; align-items: center; gap: 4px; }

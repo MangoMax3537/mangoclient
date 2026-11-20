@@ -84,11 +84,10 @@
   .head { display: flex; justify-content: space-between; gap: 12px; }
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { color: var(--paper); padding-right: 2px; }
-  .x { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 2px; color: var(--paper-mute); }
+  .x { width: 20px; height: 20px; display: grid; place-items: center; color: var(--paper-mute); }
   .x:hover { color: var(--tomato); background: var(--ink-3); }
   .add { display: flex; gap: 8px; }
   .add .field { flex: 1; }
   .sug { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .pick { cursor: default; }
   .pick:hover { border-color: var(--accent-fill); color: var(--paper); }
 </style>

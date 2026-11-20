@@ -28,7 +28,7 @@
 </div>
 
 <style>
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-m); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: var(--ink-1); max-width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; background: var(--ink-1); max-width: 100%; }
   .seg::-webkit-scrollbar { display: none; }
   .seg.fill { display: flex; width: 100%; }
   .seg.fill button { flex: 1 1 0; min-width: max-content; justify-content: center; text-align: center; }
@@ -37,11 +37,11 @@
   /* page tabs: tighter, so the nine instance tabs fit a 960px window without scrolling */
   .seg[role='tablist'] button { padding: 0 10px; }
   button:hover { color: var(--paper); background: var(--ink-3); }
-  button.off { color: var(--paper-mute); opacity: 0.55; cursor: default; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
+  button.off { color: var(--paper-mute); opacity: 0.55; background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.off:hover { color: var(--paper-mute); background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--line) 35%, transparent) 6px 7px); }
   button.on { background: var(--ink-4); color: var(--paper); }
   button.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--accent-fill); }
-  button:focus-visible { outline-offset: -3px; border-radius: 0; }
+  button:focus-visible { outline-offset: -3px; }
   .c { font-size: var(--fs-xs); color: var(--paper-mute); }
   button.on .c { color: var(--paper-dim); }
 </style>

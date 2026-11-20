@@ -18,6 +18,9 @@
   import { fmtDuration, fmtRam, fmtRelative } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
+  import { cardHandlers } from '../lib/instanceCard';
+  import { instanceMenu } from '../lib/instanceMenu';
+  import { contextmenu } from '../lib/contextMenu.svelte';
   import {
     LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
   } from '../lib/stores.svelte';
@@ -46,6 +49,7 @@
   $effect(() => { stats.run(() => getApi().statsSummary({ days: 14 })); return () => stats.cancel(); });
   const sparkLabel = (st: StatsSummary) => t('stats.chartLabel', { days: 14, total: fmtDuration(st.totalMs) });
 
+  const ops = { select: (id: string) => void actions.selectProfile(id), open: (id: string) => openProfile(id), isSelected: (id: string) => selectedProfile()?.id === id };
   function toggle() {
     if (!p) return;
     if (busy) actions.stop(p.id);
@@ -55,7 +59,7 @@
 
 <div class="home">
   {#if p && info}
-    <section class="hero on-stage" aria-labelledby="hero-h">
+    <section class="hero on-stage" aria-labelledby="hero-h" use:contextmenu={() => instanceMenu(p)}>
       {#key p.id}<HomeBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />{/key}
       <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
       <div class="content">
@@ -106,8 +110,8 @@
         <ul class="strip">
           {#each others as o (o.id)}
             {@const ob = isBusy(o.id)}
-            <li class="card notch" class:sel={o.id === p.id} class:live={ob} style:--n="14px">
-              <button class="open" type="button" aria-pressed={o.id === p.id} onclick={() => actions.selectProfile(o.id)}>
+            <li class="card notch" class:sel={o.id === p.id} class:live={ob} style:--n="14px" use:contextmenu={() => instanceMenu(o)}>
+              <button class="open" type="button" aria-pressed={o.id === p.id} {...cardHandlers(o.id, ops)}>
                 <span class="art"><InstanceIcon profile={o} fill radius={0} /></span>
                 <span class="nm">{o.name}</span>
                 <span class="meta mono">{o.mcVersion}<span class="sep">/</span>{o.loader === 'vanilla' ? t('profile.vanilla') : o.loader}</span>
@@ -163,8 +167,8 @@
   .idrow { display: flex; align-items: flex-end; gap: 20px; min-width: 0; }
   .idtext { display: grid; gap: 14px; justify-items: start; min-width: 0; }
   .iconbtn { position: relative; flex: none; display: block; width: 96px; height: 96px; margin-bottom: 4px; }
-  .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--r-s); }
-  .pen { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+  .pen { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   .iconbtn:hover .pen, .iconbtn:focus-visible .pen { opacity: 1; transform: none; }
   .bgbtn { position: absolute; right: 16px; top: 14px; width: 36px; padding: 0; background: rgba(var(--scrim), 0.55); border-color: var(--hero-line); color: var(--paper); z-index: 2; }
   .sep { margin: 0 8px; opacity: 0.5; }
@@ -185,7 +189,7 @@
   .card:hover { transform: translateY(-2px); }
   .card.sel { background: var(--ink-3); }
   .open { display: grid; width: 100%; text-align: left; gap: 2px; padding-bottom: 12px; }
-  .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: 0; }
+  .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
   .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }
   .nm { font: 700 var(--fs-lg)/1.2 var(--font-display); padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta { padding: 0 12px; font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

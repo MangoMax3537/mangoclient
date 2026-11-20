@@ -139,20 +139,20 @@
 <style>
   .lg { height: 100%; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; min-height: 0; }
   .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; align-content: start; overflow: auto; }
-  .files button { width: 100%; text-align: left; display: grid; gap: 3px; padding: 8px 10px; border-radius: var(--r-m); border: 1px solid transparent; }
+  .files button { width: 100%; text-align: left; display: grid; gap: 3px; padding: 8px 10px; border: 1px solid transparent; }
   .files button:hover { background: var(--ink-2); }
   .files button.on { background: var(--ink-3); border-color: var(--line); }
   .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
   .meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--paper-mute); }
-  .k { padding: 0 6px; border-radius: var(--r-s); background: var(--ink-4); color: var(--paper-dim); }
+  .k { padding: 0 6px; background: var(--ink-4); color: var(--paper-dim); }
   .k.crash { background: rgba(237, 102, 92, 0.2); color: var(--tomato); }
   .view { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 8px; }
   header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
   .acts { display: flex; gap: 6px; flex-wrap: nowrap; margin-left: auto; }
-  .res { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(134, 184, 107, 0.1); border: 1px solid rgba(134, 184, 107, 0.4); border-radius: var(--r-m); }
+  .res { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(134, 184, 107, 0.1); border: 1px solid rgba(134, 184, 107, 0.4); }
   .res .field { flex: 1; height: 32px; }
   .trunc { font-size: 13px; }
-  .out { flex: 1; min-height: 0; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .out { flex: 1; min-height: 0; background: var(--ink-1); border: 1px solid var(--line); overflow: hidden; }
   .ln { height: 20px; line-height: 20px; padding: 0 12px; font-size: 12.5px; white-space: pre; color: var(--paper-dim); user-select: text; }
   .ln.warn { color: var(--mango); }
   .ln.error { color: var(--tomato); }

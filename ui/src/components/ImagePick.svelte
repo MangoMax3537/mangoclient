@@ -20,7 +20,7 @@
 </div>
 
 <style>
-  .dz { display: grid; justify-items: center; align-content: center; gap: 10px; min-height: 200px; padding: 24px; text-align: center; border: 2px dashed var(--line); border-radius: var(--r-m); background: var(--ink-1); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+  .dz { display: grid; justify-items: center; align-content: center; gap: 10px; min-height: 200px; padding: 24px; text-align: center; border: 2px dashed var(--line); background: var(--ink-1); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
   .dz.over { border-color: var(--accent-fill); background: color-mix(in srgb, var(--ink-2) 88%, var(--accent-fill)); }
   .ic { color: var(--paper-dim); }
   .hint { max-width: 36ch; }

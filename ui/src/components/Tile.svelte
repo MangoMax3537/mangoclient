@@ -28,7 +28,6 @@
 <span
   class="tile" class:fb={isFb} class:notch={notch > 0} data-tone={tone}
   style:width={fill ? '100%' : `${size}px`} style:height={fill ? '100%' : `${size}px`} style:--n="{notch}px"
-  style:border-radius={notch ? undefined : `${radius}px`}
   style:--tint={tint}
 >
   <Img {src} {alt} bind:phase fallback={fallbackImage(kind, id, size * 2)} />

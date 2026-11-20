@@ -21,7 +21,7 @@
 {/if}
 
 <style>
-  .note { display: flex; gap: 10px; padding: 10px 6px 10px 12px; border: 1px solid var(--mango); border-radius: var(--r-m); background: rgba(255, 173, 50, 0.08); text-align: left; font-size: 13.5px; line-height: 1.4; }
+  .note { display: flex; gap: 10px; padding: 10px 6px 10px 12px; border: 1px solid var(--mango); background: rgba(255, 173, 50, 0.08); text-align: left; font-size: 13.5px; line-height: 1.4; }
   .note > :global(svg) { flex: none; color: var(--mango); margin-top: 1px; }
   .txt { display: grid; gap: 4px; flex: 1; min-width: 0; }
   .txt span { color: var(--paper-dim); }
