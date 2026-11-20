@@ -54,6 +54,12 @@ export class Session {
     return els.map((e) => e[ELEMENT_KEY]);
   }
 
+  /** Key chord through the W3C actions API: e.g. keys(['\uE009', '5']) = Ctrl+5 (modifiers first, released in reverse). */
+  async keys(chord) {
+    const seq = [...chord.map((value) => ({ type: 'keyDown', value })), ...[...chord].reverse().map((value) => ({ type: 'keyUp', value }))];
+    return this.cmd('POST', '/actions', { actions: [{ type: 'key', id: 'kbd', actions: seq }] });
+  }
+
   click(id) { return this.cmd('POST', `/element/${id}/click`, {}); }
   clear(id) { return this.cmd('POST', `/element/${id}/clear`, {}); }
   sendKeys(id, text) { return this.cmd('POST', `/element/${id}/value`, { text }); }

@@ -2,12 +2,15 @@
 // End-to-end harness: drives the REAL built MangoClient binary through WebKitWebDriver.
 // Usage: node e2e/run.mjs [--binary <path>] [--port N] [--out <dir>] [--keep]
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, openSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync, openSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Session, sleep, waitFor } from './lib/wd.mjs';
 import { Page } from './lib/page.mjs';
 import { alive, descendants, envOf, exeOf, kill, pids, pidsByExeName, statOf, waitExit } from './lib/proc.mjs';
+import * as x11 from './lib/x11.mjs';
+import { decodePng, meanDiff, regionStats } from './lib/png.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -21,6 +24,12 @@ const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 const OUT = resolve(opt('--out', join(ROOT, 'target', 'e2e', STAMP)));
 const HOME_DIR = join(OUT, 'data'); // fresh MANGOCLIENT_HOME
 const KEEP = argv.includes('--keep');
+const ONLY = opt('--only', '') ? new Set(opt('--only', '').split(',').map((x) => x.trim().toUpperCase())) : null; // e.g. --only S9A,S10
+const wanted = (id) => !ONLY || ONLY.has(id.toUpperCase());
+// Prepared data directory (downloaded 1.21.4 vanilla + fabric, Java, assets, an offline account) for S9..S13. It is only ever COPIED.
+const SEED = resolve(opt('--seed', process.env.MANGO_E2E_SEED || '/tmp/claude-1000/-home-henrik-Dokumente-mangoclient/5961dfad-8ec5-4608-b257-4d9c8b1bfc77/scratchpad/mango-home'));
+const COPIES = []; // data copies under ~/.cache/mango-e2e-<scenario>, deleted at the end unless --keep
+let curHome = HOME_DIR; // MANGOCLIENT_HOME of the app instance that `session` drives
 
 const results = []; // { id, name, status, note }
 const findings = []; // real application bugs noticed along the way
@@ -38,6 +47,7 @@ function check(cond, msg) {
 }
 
 async function scenario(id, name, fn) {
+  if (!wanted(id)) return;
   log(`${id} ${name} ...`);
   try {
     const note = await fn();
@@ -82,18 +92,19 @@ async function startDriver() {
 }
 
 /** A wrapper script is the "binary" so the real exit status of the app can be recorded (the driver swallows it). */
-function writeWrapper() {
-  const w = join(OUT, 'app-wrapper.sh');
+function writeWrapper(tag = '', home = HOME_DIR) {
+  const w = join(OUT, `app-wrapper${tag}.sh`);
+  // MANGOCLIENT_HOME is exported here (not inherited): the driver was started once, with the S1-S8 data dir
   writeFileSync(
     w,
-    `#!/bin/sh\n"${BINARY}" "$@" >>"${OUT}/app.log" 2>&1\necho $? >"${OUT}/exitcode"\n`,
+    `#!/bin/sh\nexport MANGOCLIENT_HOME="${home}"\n"${BINARY}" "$@" >>"${OUT}/app${tag}.log" 2>&1\necho $? >"${OUT}/exitcode${tag}"\n`,
   );
   chmodSync(w, 0o755);
   return w;
 }
 
 function findAppPid() {
-  return pids().find((p) => exeOf(p) === BINARY && envOf(p).MANGOCLIENT_HOME === HOME_DIR) || 0;
+  return pids().find((p) => exeOf(p) === BINARY && envOf(p).MANGOCLIENT_HOME === curHome) || 0;
 }
 
 // ---------------------------------------------------------------- scenarios
@@ -322,6 +333,534 @@ async function s8() {
   return `${how}: exit code 0; ${webkitBefore.length} WebKit helper processes all gone`;
 }
 
+// ---------------------------------------------------------------- S9..S13: lifecycle, 3D skin, title bar, cycling, visual survey
+// They run on COPIES of a prepared data dir (--seed / MANGO_E2E_SEED) under ~/.cache/mango-e2e-<scenario>. accounts.json of the copy
+// holds the offline account and the profiles only (the seed's Microsoft record is dropped, never copied). Telemetry is switched off.
+
+class Abort extends Error {}
+/** Poll `fn` (may be async) until it returns something truthy; errors thrown by `fn` abort at once. */
+async function until(fn, { timeout = 15000, interval = 250, what = 'condition' } = {}) {
+  const end = Date.now() + timeout;
+  for (;;) {
+    const v = await fn();
+    if (v) return v;
+    if (Date.now() > end) throw new Error(`timeout (${Math.round(timeout / 1000)} s) waiting for ${what}`);
+    await sleep(interval);
+  }
+}
+
+function seedProblem() {
+  if (!existsSync(join(SEED, 'accounts.json'))) return `seed data dir not found (${SEED}); pass --seed <dir> or MANGO_E2E_SEED`;
+  return '';
+}
+
+function prepareCopy(tag) {
+  const dest = join(homedir(), '.cache', `mango-e2e-${tag}`);
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(dest, { recursive: true });
+  COPIES.push(dest);
+  for (const e of readdirSync(SEED)) {
+    if (/^accounts\.json/.test(e) || /^config\.json/.test(e) || /\.log$/.test(e) || /\.bak$/.test(e)) continue; // rebuilt below / not needed
+    const r = spawnSync('cp', ['-a', '--reflink=auto', join(SEED, e), join(dest, e)]);
+    check(r.status === 0, `copying ${e} failed: ${r.stderr}`);
+  }
+  const j = JSON.parse(readFileSync(join(SEED, 'accounts.json'), 'utf8'));
+  j.accounts = (j.accounts || []).filter((a) => a.type === 'offline');
+  for (const a of j.accounts) delete a.encryptedCredentials;
+  check(j.accounts.length > 0, 'seed has no offline account');
+  writeFileSync(join(dest, 'accounts.json'), JSON.stringify(j), { mode: 0o600 });
+  const van = (j.profiles || []).find((p) => p.name === 'Vanilla Test') || (j.profiles || []).find((p) => p.loader === 'vanilla' && p.mcVersion === '1.21.4');
+  const cfg = JSON.parse(readFileSync(join(SEED, 'config.json'), 'utf8'));
+  Object.assign(cfg, { language: 'en', firstRunDone: true, telemetry: false, hideOnLaunch: false, keepLauncherOpen: true, selectedAccount: j.accounts[0].uuid, selectedProfile: van ? van.id : cfg.selectedProfile });
+  writeFileSync(join(dest, 'config.json'), JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  return dest;
+}
+
+/** Start the app on `home` through a fresh WebDriver session and make it the current one. */
+async function startApp(tag, home) {
+  curHome = home;
+  rmSync(join(OUT, `exitcode${tag}`), { force: true });
+  const wrapper = writeWrapper(tag, home);
+  session = await Session.create(`http://127.0.0.1:${PORT}`, { 'webkitgtk:browserOptions': { binary: wrapper, args: [] } });
+  appPid = await waitFor(findAppPid, { timeout: 20000, what: 'app process' });
+  page = new Page(session, OUT);
+  await waitFor(async () => (await session.title()) === 'MangoClient', { timeout: 20000, what: 'window title' }).catch(() => {});
+  await page.init();
+  await waitFor(() => page.exec(`return document.readyState === 'complete' && !!document.getElementById('app') && document.getElementById('app').children.length > 0;`), { what: '#app mounted' });
+  log(`app '${tag}' started, pid ${appPid}`);
+}
+
+/** Terminate whatever is left of the current app instance (game first), by PID only. */
+async function endApp() {
+  if (appPid && alive(appPid)) {
+    for (const j of x11.javaChildren(appPid)) kill(j, 'SIGTERM');
+    kill(appPid, 'SIGTERM');
+    if (!(await waitExit(appPid, 6000))) kill(appPid, 'SIGKILL');
+  }
+  if (session) await session.quit();
+  session = null;
+  page = null;
+}
+
+const exitCodeOf = (tag) => (existsSync(join(OUT, `exitcode${tag}`)) ? readFileSync(join(OUT, `exitcode${tag}`), 'utf8').trim() : '(no exitcode file)');
+const snap = () => ({ win: x11.mainWindows(appPid, false).length, vis: x11.mainWindows(appPid, true).length, wk: x11.webkitChildren(appPid).length, java: x11.javaChildren(appPid), mem: x11.memOf(appPid) });
+const memStr = (m) => `RSS ${m.rss} MiB / PSS ${m.pss ?? 'n/a'} MiB`;
+const rectInfo = (id) => (id ? x11.geometry(id) : null);
+
+function logTail(home) {
+  try {
+    const d = join(home, 'logs');
+    const f = readdirSync(d).filter((n) => n.endsWith('.log')).map((n) => join(d, n)).sort().pop();
+    return f ? readFileSync(f, 'utf8').split('\n').slice(-6).join(' | ').slice(0, 600) : '(no launcher log)';
+  } catch {
+    return '(no launcher log)';
+  }
+}
+
+/** Set hideOnLaunch=true / keepLauncherOpen=false, start the game for the Vanilla 1.21.4 profile, wait until the window is destroyed. */
+async function bootLaunchHidden(home, tag) {
+  await startApp(tag, home);
+  const st = (await page.invoke('app_state')).ok;
+  const prof = st.profiles.find((p) => p.name === 'Vanilla Test') || st.profiles.find((p) => p.loader === 'vanilla' && p.mcVersion === '1.21.4');
+  check(prof, 'no 1.21.4 Vanilla profile in the data copy');
+  const acc = st.accounts.find((a) => a.type === 'offline');
+  check(acc && st.accounts.every((a) => a.type === 'offline'), 'data copy must hold only the offline account');
+  const r = await page.invoke('config_set', { patch: { hideOnLaunch: true, keepLauncherOpen: false, selectedAccount: acc.uuid, selectedProfile: prof.id } });
+  check(!r.err, `config_set failed: ${r.err}`);
+  const cfg = (await page.invoke('app_state')).ok.config;
+  check(cfg.hideOnLaunch === true && cfg.keepLauncherOpen === false, `config not applied: hideOnLaunch=${cfg.hideOnLaunch} keepLauncherOpen=${cfg.keepLauncherOpen}`);
+  const before = snap();
+  check(before.vis >= 1, 'no visible main window before the launch');
+  await page.exec(
+    `window.__e2e.launch = 'pending';
+     window.__TAURI_INTERNALS__.invoke('game_launch', { profileId: arguments[0] }).then((v) => { window.__e2e.launch = { ok: v }; }, (e) => { window.__e2e.launch = { err: String((e && e.message) || JSON.stringify(e)) }; });
+     return true;`,
+    [prof.id],
+  );
+  const t0l = Date.now();
+  let java = 0;
+  await until(
+    async () => {
+      java = x11.javaChildren(appPid)[0] || 0;
+      if (java) return true;
+      const l = await page.exec('return window.__e2e.launch;').catch(() => null);
+      if (l && l.err) throw new Abort(`game_launch failed: ${l.err}`);
+      return false;
+    },
+    { timeout: 300000, interval: 500, what: 'the java game process (needs Java + version manifest; offline uses what is cached)' },
+  );
+  log(`java pid ${java} after ${Math.round((Date.now() - t0l) / 1000)} s`);
+  const tGone = await until(
+    () => {
+      if (!alive(java)) throw new Abort(`the game exited before the launcher reported it running; launcher log tail: ${logTail(home)}`);
+      return x11.mainWindows(appPid, false).length === 0 ? Date.now() : 0;
+    },
+    { timeout: 240000, interval: 300, what: 'the main window to be destroyed after the game reported running' },
+  );
+  const gone = (await until(() => x11.webkitChildren(appPid).length === 0, { timeout: 20000, what: 'WebKit processes to disappear' }).then(() => true, () => false));
+  await sleep(3000);
+  const after = snap();
+  return { prof, java, before, after, webkitGone: gone, goneMs: tGone - t0l };
+}
+
+async function s9a() {
+  const bad = seedProblem();
+  if (bad) throw new SkipError(bad);
+  if (!x11.hasXdotool()) throw new SkipError('xdotool not available');
+  const home = prepareCopy('s9');
+  const b = await bootLaunchHidden(home, '-s9a');
+  check(b.webkitGone, `WebKit helper processes still present 20 s after the window was destroyed (${b.after.wk} left)`);
+  check(alive(appPid), 'the main process died while the window was destroyed');
+  check(alive(b.java), 'the game died while the window was destroyed');
+  check(b.after.win === 0, `${b.after.win} main window(s) still exist in X11 after the destroy`);
+  const note = [`window+WebKit gone while java ${b.java} runs; before: ${memStr(b.before.mem)} with ${b.before.wk} WebKit procs; destroyed: ${memStr(b.after.mem)}`];
+  // end the game from outside
+  const tKill = Date.now();
+  kill(b.java, 'SIGTERM');
+  await until(() => !alive(b.java), { timeout: 30000, what: 'the game to exit after SIGTERM' });
+  await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 30000, what: 'the window to be re-created after the game ended' });
+  const backMs = Date.now() - tKill;
+  const wkBack = await until(() => x11.webkitChildren(appPid).length > 0, { timeout: 15000, what: 'WebKit processes to come back' }).then(() => true, () => false);
+  note.push(`window re-created ${backMs} ms after SIGTERM (WebKit back: ${wkBack})`);
+  check(backMs <= 10000, `window came back only after ${backMs} ms (expected <= 10 s after the game ended)`);
+  check(wkBack, 'WebKit processes did not come back with the window');
+  await sleep(1500);
+  // can anything attach to the re-created window?
+  let usable = null;
+  const alt = { err: '' };
+  try {
+    const t = await Promise.race([session.title(), sleep(8000).then(() => { throw new Error('old session does not answer'); })]);
+    usable = t === 'MangoClient' ? 'old session' : null;
+  } catch (e) {
+    alt.err = e.message;
+  }
+  if (!usable) {
+    try {
+      // WebKitWebDriver always spawns its OWN browser process: with the single-instance lock held this only pokes the running app
+      const s2 = await Promise.race([
+        Session.create(`http://127.0.0.1:${PORT}`, { 'webkitgtk:browserOptions': { binary: writeWrapper('-s9a2', home), args: [] } }),
+        sleep(40000).then(() => { throw new Error('new session did not start within 40 s'); }),
+      ]);
+      session = s2;
+      usable = 'new session';
+    } catch (e) {
+      alt.err += ` / ${e.message}`;
+    }
+  }
+  if (usable) {
+    page = new Page(session, OUT);
+    await page.init();
+    const st = await page.invoke('app_state');
+    check(!st.err, `app_state failed in the re-created window: ${st.err}`);
+    const gr = await page.invoke('game_running');
+    check(!gr.err && Array.isArray(gr.ok) && gr.ok.length === 0, `game_running not empty after the game ended: ${JSON.stringify(gr)}`);
+    note.push(`${usable} attached: app_state ok, game_running empty`);
+  } else {
+    findings.push(`S9a: the re-created window could not be inspected through WebDriver (${alt.err.trim()}): WebKitWebDriver spawns its own browser and cannot attach to a window the app re-created; app_state/game_running in that window are UNVERIFIED here (process/X11 level only). Verify by hand: after a hidden launch ends, the UI shows the idle profile with a Play button.`);
+    note.push('UI of re-created window not inspectable via WebDriver');
+  }
+  // clean quit of the re-created window
+  const w = x11.mainWindows(appPid, true).pop();
+  x11.quitWindow(w);
+  check(await waitExit(appPid, 20000), 'app did not quit after closing the re-created window with no game running');
+  const code = exitCodeOf('-s9a');
+  check(code === '0', `exit code ${code} after quit`);
+  await endApp();
+  return note.join('; ');
+}
+
+async function s9b() {
+  const bad = seedProblem();
+  if (bad) throw new SkipError(bad);
+  if (!x11.hasXdotool()) throw new SkipError('xdotool not available');
+  const home = COPIES.find((c) => c.endsWith('mango-e2e-s9')) || prepareCopy('s9');
+  const b = await bootLaunchHidden(home, '-s9b');
+  check(b.webkitGone && alive(appPid) && alive(b.java), 'precondition (destroyed window, app and game alive) not met');
+  const note = [`destroyed in ${Math.round(b.goneMs / 1000)} s after launch start`];
+  // single instance while the window is destroyed
+  const second = spawn(BINARY, [], { env: { ...process.env, MANGOCLIENT_HOME: home }, stdio: 'ignore' });
+  const exited = new Promise((res) => second.on('exit', (code, sig) => res({ code, sig })));
+  const ex = await Promise.race([exited, sleep(10000).then(() => null)]);
+  if (!ex) { kill(second.pid, 'SIGKILL'); throw new Error('second start did not exit within 10 s'); }
+  await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 10000, what: 'the window to reappear after the second start' });
+  check(alive(appPid) && alive(b.java), 'app or game died during the second start');
+  note.push(`second start exit ${ex.code}, window back; ${memStr(snap().mem)}`);
+  await sleep(2500);
+  check(x11.mainWindows(appPid, true).length > 0, 'the restored window was hidden again (repeated running must not re-hide a window the user brought back)');
+  // closing the window must not quit while the game runs
+  x11.quitWindow(x11.mainWindows(appPid, true).pop());
+  await sleep(5000);
+  check(alive(appPid), 'closing the window during a running game QUIT the launcher');
+  check(alive(b.java), 'the game died when the window was closed');
+  note.push(`window closed during game: app alive, windows left ${x11.mainWindows(appPid, false).length}`);
+  // the user starts the executable again: the window must come back
+  const second2 = spawn(BINARY, [], { env: { ...process.env, MANGOCLIENT_HOME: home }, stdio: 'ignore' });
+  await Promise.race([new Promise((res) => second2.on('exit', res)), sleep(10000)]);
+  kill(second2.pid, 'SIGKILL');
+  await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 10000, what: 'the window to reappear after closing it during the game and starting again' });
+  // game ends while the user has the window open again
+  kill(b.java, 'SIGTERM');
+  await until(() => !alive(b.java), { timeout: 30000, what: 'the game to exit' });
+  const quitEarly = await waitExit(appPid, 15000);
+  if (quitEarly) {
+    const code = exitCodeOf('-s9b');
+    findings.push(`BUG candidate S9b: the user closed the window while a game ran, started the launcher again (window visible), then the game ended: the launcher QUIT by itself (exit ${code}) although the window was open. The held-back quit (exit_wanted) is not cleared when the window is shown again.`);
+    note.push(`launcher quit by itself after the game ended although the window was re-opened (exit ${code}) -> see Notes`);
+  } else {
+    note.push('window stayed open after the game ended');
+    x11.quitWindow(x11.mainWindows(appPid, true).pop());
+    check(await waitExit(appPid, 20000), 'app did not quit after closing the window with no game running');
+    const code = exitCodeOf('-s9b');
+    check(code === '0', `exit code ${code} after quit`);
+  }
+  await endApp();
+  return note.join('; ');
+}
+
+// ---- the UI run (S10, S11, S12, S13 share one app instance)
+let uiReady = false;
+async function ensureUi() {
+  if (uiReady && appPid && alive(appPid)) return;
+  const bad = seedProblem();
+  if (bad) throw new SkipError(bad);
+  if (!x11.hasXdotool()) throw new SkipError('xdotool not available (window geometry checks)');
+  const home = prepareCopy('ui');
+  await startApp('-ui', home);
+  await sleep(1500);
+  const st = (await page.invoke('app_state')).ok;
+  check(st.config.firstRunDone && st.accounts.length > 0, 'data copy did not boot into the main UI');
+  uiReady = true;
+}
+
+async function combo(key, { shift = false } = {}) {
+  const chord = [''];
+  if (shift) chord.push('');
+  chord.push(key);
+  try {
+    await session.keys(chord);
+    await sleep(250);
+    return 'webdriver actions';
+  } catch (e) {
+    await page.exec(
+      `document.dispatchEvent(new KeyboardEvent('keydown', { key: arguments[0], ctrlKey: true, shiftKey: arguments[1], bubbles: true, cancelable: true })); return true;`,
+      [key, shift],
+    );
+    await sleep(250);
+    return 'synthetic DOM event (actions API failed: ' + e.message.slice(0, 60) + ')';
+  }
+}
+const currentNav = () => page.exec(`const b = document.querySelector('nav.rail button[aria-current="page"]'); return b ? b.getAttribute('aria-label') : null;`);
+async function goView(key, label, shiftOrRail) {
+  const how = await combo(key);
+  if ((await currentNav()) === label) return `Ctrl+${key} (${how})`;
+  await page.click(new RegExp(`^${label}$`), { selector: 'nav.rail button.nav' });
+  await sleep(400);
+  check((await currentNav()) === label, `could not navigate to ${label}`);
+  return `rail click (Ctrl+${key} did not switch via ${how})`;
+}
+const rectOf = (css) => page.exec(`const e = document.querySelector(arguments[0]); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio };`, [css]);
+async function shotImg(name) {
+  const file = await page.shot(name);
+  return { file, img: decodePng(readFileSync(file)) };
+}
+
+async function s10() {
+  await ensureUi();
+  await goView('1', 'Home');
+  await page.exec(
+    `const t = (window.__e2e.tex = []);
+     const f = window.fetch; window.fetch = function (...a) { t.push('fetch ' + String(a[0]).slice(0, 50)); return f.apply(this, a); };
+     if (window.createImageBitmap) { const c = window.createImageBitmap; window.createImageBitmap = function (...a) { t.push('createImageBitmap'); return c.apply(this, a); }; }
+     const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'crossOrigin');
+     if (d && d.set) Object.defineProperty(HTMLImageElement.prototype, 'crossOrigin', { configurable: true, get: d.get, set(v) { t.push('<img crossOrigin=' + v + '>'); d.set.call(this, v); } });
+     return true;`,
+  );
+  const how = await goView('5', 'Skins');
+  await waitFor(() => page.byCss('.viewer'), { timeout: 20000, what: '.viewer' });
+  const mode = await until(
+    () => page.exec(`const v = document.querySelector('.viewer'); if (!v) return null; if (document.querySelector('.serr')) return 'error'; if (v.querySelector('canvas.gl.ready')) return 'gl'; if (v.classList.contains('flat') && v.querySelector('.figures')) return 'flat'; return null;`),
+    { timeout: 40000, what: 'the skin viewer to show the skin (gl or flat)' },
+  );
+  await sleep(2500); // let the model render a few frames
+  const info = await page.exec(
+    `const gl = document.createElement('canvas'); const ctx = gl.getContext('webgl2') || gl.getContext('webgl');
+     const c = document.querySelector('.viewer canvas.gl');
+     return { webgl: !!ctx, tex: window.__e2e.tex, glSize: c ? [c.width, c.height] : null, flatNote: !!document.querySelector('.flatnote'), pose: !!document.querySelector('[role=radiogroup], .bar') };`,
+  );
+  // in-page read-back attempt (informational; without preserveDrawingBuffer it can legitimately be blank)
+  const rb = await page.s.execAsync(
+    `const done = arguments[arguments.length - 1]; const c = document.querySelector('.viewer canvas.gl'); if (!c) return done(null);
+     requestAnimationFrame(() => { try { const o = document.createElement('canvas'); o.width = Math.min(c.width, 200); o.height = Math.min(c.height, 200); const x = o.getContext('2d'); x.drawImage(c, 0, 0, o.width, o.height);
+       const d = x.getImageData(0, 0, o.width, o.height).data; const s = new Set(); for (let i = 0; i < d.length; i += 4) s.add((d[i] >> 4) + ',' + (d[i + 1] >> 4) + ',' + (d[i + 2] >> 4) + ',' + (d[i + 3] >> 4)); done({ distinct: s.size }); } catch (e) { done({ err: String(e) }); } });`,
+  );
+  const { img, file } = await shotImg('s10-skins-3d');
+  let verdict;
+  if (mode === 'gl') {
+    const r = await rectOf('.viewer canvas.gl');
+    const sc = img.w / r.vw;
+    const st = regionStats(img, { x: r.x * sc, y: r.y * sc, w: r.w * sc, h: r.h * sc });
+    check(st.otherShare > 0.03 && st.significant >= 5, `the WebGL canvas looks empty/uniform in the screenshot (dominant ${st.dominant}, ${(st.otherShare * 100).toFixed(1)} % other pixels, ${st.significant} significant colours); see ${file}`);
+    verdict = `WebGL model rendered: canvas ${Math.round(r.w)}x${Math.round(r.h)}, ${(st.otherShare * 100).toFixed(0)} % non-background pixels, ${st.significant} significant colours (bg ${st.dominant})`;
+  } else if (mode === 'flat') {
+    const r = await rectOf('.viewer .figures canvas.fig');
+    const sc = img.w / r.vw;
+    const st = regionStats(img, { x: r.x * sc, y: r.y * sc, w: r.w * sc, h: r.h * sc });
+    check(st.significant >= 3, `flat fallback canvas is blank (${st.significant} colours)`);
+    verdict = `flat fallback shown (${info.webgl ? 'WebGL IS available but the viewer fell back: texture refused (tainted/plain path) -> see Notes' : 'WebGL unavailable in this webview'}); figure ${st.significant} colours`;
+    if (info.webgl) findings.push('S10: WebGL is available in this webview but the skin viewer fell back to the flat view (texture refused as tainted, or the renderer lost its context).');
+  } else throw new Error(`skin viewer ended in state ${mode}`);
+  const c = await page.collected();
+  check(c.errors.length === 0, `page errors on the Skins page: ${c.errors.join(' | ')}`);
+  return `${verdict}; opened via ${how}; texture path spy: ${(info.tex || []).join(', ') || 'no fetch/createImageBitmap/crossOrigin seen (cached or plain <img>)'}; in-page readback ${JSON.stringify(rb)}; ${file}`;
+}
+
+async function s11() {
+  await ensureUi();
+  const wid = x11.mainWindows(appPid, true)[0];
+  check(wid, 'no X11 window for the app');
+  const dom = await page.exec(
+    `const q = (s) => [...document.querySelectorAll(s)];
+     const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+     const strip = document.querySelector('header.strip'); if (!strip) return { missing: 'header.strip' };
+     const brand = strip.querySelector('.brandbtn'); const arrows = q('header.strip .arrows .ab'); const wc = q('header.strip .wc .c');
+     return { strip: r(strip), mode: strip.dataset.mode, brand: brand ? { ...r(brand), label: brand.getAttribute('aria-label'), hasArt: !!brand.querySelector('svg, img, canvas') || brand.textContent.trim().length > 0 } : null,
+       arrows: arrows.map((a) => ({ label: a.getAttribute('aria-label'), disabled: a.disabled, ...r(a) })), wc: wc.map((a) => ({ label: a.getAttribute('aria-label'), ...r(a) })), rz: q('.rz').length, vw: innerWidth };`,
+  );
+  check(!dom.missing, `title bar element missing: ${dom.missing}`);
+  check(dom.mode === 'linux', `title bar mode is ${dom.mode}, expected "linux" (custom controls)`);
+  check(dom.brand && dom.brand.hasArt && dom.brand.w > 10, 'brand button missing or empty');
+  check(dom.arrows.length === 2, `expected back/forward buttons, found ${dom.arrows.length}`);
+  check(dom.wc.length === 3, `expected 3 window controls, found ${dom.wc.length}`);
+  check(dom.rz === 8, `expected 8 resize zones, found ${dom.rz}`);
+  check(Math.abs(dom.strip.h - 36) < 1.5, `title bar height ${dom.strip.h}, expected 36`);
+  check(Math.abs(dom.wc[2].x + dom.wc[2].w - dom.vw) < 2, `close button is not flush with the right edge (${dom.wc[2].x + dom.wc[2].w} vs ${dom.vw})`);
+  await page.shot('s11-titlebar');
+  const ctrl = (i) => page.exec(`const c = document.querySelectorAll('header.strip .wc .c')[arguments[0]]; return c ? { label: c.getAttribute('aria-label'), svg: c.innerHTML.length } : null;`, [i]);
+  const clickCtrl = async (i) => {
+    const el = await page.exec(`return document.querySelectorAll('header.strip .wc .c')[arguments[0]] || null;`, [i]);
+    await session.click(Object.values(el)[0]);
+  };
+  const isMax = async () => (await page.invoke('window_is_maximized')).ok === true;
+  const rz = () => page.exec(`return document.querySelectorAll('.rz').length;`);
+  const g0 = rectInfo(wid);
+  const maxBefore = await ctrl(1);
+  const notes = [];
+  // maximize / restore through the buttons
+  await clickCtrl(1);
+  await until(isMax, { timeout: 6000, what: 'window to report maximized' });
+  await sleep(500);
+  const g1 = rectInfo(wid);
+  const maxAfter = await until(async () => { const c = await ctrl(1); return c && c.label !== maxBefore.label ? c : null; }, { timeout: 5000, what: 'maximize icon to swap to restore (window:state)' });
+  check(g1.w > g0.w || g1.h > g0.h, `X11 geometry did not grow on maximize (${g0.w}x${g0.h} -> ${g1.w}x${g1.h}; screen may equal the window)`);
+  check((await rz()) === 0, 'resize zones still present while maximized');
+  await page.shot('s11-maximized');
+  notes.push(`maximize ${g0.w}x${g0.h} -> ${g1.w}x${g1.h}, button "${maxBefore.label}" -> "${maxAfter.label}", resize zones 8 -> 0`);
+  await clickCtrl(1);
+  await until(async () => !(await isMax()), { timeout: 6000, what: 'window to report restored' });
+  await sleep(500);
+  const g2 = rectInfo(wid);
+  check(Math.abs(g2.w - g0.w) < 40 && Math.abs(g2.h - g0.h) < 40, `restore did not return to the old size (${g0.w}x${g0.h} vs ${g2.w}x${g2.h})`);
+  await until(async () => (await rz()) === 8, { timeout: 4000, what: '8 resize zones after restore' });
+  await until(async () => { const c = await ctrl(1); return c && c.label === maxBefore.label; }, { timeout: 4000, what: 'restore icon to swap back to maximize' });
+  notes.push(`restore -> ${g2.w}x${g2.h}, zones back to 8`);
+  // double click on the drag region (real X11 clicks)
+  const mid = await rectOf('header.strip .mid');
+  const gw = rectInfo(wid);
+  x11.focus(wid);
+  x11.doubleClick(gw.x + mid.x + mid.w / 2, gw.y + mid.y + mid.h / 2);
+  const dbl1 = await until(isMax, { timeout: 4000, what: 'double click on the drag region to maximize' }).then(() => true, () => false);
+  if (dbl1) {
+    await sleep(600);
+    const gm = await rectOf('header.strip .mid');
+    const gg = rectInfo(wid);
+    x11.doubleClick(gg.x + gm.x + gm.w / 2, gg.y + gm.y + gm.h / 2);
+    const back = await until(async () => !(await isMax()), { timeout: 4000, what: 'second double click to restore' }).then(() => true, () => false);
+    check(back, 'double click on the drag region maximized but a second one did not restore');
+    notes.push('double click on the strip toggles maximize both ways');
+    await sleep(500);
+  } else {
+    // may be an xdotool/WM timing issue rather than an app bug: say so
+    throw new Error(`double click on the drag region did not maximize (xdotool at ${Math.round(gw.x + mid.x + mid.w / 2)},${Math.round(gw.y + mid.y + mid.h / 2)}); if the WM swallowed the clicks verify by hand`);
+  }
+  // drag / resize commands (the WM grabs the pointer; release it afterwards)
+  for (const [cmd, args] of [['window_start_drag', {}], ['window_start_resize', { direction: 'east' }], ['window_start_resize', { direction: 'southwest' }]]) {
+    const r = await page.invoke(cmd, args);
+    check(!r.err, `${cmd} ${JSON.stringify(args)} errored: ${r.err}`);
+    x11.key('Escape');
+    x11.mouseUp();
+    await sleep(400);
+  }
+  notes.push('window_start_drag / window_start_resize return ok');
+  // minimize
+  await clickCtrl(0);
+  const unmapped = await until(() => x11.mainWindows(appPid, true).length === 0, { timeout: 5000, what: 'window to be unmapped after Minimize' }).then(() => true, () => false);
+  check(unmapped, 'Minimize did not unmap/iconify the window');
+  x11.mapWindow(wid);
+  x11.activate(wid);
+  const back = await until(() => x11.mainWindows(appPid, true).length > 0, { timeout: 6000, what: 'window to come back (windowmap/activate)' }).then(() => true, () => false);
+  if (!back) findings.push('S11: after Minimize the window could not be restored with xdotool windowmap/windowactivate; check by hand that the taskbar restores it.');
+  notes.push(`minimize unmapped the window; restored via xdotool: ${back}`);
+  await sleep(600);
+  await page.shot('s11-after-minimize-restore');
+  const c = await page.collected();
+  check(c.errors.length === 0, `page errors during the title bar test: ${c.errors.join(' | ')}`);
+  return notes.join('; ');
+}
+
+async function s12() {
+  await ensureUi();
+  const wid = x11.mainWindows(appPid, true)[0];
+  if (wid) { x11.activate(wid); x11.focus(wid); }
+  await goView('1', 'Home');
+  await waitFor(() => page.byCss('.hero'), { timeout: 15000, what: '.hero on Home' });
+  const sample = () => page.exec(
+    `const st = document.querySelector('.hero .stack');
+     if (!st) return { stack: false, focus: document.hasFocus(), hidden: document.hidden };
+     const slots = [...st.querySelectorAll('.slot')].map((s) => { const i = s.querySelector('img'); const b = s.querySelector('[style*="background"]'); return { cls: s.className.replace(/svelte-\\w+/g, '').trim(), key: i ? i.getAttribute('src') : b ? b.getAttribute('style').slice(0, 80) : s.innerHTML.length + ':' + s.innerHTML.slice(0, 60) }; });
+     return { stack: true, focus: document.hasFocus(), hidden: document.hidden, slots };`,
+  );
+  await sleep(4000);
+  const first = await sample();
+  const pool = (await page.invoke('panorama_pool')).ok || [];
+  await page.shot('s12-home-start');
+  if (!first.stack) {
+    // not cycling: legitimate only with a single pool member (or the setting off / a fixed background)
+    const pref = await page.exec(`try { return localStorage.getItem('mango.cycleBackgrounds'); } catch { return 'n/a'; }`);
+    if (pool.length >= 1) throw new Error(`Home is not cycling although ${pool.length} panorama set(s) exist (cycle pref ${pref}, focus ${first.focus}, hidden ${first.hidden}); instance background may be fixed rather than "auto"`);
+    return `no cycling: pool has no panorama sets and there is no stack layer (brand + wallpapers only, or a single member); nothing to swap (not cycling is expected)`;
+  }
+  const keys = (s) => (s.slots || []).map((x) => x.key).sort().join('|');
+  const seen = new Set([keys(first)]);
+  const t0c = Date.now();
+  let changes = 0;
+  let last = keys(first);
+  let paused = 0;
+  while (Date.now() - t0c < 75000) {
+    await sleep(1000);
+    const s = await sample();
+    if (!s.focus || s.hidden) paused++;
+    const k = keys(s);
+    if (k !== last) { changes++; seen.add(k); last = k; if (changes === 1) await page.shot('s12-home-after-swap'); if (changes >= 2) break; }
+  }
+  const secs = Math.round((Date.now() - t0c) / 1000);
+  check(changes >= 1, `the Home hero background did not change within ${secs} s (focus lost in ${paused} samples; cycling pauses while the window is unfocused or the document hidden); pool sets ${pool.length}`);
+  return `hero swapped ${changes}x within ${secs} s (${seen.size} distinct layer states, ${pool.length} panorama set(s) in the pool, unfocused samples ${paused})`;
+}
+
+async function s13() {
+  await ensureUi();
+  const wid = x11.mainWindows(appPid, true)[0];
+  if (wid) x11.activate(wid);
+  const shots = [];
+  const survey = async (name) => {
+    await sleep(1200);
+    const f = await page.shot(name);
+    const broken = await page.exec(`return [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.src).map((i) => i.src.slice(0, 70));`);
+    const overflow = await page.exec(`return document.documentElement.scrollWidth > innerWidth + 1;`);
+    shots.push(`${name}${broken.length ? ` (${broken.length} broken <img>)` : ''}${overflow ? ' (horizontal overflow)' : ''}`);
+    if (broken.length) findings.push(`S13 ${name}: broken images ${broken.slice(0, 3).join(', ')}`);
+    return f;
+  };
+  await goView('1', 'Home'); await survey('s13-01-home');
+  await goView('2', 'Library'); await survey('s13-02-library');
+  await goView('5', 'Skins'); await survey('s13-03-skins');
+  await combo(','); await survey('s13-04-settings');
+  // an instance page with every tab
+  await page.click(/^Vanilla Test$/, { selector: 'nav.rail button.prof' });
+  await sleep(800);
+  const tabs = await page.exec(`return [...document.querySelectorAll('[role=tablist] [role=tab]')].map((t) => t.textContent.trim());`);
+  check(tabs.length >= 5, `instance page shows only ${tabs.length} tabs`);
+  for (const [i, label] of tabs.entries()) {
+    const id = await page.findText(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), '[role=tab]');
+    if (id) { await session.click(id); await sleep(600); }
+    await survey(`s13-05-instance-${String(i + 1).padStart(2, '0')}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+  }
+  // icon picker
+  let cells = 0;
+  const open = await page.findText(/Change icon/i, 'button.iconbtn, button');
+  if (open) {
+    await session.click(open);
+    await waitFor(() => page.byCss('dialog[open]'), { timeout: 8000, what: 'icon picker dialog' });
+    cells = await until(() => page.exec(`return document.querySelectorAll('dialog[open] [role=radio].cell').length;`), { timeout: 60000, interval: 500, what: 'block icons in the picker gallery' }).catch(() => 0);
+    await sleep(1500);
+    const imgs = await page.exec(`const im = [...document.querySelectorAll('dialog[open] .cell img')]; return { n: im.length, ok: im.filter((i) => i.complete && i.naturalWidth > 0).length };`);
+    await survey('s13-06-icon-picker');
+    shots.push(`icon picker: ${cells} cells, ${imgs.ok}/${imgs.n} face images decoded`);
+    await page.exec(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true;`);
+    await sleep(500);
+    if (await page.byCss('dialog[open]')) { await session.keys(['']).catch(() => {}); await sleep(500); }
+  } else findings.push('S13: no "Change icon" button found on the instance page');
+  // shortcut sheet
+  await combo('/'); await sleep(500);
+  const sheet = await page.byCss('dialog[open]');
+  await survey('s13-07-shortcuts');
+  check(!!sheet, 'Ctrl+/ did not open the shortcut sheet');
+  await session.keys(['']).catch(() => {});
+  const c = await page.collected();
+  check(c.errors.length === 0, `page errors during the survey: ${c.errors.join(' | ')}`);
+  return `${shots.length} screenshots in ${OUT}: ${shots.join(', ')}`;
+}
+
 // ---------------------------------------------------------------- main
 
 async function cleanup() {
@@ -332,11 +871,19 @@ async function cleanup() {
     if (!(await waitExit(appPid, 5000))) kill(appPid, 'SIGKILL');
   }
   // anything the driver launched with our data dir that survived (e.g. a failed session start)
-  for (const p of pids()) if (exeOf(p) === BINARY && envOf(p).MANGOCLIENT_HOME === HOME_DIR) kill(p, 'SIGKILL');
+  for (const p of pids()) {
+    if (exeOf(p) !== BINARY) continue;
+    const h = envOf(p).MANGOCLIENT_HOME;
+    if (h === HOME_DIR || COPIES.includes(h)) {
+      for (const j of x11.javaChildren(p)) kill(j, 'SIGKILL');
+      kill(p, 'SIGKILL');
+    }
+  }
   if (driverPid) kill(driverPid, 'SIGTERM');
   if (!KEEP) {
     // data dir only; screenshots and logs stay
     rmSync(HOME_DIR, { recursive: true, force: true });
+    for (const c of COPIES) rmSync(c, { recursive: true, force: true }); // the copies of the prepared data dir
   }
 }
 
@@ -360,7 +907,7 @@ async function main() {
   mkdirSync(HOME_DIR, { recursive: true });
   preflight();
   log(`binary ${BINARY}\n       data   ${HOME_DIR}\n       out    ${OUT}`);
-  process.env.MANGOCLIENT_HOME = HOME_DIR; // inherited by the driver and the app it launches
+  process.env.MANGOCLIENT_HOME = HOME_DIR; // inherited by the driver; the wrappers of S9+ export their own
   if (!argv.includes('--native')) {
     // XWayland: lets S8 close the window like the WM close button. Software-ish buffers: the dmabuf path fails on XWayland here.
     process.env.GDK_BACKEND = 'x11';
@@ -368,24 +915,43 @@ async function main() {
   }
   process.env.TAURI_WEBVIEW_AUTOMATION = 'true'; // tauri-runtime-wry: allow WebKit automation (what tauri-driver sets)
   await startDriver();
-  const wrapper = writeWrapper();
-  session = await Session.create(`http://127.0.0.1:${PORT}`, {
-    'webkitgtk:browserOptions': { binary: wrapper, args: [] },
-  });
-  appPid = await waitFor(findAppPid, { timeout: 15000, what: 'app process' });
-  log(`session ${session.id}, app pid ${appPid}`);
-  page = new Page(session, OUT);
-  await waitFor(async () => (await session.title()) === 'MangoClient', { timeout: 20000, what: 'window title' }).catch(() => {});
-  await page.init();
+  const mainWanted = [...'12345678'].some((n) => wanted(`S${n}`));
+  if (mainWanted) {
+    const wrapper = writeWrapper();
+    session = await Session.create(`http://127.0.0.1:${PORT}`, {
+      'webkitgtk:browserOptions': { binary: wrapper, args: [] },
+    });
+    appPid = await waitFor(findAppPid, { timeout: 15000, what: 'app process' });
+    log(`session ${session.id}, app pid ${appPid}`);
+    page = new Page(session, OUT);
+    await waitFor(async () => (await session.title()) === 'MangoClient', { timeout: 20000, what: 'window title' }).catch(() => {});
+    await page.init();
 
-  await scenario('S1', 'window, title, document, no errors', s1);
-  await scenario('S2', 'IPC under reduced capability', s2);
-  await scenario('S3', 'events (listen + emit observed)', s3);
-  await scenario('S4', 'mangoimg:// protocol + root refusal', s4);
-  await scenario('S5', 'CSP blocks inline script and network', s5);
-  await scenario('S6', 'real UI: onboarding, profile, views', s6);
-  await scenario('S7', 'single instance', s7);
-  await scenario('S8', 'clean quit, exit 0, no strays', s8);
+    await scenario('S1', 'window, title, document, no errors', s1);
+    await scenario('S2', 'IPC under reduced capability', s2);
+    await scenario('S3', 'events (listen + emit observed)', s3);
+    await scenario('S4', 'mangoimg:// protocol + root refusal', s4);
+    await scenario('S5', 'CSP blocks inline script and network', s5);
+    await scenario('S6', 'real UI: onboarding, profile, views', s6);
+    await scenario('S7', 'single instance', s7);
+    await scenario('S8', 'clean quit, exit 0, no strays', s8);
+    if (session) await session.quit();
+    session = null;
+    page = null;
+  }
+
+  // S9..S13 run on copies of the prepared data dir, one app instance per lifecycle scenario
+  const fresh = async (fn) => { try { return await fn(); } finally { await endApp(); } };
+  await scenario('S9a', 'hideOnLaunch: window destroyed while the game runs, re-created at game end', () => fresh(s9a));
+  await scenario('S9b', 'hideOnLaunch: second start restores the window; closing it during a game does not quit', () => fresh(s9b));
+  const uiWanted = ['S10', 'S11', 'S12', 'S13'].some(wanted);
+  if (uiWanted) {
+    await scenario('S10', '3D skin viewer renders the skin in the real shell', s10);
+    await scenario('S11', 'frameless title bar: controls, maximize, minimize, resize zones', s11);
+    await scenario('S13', 'visual survey screenshots (every view, tabs, icon picker, shortcuts)', s13);
+    await scenario('S12', 'Home background cycling (up to 75 s)', s12);
+    await endApp();
+  }
 }
 
 let code = 1;
