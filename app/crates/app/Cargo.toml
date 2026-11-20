@@ -1,0 +1,30 @@
+[package]
+name = "mango-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mango-core = { path = "../core" }
+mango-net = { path = "../net" }
+mango-auth = { path = "../auth" }
+mango-java = { path = "../java" }
+mango-minecraft = { path = "../minecraft" }
+mango-loaders = { path = "../loaders" }
+mango-modrinth = { path = "../modrinth" }
+mango-content = { path = "../content" }
+mango-mango = { path = "../mango" }
+mango-servers = { path = "../servers" }
+mango-runtime = { path = "../runtime" }
+mango-updater = { path = "../updater" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

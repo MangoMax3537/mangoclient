@@ -1,0 +1,79 @@
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/inter';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+:root {
+  --ink-0: #0b0c0e; --ink-1: #111316; --ink-2: #16181c; --ink-3: #1c1f24; --ink-4: #262a31;
+  --line: #2a2e35; --line-soft: #1f2328;
+  --paper: #f4f1ea; --paper-dim: #b4b0a6; --paper-mute: #8d8a82;
+  --mango: #ffad32; --mango-ink: #1a1100; --leaf: #86b86b; --tomato: #ed665c;
+  --r-s: 4px; --r-m: 8px; --r-l: 14px;
+  --font-display: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
+  --font-ui: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  background: var(--ink-0); color: var(--paper); font: 14px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+button:disabled { cursor: not-allowed; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.px { image-rendering: pixelated; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+:focus-visible { outline: 2px solid var(--mango); outline-offset: 2px; border-radius: var(--r-s); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: var(--r-m);
+  border: 1px solid var(--line); background: var(--ink-3); font-weight: 500;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--ink-4); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--paper-dim); }
+.btn.ghost:hover:not(:disabled) { color: var(--paper); background: var(--ink-3); }
+.btn.accent { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); font-weight: 700; }
+.btn.accent:hover:not(:disabled) { background: #ffbd57; }
+.btn.danger { color: var(--tomato); }
+
+.field {
+  height: 36px; padding: 0 12px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m);
+  user-select: text; min-width: 0;
+}
+.field:focus-visible { outline-offset: 0; border-color: var(--mango); }
+.field[aria-invalid='true'] { border-color: var(--tomato); }
+.hint { color: var(--paper-mute); font-size: 13px; }
+.err { color: var(--tomato); font-size: 13px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: var(--r-s);
+  background: rgba(244, 241, 234, 0.08); border: 1px solid rgba(244, 241, 234, 0.12); font-size: 13px;
+}
+.chip svg { color: var(--paper-dim); }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); font-weight: 600; }
+
+input[type='range'] { accent-color: var(--mango); width: 100%; }
+.switch { position: relative; width: 40px; height: 22px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; background: var(--ink-4); border: 1px solid var(--line); border-radius: 11px; transition: background var(--dur) var(--ease); pointer-events: none; }
+.switch span::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--paper-dim); transition: transform var(--dur) var(--ease); }
+.switch input:checked + span { background: var(--mango); border-color: var(--mango); }
+.switch input:checked + span::after { transform: translateX(18px); background: var(--mango-ink); }
+.switch input:focus-visible + span { outline: 2px solid var(--mango); outline-offset: 2px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 5px; border: 2px solid var(--ink-0); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}

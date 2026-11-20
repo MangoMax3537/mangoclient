@@ -1,0 +1,233 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
+  import XIcon from 'phosphor-svelte/lib/XIcon';
+  import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
+  import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
+  import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import { fmtRam } from '../lib/format';
+  import type { Key } from '../lib/i18n';
+  import { actions, app, errorText, getApi, nav, t } from '../lib/stores.svelte';
+  import type { Loader, LoaderVersion, VersionManifest } from '../lib/types';
+
+  const LOADERS: Loader[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'];
+  const COLORS = ['#ffad32', '#86b86b', '#ed665c', '#6fa8d6', '#d6c27a', '#e6a3b8'];
+  const PAGE = 40;
+
+  let dlg: HTMLDialogElement | undefined = $state();
+  let step = $state(0);
+  let name = $state('');
+  let color = $state(COLORS[0]);
+  let touched = $state(false);
+  let manifest = $state<VersionManifest | null>(null);
+  let filter = $state<'release' | 'snapshot' | 'all'>('release');
+  let q = $state('');
+  let limit = $state(PAGE);
+  let mcVersion = $state('');
+  let loader = $state<Loader>('vanilla');
+  let loaderVersions = $state<LoaderVersion[]>([]);
+  let loaderVersion = $state('');
+  let loaderLoading = $state(false);
+  let ram = $state(app.config?.ram ?? 4096);
+  let creating = $state(false);
+  let error = $state('');
+
+  const steps = ['new.step.name', 'new.step.version', 'new.step.resources'] as const;
+  const maxRam = $derived(Math.max(2048, Math.floor((app.totalRamMb || 8192) * 0.75 / 512) * 512));
+  const filtered = $derived.by(() => {
+    const s = q.trim().toLowerCase();
+    return (manifest?.versions ?? []).filter((v) =>
+      (filter === 'all' || (filter === 'release' ? v.type === 'release' : v.type === 'snapshot')) && (!s || v.id.toLowerCase().includes(s)));
+  });
+  const nameOk = $derived(name.trim().length > 0);
+
+  onMount(() => {
+    dlg?.showModal();
+    getApi().versionsManifest().then((m) => {
+      manifest = m;
+      mcVersion = m.latest.release;
+    }).catch((e) => (error = errorText(e)));
+  });
+
+  function close() { nav.newProfile = false; }
+
+  let loadSeq = 0;
+  async function loadLoader() {
+    const seq = ++loadSeq;
+    loaderVersions = []; loaderVersion = '';
+    if (loader === 'vanilla' || !mcVersion) return;
+    loaderLoading = true;
+    try {
+      const l = await getApi().loaderVersions({ loader, mcVersion });
+      if (seq !== loadSeq) return;
+      loaderVersions = l;
+      loaderVersion = (l.find((x) => x.stable) ?? l[0])?.version ?? '';
+    } catch (e) { if (seq === loadSeq) error = errorText(e); }
+    if (seq === loadSeq) loaderLoading = false;
+  }
+  $effect(() => { void loader; void mcVersion; loadLoader(); });
+  $effect(() => { void q; void filter; limit = PAGE; });
+
+  function next() {
+    if (step === 0) { touched = true; if (!nameOk) return; }
+    if (step === 1 && (!mcVersion || (loader !== 'vanilla' && !loaderLoading && !loaderVersion))) return;
+    step = Math.min(2, step + 1);
+  }
+  async function create() {
+    creating = true; error = '';
+    try {
+      await actions.createProfile(
+        { name: name.trim(), mcVersion, loader, loaderVersion: loader === 'vanilla' ? null : loaderVersion },
+        { color, ram },
+      );
+      close();
+    } catch (e) { error = errorText(e); creating = false; }
+  }
+</script>
+
+<dialog bind:this={dlg} class="dlg" aria-labelledby="np-title" onclose={close} oncancel={close}>
+  <header>
+    <h2 id="np-title">{t('new.title')}</h2>
+    <button class="btn ghost" type="button" aria-label={t('common.close')} onclick={close}><XIcon weight="bold" size={16} aria-hidden="true" /></button>
+  </header>
+
+  <ol class="steps" aria-label={t('new.title')}>
+    {#each steps as s, i (s)}
+      <li class:cur={i === step} class:done={i < step} aria-current={i === step ? 'step' : undefined}><span class="n mono">{i + 1}</span>{t(s as Key)}</li>
+    {/each}
+  </ol>
+
+  <div class="body">
+    {#if step === 0}
+      <label class="lbl" for="np-name">{t('new.name')}</label>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input id="np-name" class="field" bind:value={name} placeholder={t('new.namePlaceholder')} maxlength="48" autofocus autocomplete="off"
+        aria-invalid={touched && !nameOk} aria-describedby={touched && !nameOk ? 'np-name-err' : undefined}
+        onkeydown={(e) => e.key === 'Enter' && next()} />
+      {#if touched && !nameOk}<div id="np-name-err" class="err" role="alert">{t('new.nameRequired')}</div>{/if}
+      <div class="lbl">{t('new.color')}</div>
+      <div class="swatches" role="radiogroup" aria-label={t('new.color')}>
+        {#each COLORS as c (c)}
+          <button type="button" role="radio" aria-checked={color === c} aria-label={c} class="sw" class:on={color === c} style:background={c} onclick={() => (color = c)}>
+            {#if color === c}<CheckIcon weight="bold" size={14} color="#1a1100" aria-hidden="true" />{/if}
+          </button>
+        {/each}
+      </div>
+    {:else if step === 1}
+      <div class="lbl">{t('new.loader')}</div>
+      <div class="loaders" role="radiogroup" aria-label={t('new.loader')}>
+        {#each LOADERS as l (l)}
+          <button type="button" role="radio" aria-checked={loader === l} class="lo" class:on={loader === l} onclick={() => (loader = l)}>{l === 'vanilla' ? t('profile.vanilla') : l}</button>
+        {/each}
+      </div>
+      <div class="vrow">
+        <label class="search">
+          <MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
+          <span class="sr-only">{t('new.search')}</span>
+          <input class="field" type="search" bind:value={q} placeholder={t('new.search')} />
+        </label>
+        <div class="loaders" role="radiogroup" aria-label={t('new.releases')}>
+          {#each [['release', 'new.releases'], ['snapshot', 'new.snapshots'], ['all', 'new.all']] as [f, k] (f)}
+            <button type="button" role="radio" aria-checked={filter === f} class="lo" class:on={filter === f} onclick={() => (filter = f as typeof filter)}>{t(k as Key)}</button>
+          {/each}
+        </div>
+      </div>
+      {#if !manifest}
+        <p class="hint">{t('new.loadingVersions')}</p>
+      {:else if filtered.length === 0}
+        <p class="hint">{t('new.noVersions')}</p>
+      {:else}
+        <ul class="vlist" role="listbox" aria-label={t('new.step.version')}>
+          {#each filtered.slice(0, limit) as v (v.id)}
+            <li role="option" aria-selected={v.id === mcVersion}>
+              <button type="button" class:on={v.id === mcVersion} onclick={() => (mcVersion = v.id)}>
+                <span class="mono">{v.id}</span>
+                <span class="tags">
+                  {#if v.id === manifest.latest.release}<em>{t('new.latest')}</em>{/if}
+                  {#if manifest.installed.includes(v.id)}<em class="inst">{t('new.installed')}</em>{/if}
+                </span>
+              </button>
+            </li>
+          {/each}
+          {#if filtered.length > limit}
+            <li><button type="button" class="more" onclick={() => (limit += PAGE)}>{t('new.showMore')}</button></li>
+          {/if}
+        </ul>
+      {/if}
+      {#if loader !== 'vanilla'}
+        <label class="lbl" for="np-lv">{t('new.loaderVersion')}</label>
+        {#if loaderLoading}
+          <p class="hint">{t('new.loadingVersions')}</p>
+        {:else if !loaderVersions.length}
+          <p class="err">{t('new.noLoaderVersion')}</p>
+        {:else}
+          <select id="np-lv" class="field" bind:value={loaderVersion}>
+            {#each loaderVersions as lv (lv.version)}<option value={lv.version}>{lv.version}{lv.stable ? ` (${t('new.recommended')})` : ''}</option>{/each}
+          </select>
+        {/if}
+      {/if}
+    {:else}
+      <label class="lbl" for="np-ram">{t('new.ram')}</label>
+      <div class="ram"><input id="np-ram" type="range" min="1024" max={maxRam} step="512" bind:value={ram} aria-valuetext={fmtRam(ram)} /><output class="mono">{fmtRam(ram)}</output></div>
+      <p class="hint">{t('new.ramHint')}</p>
+      <div class="lbl">{t('new.summary')}</div>
+      <dl class="sum">
+        <dt>{t('new.name')}</dt><dd>{name.trim()}</dd>
+        <dt>{t('col.version')}</dt><dd class="mono">{mcVersion}</dd>
+        <dt>{t('col.loader')}</dt><dd>{loader === 'vanilla' ? t('profile.vanilla') : `${loader} ${loaderVersion}`}</dd>
+        <dt>{t('new.ram')}</dt><dd class="mono">{fmtRam(ram)}</dd>
+      </dl>
+    {/if}
+    {#if error}<div class="err" role="alert">{error}</div>{/if}
+  </div>
+
+  <footer>
+    <button class="btn ghost" type="button" onclick={close}>{t('new.cancel')}</button>
+    <span class="sp"></span>
+    {#if step > 0}<button class="btn" type="button" onclick={() => (step -= 1)}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('new.back')}</button>{/if}
+    {#if step < 2}
+      <button class="btn accent" type="button" onclick={next}>{t('new.next')}<ArrowRightIcon weight="bold" size={14} aria-hidden="true" /></button>
+    {:else}
+      <button class="btn accent" type="button" disabled={creating} onclick={create}>{creating ? t('new.creating') : t('new.create')}</button>
+    {/if}
+  </footer>
+</dialog>
+
+<style>
+  .dlg { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); }
+  .dlg[open] { display: flex; flex-direction: column; }
+  .dlg::backdrop { background: rgba(5, 6, 7, 0.7); }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 0; }
+  h2 { font-size: 22px; }
+  .steps { display: flex; gap: 20px; list-style: none; margin: 0; padding: 14px 20px; border-bottom: 1px solid var(--line); color: var(--paper-mute); font-size: 13px; }
+  .steps li { display: flex; align-items: center; gap: 8px; }
+  .n { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+  .cur { color: var(--paper); font-weight: 600; }
+  .cur .n { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); }
+  .done .n { border-color: var(--leaf); color: var(--leaf); }
+  .body { display: grid; gap: 10px; padding: 18px 20px; overflow: auto; align-content: start; min-height: 320px; }
+  .lbl { font-size: 13px; font-weight: 600; color: var(--paper-dim); margin-top: 4px; }
+  .swatches, .loaders { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sw { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-s); border: 2px solid transparent; }
+  .sw.on { border-color: var(--paper); }
+  .lo { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-s); color: var(--paper-dim); font-size: 13px; text-transform: capitalize; }
+  .lo.on { background: var(--paper); color: var(--ink-0); border-color: var(--paper); font-weight: 600; }
+  .vrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .search { position: relative; flex: 1; min-width: 180px; }
+  .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
+  .search .field { width: 100%; padding-left: 36px; }
+  .vlist { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-m); }
+  .vlist button { display: flex; justify-content: space-between; width: 100%; padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--line-soft); }
+  .vlist button:hover { background: var(--ink-3); }
+  .vlist button.on { background: rgba(255, 173, 50, 0.14); box-shadow: inset 3px 0 var(--mango); }
+  .more { color: var(--mango); justify-content: center !important; }
+  .tags { display: flex; gap: 6px; }
+  em { font-style: normal; font-size: 12px; padding: 0 6px; border-radius: 3px; background: var(--ink-4); color: var(--paper-dim); }
+  em.inst { color: var(--leaf); }
+  .ram { display: flex; gap: 14px; align-items: center; }
+  .ram output { min-width: 70px; text-align: right; color: var(--mango); }
+  .sum { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .sum dt { color: var(--paper-mute); } .sum dd { margin: 0; }
+  footer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
+  .sp { flex: 1; }
+</style>

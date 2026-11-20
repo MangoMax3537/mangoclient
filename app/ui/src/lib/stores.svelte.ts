@@ -1,0 +1,190 @@
+import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
+import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
+import type {
+  AppState, Config, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, PublicAccount,
+} from './types';
+
+export const CONSOLE_CAP = 800;
+
+export const LAUNCH_STAGES = ['preparing', 'java', 'loader', 'downloading', 'account', 'launching', 'running'] as const;
+export type Stage = (typeof LAUNCH_STAGES)[number];
+
+export interface ConsoleLine { id: number; line: string; level: LogLevel }
+export interface LaunchInfo {
+  state: LaunchState | 'idle';
+  progress: LaunchProgressEvent | null;
+  /** 0..1 of the current "downloading" stage, from launch:progress. */
+  downloadFraction: number;
+}
+
+export const app = $state({
+  ready: false,
+  version: '',
+  config: null as Config | null,
+  profiles: [] as ProfileView[],
+  accounts: [] as PublicAccount[],
+  totalRamMb: 0,
+  rootDir: '',
+  error: null as { code: string; message: string } | null,
+});
+
+export const launches = $state<Record<string, LaunchInfo>>({});
+export const consoles = $state<Record<string, ConsoleLine[]>>({});
+export const nav = $state({ view: 'home' as 'home' | 'library' | 'settings', newProfile: false, accounts: false });
+
+let lineId = 0;
+let currentApi: Api = defaultApi;
+let unlisteners: Unlisten[] = [];
+
+export const lang = (): Lang => app.config?.language ?? DEFAULT_LANG;
+/** Reactive translate: reads the language rune, so templates re-render on change. */
+export const t = (key: Key, vars?: Vars): string => translate(lang(), key, vars);
+export const tp = (key: PluralKey, n: number, vars?: Vars): string => plural(lang(), key, n, vars);
+export function errorText(e: unknown): string {
+  const code = toAppError(e).code;
+  const key = `err.${code}`;
+  return hasKey(lang(), key) ? translate(lang(), key) : translate(lang(), 'err.unknown');
+}
+
+export const selectedProfile = (): ProfileView | null =>
+  app.profiles.find((p) => p.id === app.config?.selectedProfile) ?? app.profiles[0] ?? null;
+export const selectedAccount = (): PublicAccount | null =>
+  app.accounts.find((a) => a.uuid === app.config?.selectedAccount) ?? app.accounts[0] ?? null;
+
+export function launchInfo(id: string): LaunchInfo {
+  return launches[id] ?? { state: 'idle', progress: null, downloadFraction: 0 };
+}
+export const isBusy = (id: string): boolean => {
+  const s = launchInfo(id).state;
+  return s !== 'idle' && s !== 'stopped' && s !== 'crashed';
+};
+export const isRunning = (id: string): boolean => launchInfo(id).state === 'running';
+
+/** 0..1 across the staged bar. Downloading interpolates with progress events. */
+export function stageProgress(info: LaunchInfo): number {
+  if (info.state === 'idle' || info.state === 'stopped' || info.state === 'crashed') return 0;
+  const i = LAUNCH_STAGES.indexOf(info.state as Stage);
+  if (i < 0) return 0;
+  if (info.state === 'running') return 1;
+  const within = info.state === 'downloading' ? info.downloadFraction : 0;
+  return (i + within) / LAUNCH_STAGES.length;
+}
+
+export function applyState(profileId: string, state: LaunchState): void {
+  const prev = launches[profileId];
+  launches[profileId] = {
+    state,
+    progress: state === 'downloading' ? prev?.progress ?? null : null,
+    downloadFraction: state === 'downloading' ? prev?.downloadFraction ?? 0 : 0,
+  };
+}
+
+export function applyProgress(ev: LaunchProgressEvent): void {
+  const prev = launches[ev.profileId] ?? { state: 'idle' as const, progress: null, downloadFraction: 0 };
+  let f = prev.downloadFraction;
+  if (ev.phase === 'client' || ev.phase === 'libraries' || ev.phase === 'assets') {
+    const idx = { client: 0, libraries: 1, assets: 2 }[ev.phase];
+    f = Math.max(f, (idx + (ev.total > 0 ? ev.done / ev.total : 1)) / 3);
+  } else if (ev.phase === 'done') f = 1;
+  launches[ev.profileId] = { ...prev, progress: ev, downloadFraction: Math.min(1, f) };
+}
+
+export function pushLog(profileId: string, line: string, level: LogLevel): void {
+  const buf = consoles[profileId] ?? (consoles[profileId] = []);
+  buf.push({ id: ++lineId, line, level });
+  if (buf.length > CONSOLE_CAP) buf.splice(0, buf.length - CONSOLE_CAP);
+}
+export function clearConsole(profileId: string): void {
+  consoles[profileId] = [];
+}
+
+function applyAppState(s: AppState): void {
+  app.version = s.version;
+  app.config = s.config;
+  app.profiles = s.profiles;
+  app.accounts = s.accounts;
+  app.totalRamMb = s.totalRamMb;
+  app.rootDir = s.rootDir;
+  for (const id of s.running) if (!isBusy(id)) applyState(id, 'running');
+}
+
+export async function init(api: Api = defaultApi): Promise<void> {
+  for (const u of unlisteners) u();
+  unlisteners = [];
+  currentApi = api;
+  unlisteners = await Promise.all([
+    api.listen('launch:state', (e) => applyState(e.profileId, e.state)),
+    api.listen('launch:progress', applyProgress),
+    api.listen('launch:log', (e) => pushLog(e.profileId, e.line, e.level)),
+  ]);
+  try {
+    applyAppState(await api.appState());
+    app.error = null;
+  } catch (e) {
+    const err = toAppError(e);
+    app.error = { code: err.code, message: err.message };
+  }
+  app.ready = true;
+}
+
+export const getApi = (): Api => currentApi;
+
+export function resetStores(): void {
+  app.ready = false; app.config = null; app.profiles = []; app.accounts = []; app.error = null;
+  for (const k of Object.keys(launches)) delete launches[k];
+  for (const k of Object.keys(consoles)) delete consoles[k];
+  nav.view = 'home'; nav.newProfile = false; nav.accounts = false;
+}
+
+/* ---- actions (thin wrappers; logic stays in Rust) ---- */
+async function guard<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try { return await fn(); } catch (e) {
+    const err = toAppError(e);
+    app.error = { code: err.code, message: err.message };
+    return undefined;
+  }
+}
+export const actions = {
+  async setConfig(patch: Partial<Config>) {
+    if (app.config) Object.assign(app.config, patch); // optimistic
+    const c = await guard(() => currentApi.configSet({ patch }));
+    if (c) app.config = c;
+  },
+  async selectProfile(id: string) {
+    const c = await guard(() => currentApi.profileSelect({ id }));
+    if (c) app.config = c;
+  },
+  async selectAccount(uuid: string) {
+    const c = await guard(() => currentApi.accountSelect({ uuid }));
+    if (c) app.config = c;
+  },
+  async addOffline(name: string) {
+    const a = await currentApi.accountAddOffline({ name }); // caller handles validation error
+    app.accounts = [...app.accounts, a];
+    if (!app.config?.selectedAccount) await actions.selectAccount(a.uuid);
+    return a;
+  },
+  async removeAccount(uuid: string) {
+    await guard(() => currentApi.accountRemove({ uuid }));
+    await refresh();
+  },
+  async createProfile(a: { name: string; mcVersion: string; loader: ProfileView['loader']; loaderVersion?: string | null }, extra: Partial<ProfileView>) {
+    let p = await currentApi.profileCreate(a);
+    if (Object.keys(extra).length) p = await currentApi.profileUpdate({ id: p.id, patch: extra });
+    app.profiles = [...app.profiles, p];
+    await actions.selectProfile(p.id);
+    return p;
+  },
+  async play(id: string) {
+    clearConsole(id);
+    applyState(id, 'preparing');
+    const r = await guard(() => currentApi.gameLaunch({ profileId: id }));
+    if (!r) applyState(id, 'crashed');
+  },
+  async stop(id: string) { await guard(() => currentApi.gameStop({ profileId: id })); },
+};
+
+export async function refresh(): Promise<void> {
+  const s = await guard(() => currentApi.appState());
+  if (s) applyAppState(s);
+}

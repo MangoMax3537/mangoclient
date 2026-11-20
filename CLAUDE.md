@@ -87,6 +87,10 @@ Profiles (vanilla/fabric/quilt/forge/neoforge, per-profile RAM/Java args/cover/p
 
 Professional, distinctive, not a generic dark dashboard, no AI-slop tells: no purple-blue gradients, no glassmorphism cards-in-cards, no emoji as icons, no stock "rocket" illustrations, no identical rounded-rect grids, no lorem-ish marketing copy. It should feel like a game launcher: real Minecraft imagery (panoramas, biome art, block textures at integer scale), strong typographic hierarchy, purposeful motion (<250ms, ease-out, respects reduced-motion), density that rewards power users. Mango orange `#ffad32` is the brand accent. Full brief: `docs/redesign-brief.md`. Accessibility: keyboard-complete, visible focus, 4.5:1 contrast, scalable text.
 
+## Network hosts (privacy)
+
+The app talks only to the hosts listed in `docs/port-spec.md` (Mojang, Microsoft/Xbox, Modrinth, Adoptium, loader metas, mclo.gs, GitHub releases, the MangoClient API). No third-party image/CDN/analytics hosts in the UI. Account heads come from the skin cache in `mango-auth` (Mojang session server), served through the image protocol. The first UI slice still loads Microsoft heads from `mc-heads.net` as a temporary stand-in: replace it before release.
+
 ## Porting the tests (checklist)
 
 archive (traversal, symlinks, limits) · content routing + dependency trees + exact-version reuse · credentials (envelope migration, lock-preservation, 0600 fallback) · net (sha512, size, temp cleanup, CL=0) · persistence/store-recovery · security (URL policy, API base, image paths, UUID targets) · validation · serverlist (NBT mUTF-8, dedupe, recovery, no-rewrite seeding, icon cache) · servericons (first valid favicon is durable).

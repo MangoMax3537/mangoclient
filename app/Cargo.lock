@@ -1133,6 +1133,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
+name = "mango-app"
+version = "2.0.0-dev"
+dependencies = [
+ "mango-auth",
+ "mango-content",
+ "mango-core",
+ "mango-java",
+ "mango-loaders",
+ "mango-mango",
+ "mango-minecraft",
+ "mango-modrinth",
+ "mango-net",
+ "mango-runtime",
+ "mango-servers",
+ "mango-updater",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mango-archive"
 version = "2.0.0-dev"
 dependencies = [

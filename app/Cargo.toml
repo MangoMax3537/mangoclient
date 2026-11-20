@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
+# Needs the system webkit2gtk; it has its own [workspace] and is built with
+# `cargo tauri build` from src-tauri, so `cargo test --workspace` stays green.
+exclude = ["src-tauri"]
 
 [workspace.package]
 version = "2.0.0-dev"
