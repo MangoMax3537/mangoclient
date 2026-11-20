@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen as tauriListen } from '@tauri-apps/api/event';
 import type {
-  ApiEvents, AppError, AppState, Config, LoaderVersion, Loader, ProfileView, PublicAccount, VersionManifest,
+  ApiEvents, AppError, BlockIconsStatus, PanoramaSet, AppState, Config, LoaderVersion, Loader, ProfileView, PublicAccount, VersionManifest,
   BlockedFile, ContentItem, ContentType, InstallPlan, InstallTarget, LogEntry, ModpackPlan, Provider, ProviderStatus, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
   ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
@@ -56,6 +56,16 @@ export interface Api {
   blockedSkip(args: { profileId: string; fileName: string }): Promise<BlockedFile[]>;
   /** Opens the first watched folder, resolves its path. */
   blockedOpenFolder(): Promise<string>;
+  /* Part 6 + 7: instance icons and backgrounds */
+  blockIconsStatus(): Promise<BlockIconsStatus>;
+  blockIconsPrepare(args?: { force?: boolean }): Promise<BlockIconsStatus>;
+  profileIconSetBlock(args: { id: string; block: string }): Promise<ProfileView>;
+  profileIconSetImage(args: { id: string; filePath: string }): Promise<ProfileView>;
+  profileIconClear(args: { id: string }): Promise<ProfileView>;
+  panoramaForProfile(args: { id: string }): Promise<PanoramaSet | null>;
+  profileBackgroundSetScreenshot(args: { id: string; name: string }): Promise<ProfileView>;
+  profileBackgroundSetImage(args: { id: string; filePath: string }): Promise<ProfileView>;
+  profileBackgroundClear(args: { id: string; none?: boolean }): Promise<ProfileView>;
   serversList(): Promise<ServerEntry[]>;
   serversPingAll(): Promise<void>;
   serversPing(args: { address: string }): Promise<ServerStatus>;
@@ -113,6 +123,15 @@ export const tauriApi: Api = {
   blockedWatchStop: (a) => invoke('blocked_watch_stop', a),
   blockedSkip: (a) => invoke('blocked_skip', a),
   blockedOpenFolder: () => invoke('blocked_open_folder'),
+  blockIconsStatus: () => invoke('block_icons_status'),
+  blockIconsPrepare: (a) => invoke('block_icons_prepare', a ?? {}),
+  profileIconSetBlock: (a) => invoke('profile_icon_set_block', a),
+  profileIconSetImage: (a) => invoke('profile_icon_set_image', a),
+  profileIconClear: (a) => invoke('profile_icon_clear', a),
+  panoramaForProfile: (a) => invoke('panorama_for_profile', a),
+  profileBackgroundSetScreenshot: (a) => invoke('profile_background_set_screenshot', a),
+  profileBackgroundSetImage: (a) => invoke('profile_background_set_image', a),
+  profileBackgroundClear: (a) => invoke('profile_background_clear', a),
   serversList: () => invoke('servers_list'),
   serversPingAll: () => invoke('servers_ping_all'),
   serversPing: (a) => invoke('servers_ping', a),

@@ -2,6 +2,7 @@ import type {
   Api, Unlisten,
 } from './api';
 import { createContentApi } from './mockContent';
+import { createIconsMock, type MockBlocksMode, type MockPanoramaMode } from './mockIcons';
 import { createBlockedMock, type BlockedDev } from './mockBlocked';
 import { fallbackImage } from './fallbackImage';
 import type {
@@ -25,6 +26,10 @@ export interface MockOptions {
   noCurseforge?: boolean;
   /** Blocked files appear in the Downloads folder by themselves, one per watcher tick. */
   blockedAuto?: boolean;
+  /** Part 6: how the block gallery behaves (see mockIcons). */
+  blocks?: MockBlocksMode;
+  /** Part 7: `off` = no panorama is ever extracted. */
+  panorama?: MockPanoramaMode;
 }
 
 /** Error code per `?mockLoginError=<variant>` (codes from crates/auth/src/error.rs). */
@@ -34,7 +39,7 @@ export const MOCK_LOGIN_ERRORS: Record<string, string> = {
   offline: 'net.request', generic: 'auth.login_failed',
 };
 
-/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto */
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked ?mockNoCurseforge ?mockBlockedAuto ?mockBlocks=off|preparing|error ?mockPanorama=off */
 export function mockOptionsFromSearch(search: string): MockOptions {
   const q = new URLSearchParams(search);
   const err = q.get('mockLoginError');
@@ -46,6 +51,8 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     locked: q.has('mockLocked'),
     noCurseforge: q.has('mockNoCurseforge'),
     blockedAuto: q.has('mockBlockedAuto'),
+    blocks: ((['off', 'preparing', 'error'] as const).find((m) => m === q.get('mockBlocks')) ?? 'default') as MockBlocksMode,
+    panorama: q.get('mockPanorama') === 'off' ? 'off' : 'default',
   };
 }
 
@@ -55,20 +62,20 @@ const uuid = () =>
   'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/[x]/g, () => Math.floor(Math.random() * 16).toString(16));
 
 function seedProfiles(now: number): ProfileView[] {
-  const base = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0 };
+  const base: Pick<ProfileView, 'coverUrl' | 'ram' | 'javaArgs' | 'mangoConfig' | 'pendingBlocked' | 'icon' | 'autoBlock' | 'background'> = { coverUrl: null, ram: null, javaArgs: '', mangoConfig: null, pendingBlocked: 0, icon: null, autoBlock: null, background: { kind: 'auto' } };
   return [
     { ...base, id: '3f1c2a7e-5b1d-4c0a-9d51-0a6f5e2b7c11', name: 'Iron Hollow', mcVersion: '1.21.4', loader: 'fabric', loaderVersion: '0.16.10',
       color: '#ffad32', ram: 6144, lastPlayed: now - 2 * 3600000, playTimeMs: 142 * 3600000 + 18 * 60000, created: now - 120 * DAY, modCount: 38 },
     { ...base, id: '8a4be9d0-2f6c-4f3e-8b0c-7d1e93a4c5f2', name: 'Vanilla Survival', mcVersion: '1.21.4', loader: 'vanilla', loaderVersion: null,
-      color: '#86b86b', lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
+      color: '#86b86b', icon: { kind: 'block', block: 'grass_block' }, lastPlayed: now - 1 * DAY, playTimeMs: 61 * 3600000 + 5 * 60000, created: now - 300 * DAY, modCount: 0 },
     { ...base, id: 'c27d11f4-91a8-4e22-b3a6-4c8f0e9d6b37', name: 'Bedwars Practice', mcVersion: '1.8.9', loader: 'forge', loaderVersion: '11.15.1.2318',
-      color: '#ed665c', ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
+      color: '#ed665c', icon: { kind: 'block', block: 'tnt' }, ram: 3072, javaArgs: '-XX:+UseG1GC', lastPlayed: now - 6 * DAY, playTimeMs: 23 * 3600000 + 47 * 60000, created: now - 400 * DAY, modCount: 7 },
     { ...base, id: 'e90a6b35-17c4-4d8f-a2e1-5b3c7f4d8a09', name: 'Shader Showcase', mcVersion: '1.20.6', loader: 'quilt', loaderVersion: '0.26.1',
       color: '#6fa8d6', ram: 8192, lastPlayed: now - 19 * DAY, playTimeMs: 9 * 3600000 + 12 * 60000, created: now - 60 * DAY, modCount: 21 },
     { ...base, id: '1b9d4c68-6e0f-4a35-8c27-d3f5a7e91b40', name: 'Create Expedition', mcVersion: '1.21.1', loader: 'neoforge', loaderVersion: '21.1.172',
       color: '#d6c27a', ram: 8192, lastPlayed: now - 3 * DAY, playTimeMs: 34 * 3600000 + 40 * 60000, created: now - 90 * DAY, modCount: 0 },
     { ...base, id: '6e2a85f1-0b7d-4d94-9a13-c48e2f6b7d05', name: 'Classic Forge 1.20.1', mcVersion: '1.20.1', loader: 'forge', loaderVersion: '47.3.0',
-      color: '#e6a3b8', ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
+      color: '#e6a3b8', background: { kind: 'none' }, ram: 6144, lastPlayed: now - 40 * DAY, playTimeMs: 17 * 3600000 + 5 * 60000, created: now - 500 * DAY, modCount: 0 },
   ];
 }
 
@@ -127,6 +134,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
     'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(), 'blocked:changed': new Set(),
+    'blocks:status': new Set(), 'panorama:ready': new Set(),
   };
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
     for (const cb of listeners[name] as Set<(p: ApiEvents[K]) => void>) cb(payload);
@@ -146,18 +154,21 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     timers.delete(id);
   };
 
+  const iconsMock = createIconsMock({ scale, emit, profiles: () => profiles, find, blocks: opts.blocks, panorama: opts.panorama });
+  const icons = iconsMock;
   const blockedMock = createBlockedMock({
     scale, emit, auto: !!opts.blockedAuto, dirs: () => config.blockedModsWatchDirs,
     setPending: (id, n) => { const p = profiles.find((x) => x.id === id); if (p) p.pendingBlocked = n; },
   });
   const part2 = createContentApi({
     seedBlocked: blockedMock.seed,
-    now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; }, find,
+    now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; icons.sync(); }, find,
     gameActive: () => running.size > 0 || timers.size > 0, get curseforge() { return cfOn; },
   });
   const api: MockApi = {
     ...part2,
     ...blockedMock.api,
+    ...iconsMock.api,
     dev: blockedMock.dev,
     async appState(): Promise<AppState> {
       return {
@@ -175,8 +186,10 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
+        icon: null, autoBlock: null, background: { kind: 'auto' },
       };
       profiles = [...profiles, p];
+      icons.sync();
       return structuredClone(p);
     },
     async profileUpdate({ id, patch }) { Object.assign(find(id), patch); return structuredClone(find(id)); },
@@ -189,6 +202,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
       const src = find(id);
       const p = { ...structuredClone(src), id: uuid(), name: `${src.name} (2)`, lastPlayed: null, playTimeMs: 0, created: Date.now() };
       profiles = [...profiles, p];
+      icons.sync();
       return structuredClone(p);
     },
     async accountAddOffline({ name }) {

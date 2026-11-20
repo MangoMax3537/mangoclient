@@ -16,6 +16,8 @@
   import UpdateOverlay from './components/UpdateOverlay.svelte';
   import Activity from './components/Activity.svelte';
   import InstallFlow from './components/InstallFlow.svelte';
+  import IconPicker from './components/IconPicker.svelte';
+  import BackgroundPicker from './components/BackgroundPicker.svelte';
   import { actions, app, auth, errorText, flow, init, initTheme, nav, t, updates } from './lib/stores.svelte';
   import { inTauri } from './lib/api';
 
@@ -58,6 +60,8 @@
   </div>
   {#if nav.newProfile}<NewProfile />{/if}
   {#if flow.req}<InstallFlow />{/if}
+  {#if nav.iconPicker}<IconPicker profileId={nav.iconPicker} onclose={() => (nav.iconPicker = null)} />{/if}
+  {#if nav.backgroundPicker}<BackgroundPicker profileId={nav.backgroundPicker} onclose={() => (nav.backgroundPicker = null)} />{/if}
   {#if updates.overlay}<UpdateOverlay />{/if}
   {#if app.ready && app.config && !app.config.firstRunDone}<Onboarding />{/if}
   {#if auth.relogin}<ReloginDialog />{/if}

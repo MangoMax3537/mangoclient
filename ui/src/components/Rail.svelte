@@ -6,6 +6,7 @@
   import ChartBarIcon from 'phosphor-svelte/lib/ChartBarIcon';
   import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import Accounts from './Accounts.svelte';
   import { tip } from '../lib/tooltip';
   import { actions, app, isBusy, accountNeedsLogin, keystoreMissing, nav, openDiscover, openProfile, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
@@ -41,7 +42,7 @@
       <li class:sel class:on={nav.view === 'profile' && p.id === nav.profileId}>
         <button type="button" class="prof" use:tip={p.name} aria-label={p.name} aria-current={sel ? 'true' : undefined}
           onclick={() => { actions.selectProfile(p.id); openProfile(p.id); }}>
-          <span class="ring notch" style:--n="9px"><Tile kind="profile" id={p.id} src={p.coverUrl} tint={p.color} size={40} notch={7} /></span>
+          <span class="ring notch" style:--n="9px"><InstanceIcon profile={p} size={40} notch={7} /></span>
         </button>
         {#if isBusy(p.id)}<span class="sq ok pulse" aria-hidden="true"></span><span class="sr-only">{t('home.running')}</span>{/if}
       </li>

@@ -3,6 +3,7 @@ import { de3, en3 } from './i18n3';
 import { de4, en4 } from './i18n4';
 import { de5, en5 } from './i18n5';
 import { de6, en6 } from './i18n6';
+import { de7, en7 } from './i18n7';
 
 export type Lang = 'de' | 'en';
 
@@ -59,6 +60,7 @@ const en = {
   ...en4,
   ...en5,
   ...en6,
+  ...en7,
 } as const;
 
 export type Key = keyof typeof en;
@@ -118,6 +120,7 @@ const de: Record<Key, string> = {
   ...de4,
   ...de5,
   ...de6,
+  ...de7,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };

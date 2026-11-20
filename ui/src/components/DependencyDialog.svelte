@@ -8,6 +8,7 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import { fileCount, includeFor, planBytes, planGroups, requestedBlocked, type RunStep } from '../lib/install';
   import { fmtBytes } from '../lib/format';
   import { actions, app, errorText, getApi, lang, t, tp, type FlowProject } from '../lib/stores.svelte';
@@ -75,7 +76,7 @@
       {@const g = planGroups(plan)}
       <section class="inst" aria-labelledby="dp-{pid}">
         {#if profileIds.length > 1}
-          <h3 id="dp-{pid}" class="who"><Tile kind="profile" id={pid} src={prof(pid)?.coverUrl} tint={prof(pid)?.color} size={24} notch={5} />{name(pid)}
+          <h3 id="dp-{pid}" class="who"><InstanceIcon profile={prof(pid)} id={pid} size={24} notch={5} />{name(pid)}
             <span class="mono hint">{prof(pid)?.mcVersion} / {prof(pid)?.loader}</span></h3>
         {:else}
           <h3 id="dp-{pid}" class="sr-only">{name(pid)}</h3>

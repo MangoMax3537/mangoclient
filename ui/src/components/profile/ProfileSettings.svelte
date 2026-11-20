@@ -5,8 +5,13 @@
   import Modal from '../Modal.svelte';
   import ConfirmDialog from '../ConfirmDialog.svelte';
   import Seg from '../Seg.svelte';
+  import InstanceIcon from '../InstanceIcon.svelte';
+  import PanoramaBackground from '../PanoramaBackground.svelte';
+  import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
+  import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
+  import type { Key } from '../../lib/i18n';
   import { fmtDuration, fmtRam, fmtRelative } from '../../lib/format';
-  import { actions, app, errorText, getApi, isBusy, lang, t, toast } from '../../lib/stores.svelte';
+  import { actions, app, bgPanorama, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
   import type { Loader, LoaderVersion, ProfileView, VersionManifest } from '../../lib/types';
 
   let { profile }: { profile: ProfileView } = $props();
@@ -90,6 +95,18 @@
     </div>
 
     <div class="row">
+      <div class="who"><InstanceIcon profile={profile} size={56} notch={10} />
+        <div class="txt"><b>{t('psettings.icon')}</b><div class="hint">{t('psettings.iconHint')}</div></div></div>
+      <button class="btn" type="button" onclick={() => openIconPicker(profile.id)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.iconChange')}</button>
+    </div>
+
+    <div class="row">
+      <div class="who"><span class="bgthumb on-stage"><PanoramaBackground profileId={profile.id} mcVersion={profile.mcVersion} background={profile.background} tint={profile.color} /></span>
+        <div class="txt"><b>{t('psettings.background')}</b><div class="hint">{t(`psettings.bg.${profile.background.kind === 'auto' && bgPanorama[profile.id] ? 'panorama' : profile.background.kind}` as Key)}</div></div></div>
+      <button class="btn" type="button" onclick={() => openBackgroundPicker(profile.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.backgroundChange')}</button>
+    </div>
+
+    <div class="row">
       <div class="txt"><b>{t('psettings.version')}</b>
         <div class="hint mono">{profile.mcVersion} &middot; {profile.loader === 'vanilla' ? t('profile.vanilla') : `${profile.loader} ${profile.loaderVersion ?? ''}`}</div>
       </div>
@@ -163,6 +180,8 @@
 {/if}
 
 <style>
+  .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .bgthumb { position: relative; flex: none; width: 100px; height: 56px; border-radius: var(--r-s); overflow: hidden; border: 1px solid var(--line); }
   .delcol { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 260px; }
   .ps { max-width: 760px; display: grid; gap: 24px; }
   .status { height: 18px; font-size: 13px; }

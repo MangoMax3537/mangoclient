@@ -11,7 +11,21 @@ export interface ProfileView {
   mangoConfig: boolean | null; lastPlayed: number | null; playTimeMs: number; created: number; modCount: number;
   /** Part 5: blocked CurseForge files not yet installed or skipped. */
   pendingBlocked: number;
+  /** Part 6: `null` = auto. */
+  icon: InstanceIcon;
+  /** Part 6: the block id the auto rule picks, `null` while the gallery is not ready. */
+  autoBlock: string | null;
+  /** Part 7. */
+  background: ProfileBackground;
 }
+/* ---- Part 6 + 7 (docs/ipc.md): instance icons and backgrounds ---- */
+export type BlockFace = 'top' | 'left' | 'right';
+export interface BlockIcon { id: string; label: string; faces: Record<BlockFace, string> }
+export interface BlockIconsStatus { state: 'missing' | 'preparing' | 'ready' | 'error'; mcVersion: string | null; blocks: BlockIcon[]; errorCode?: string }
+export type InstanceIcon = { kind: 'image' } | { kind: 'block'; block: string } | null;
+export interface PanoramaSet { mcVersion: string; faces: string[]; source: 'own' | 'nearest' }
+export type ProfileBackground = { kind: 'auto' } | { kind: 'image'; url: string } | { kind: 'none' };
+
 export interface PublicAccount {
   uuid: string; name: string; type: 'microsoft' | 'offline'; expiresAt: number | null; expired: boolean; hasCape: boolean;
   /** `mangoimg://head/<uuid>`: cached Mojang skin head, Steve/Alex for offline. */
@@ -155,4 +169,6 @@ export interface ApiEvents {
   'content:changed': { profileId: string };
   'accounts:changed': { uuid: string };
   'blocked:changed': { profileId: string; files: BlockedFile[] };
+  'blocks:status': BlockIconsStatus;
+  'panorama:ready': { profileId: string };
 }

@@ -4,13 +4,15 @@
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import SlidersIcon from 'phosphor-svelte/lib/SlidersIcon';
   import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
-  import Tile from './Tile.svelte';
+  import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
+  import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
+  import InstanceIcon from './InstanceIcon.svelte';
   import PlayButton from './PlayButton.svelte';
   import LaunchProgress from './LaunchProgress.svelte';
   import Console from './Console.svelte';
   import ProfileMenu from './ProfileMenu.svelte';
   import QuickJoin from './QuickJoin.svelte';
-  import HeroArt from './HeroArt.svelte';
+  import PanoramaBackground from './PanoramaBackground.svelte';
   import Spark from './Spark.svelte';
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
@@ -18,7 +20,7 @@
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
   import {
-    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBlocked, openProfile, selectedProfile, stageProgress, t, tp,
+    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openBlocked, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
   } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
 
@@ -56,8 +58,15 @@
 <div class="home">
   {#if p && info}
     <section class="hero on-stage" aria-labelledby="hero-h">
-      <HeroArt cover={p.coverUrl} tint={p.color} />
+      <PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />
+      <button class="bgbtn btn" type="button" use:tip={{ text: t('bg.change'), side: 'top' }} aria-label={t('bg.change')} onclick={() => openBackgroundPicker(p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" /></button>
       <div class="content">
+        <div class="idrow">
+          <button class="iconbtn" type="button" use:tip={{ text: t('icons.change'), side: 'top' }} aria-label={t('icons.change')} onclick={() => openIconPicker(p.id)}>
+            <InstanceIcon profile={p} size={96} notch={14} />
+            <span class="pen" aria-hidden="true"><PencilSimpleIcon weight="bold" size={14} /></span>
+          </button>
+          <div class="idtext">
         <div class="eyebrow status">
           {#if running}<span class="sq ok live"></span><span class="live-t">{t('home.running')}</span>
           {:else if launching}<span class="sq warn live"></span>{t(`launch.${info.state}` as Key)}
@@ -72,6 +81,8 @@
           {#if p.modCount}<li>{tp('profile.mods', p.modCount)}</li>{/if}
           {#if p.pendingBlocked > 0}<li><button class="miss" type="button" onclick={() => openBlocked(p.id)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</button></li>{/if}
         </ul>
+          </div>
+        </div>
         <div class="actions">
           <PlayButton mode={running ? 'stop' : launching ? 'busy' : 'play'} {label} progress={prog} onclick={toggle} disabled={!app.accounts.length && !busy} />
           {#if launching}<button class="btn text" type="button" onclick={toggle}>{t('home.stop')}</button>{/if}
@@ -101,7 +112,7 @@
             {@const ob = isBusy(o.id)}
             <li class="card notch" class:sel={o.id === p.id} class:live={ob} style:--n="14px">
               <button class="open" type="button" aria-pressed={o.id === p.id} onclick={() => actions.selectProfile(o.id)}>
-                <span class="art"><Tile kind="profile" id={o.id} src={o.coverUrl} tint={o.color} fill radius={0} /></span>
+                <span class="art"><InstanceIcon profile={o} fill radius={0} /></span>
                 <span class="nm">{o.name}</span>
                 <span class="meta mono">{o.mcVersion}<span class="sep">/</span>{o.loader === 'vanilla' ? t('profile.vanilla') : o.loader}</span>
                 <span class="meta mono dim">{fmtDuration(o.playTimeMs)}<span class="sep">/</span>{fmtRelative(o.lastPlayed, lang()) ?? t('home.never')}</span>
@@ -144,6 +155,13 @@
   .hero { position: relative; flex: none; min-height: 46vh; display: flex; align-items: flex-end; background: var(--hero-bg); }
   .content { position: relative; display: grid; gap: 14px; justify-items: start; padding: 40px 40px 44px 44px; width: 100%; }
   .status { display: inline-flex; align-items: center; gap: 8px; color: var(--paper-dim); }
+  .idrow { display: flex; align-items: flex-end; gap: 20px; min-width: 0; }
+  .idtext { display: grid; gap: 14px; justify-items: start; min-width: 0; }
+  .iconbtn { position: relative; flex: none; display: block; width: 96px; height: 96px; margin-bottom: 4px; }
+  .iconbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--r-s); }
+  .pen { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  .iconbtn:hover .pen, .iconbtn:focus-visible .pen { opacity: 1; transform: none; }
+  .bgbtn { position: absolute; right: 16px; top: 14px; width: 36px; padding: 0; background: rgba(var(--scrim), 0.55); border-color: var(--hero-line); color: var(--paper); z-index: 2; }
   .sep { margin: 0 8px; opacity: 0.5; }
   .live-t { color: var(--leaf); }
   .live { animation: pulse 1.6s ease-in-out infinite; }

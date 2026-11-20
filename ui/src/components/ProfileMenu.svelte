@@ -1,6 +1,6 @@
 <script lang="ts">
   import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
-  import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import { actions, app, t } from '../lib/stores.svelte';
 
   let { currentId, disabled = false }: { currentId: string; disabled?: boolean } = $props();
@@ -29,7 +29,7 @@
       {#each app.profiles as p (p.id)}
         <li role="option" aria-selected={p.id === currentId}>
           <button type="button" class:cur={p.id === currentId} onclick={() => pick(p.id)}>
-            <Tile kind="profile" id={p.id} src={p.coverUrl} size={28} radius={4} />
+            <InstanceIcon profile={p} size={28} radius={4} />
             <span class="n">{p.name}</span>
             <span class="v mono">{p.mcVersion}</span>
           </button>

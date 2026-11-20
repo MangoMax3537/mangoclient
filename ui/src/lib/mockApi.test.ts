@@ -64,3 +64,51 @@ describe('mockApi', () => {
     expect((await api.appState()).config.language).toBe('en');
   });
 });
+
+describe('mock icons and backgrounds (Parts 6 + 7)', () => {
+  it('prepares the gallery, fills autoBlock, then lets a block be chosen', async () => {
+    vi.useFakeTimers();
+    const api = createMockApi();
+    const events: string[] = [];
+    await api.listen('blocks:status', (s) => events.push(s.state));
+    expect((await api.blockIconsStatus()).state).toBe('missing');
+    expect((await api.appState()).profiles[0].autoBlock).toBeNull();
+    expect((await api.blockIconsPrepare()).state).toBe('preparing');
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(events).toEqual(['ready']);
+    const st = await api.blockIconsStatus();
+    expect(st.blocks).toHaveLength(21);
+    const ps = (await api.appState()).profiles;
+    expect(ps.every((p) => p.autoBlock && st.blocks.some((b) => b.id === p.autoBlock))).toBe(true);
+    const v = await api.profileIconSetBlock({ id: ps[0].id, block: 'tnt' });
+    expect(v.icon).toEqual({ kind: 'block', block: 'tnt' });
+    await expect(api.profileIconSetBlock({ id: ps[0].id, block: 'bedrock' })).rejects.toMatchObject({ code: 'block_unknown' });
+    expect((await api.profileIconClear({ id: ps[0].id })).icon).toBeNull();
+    vi.useRealTimers();
+  });
+  it('mockBlocks switch: off stays missing, error ends in error', async () => {
+    vi.useFakeTimers();
+    const off = createMockApi({ blocks: 'off' });
+    expect((await off.blockIconsPrepare()).state).toBe('missing');
+    const bad = createMockApi({ blocks: 'error' });
+    expect((await bad.blockIconsStatus()).errorCode).toBe('blocks.jar_unreadable');
+    expect((await createMockApi({ blocks: 'preparing' }).blockIconsStatus()).state).toBe('preparing');
+    vi.useRealTimers();
+  });
+  it('backgrounds: set, clear, none; panorama null first then ready event', async () => {
+    vi.useFakeTimers();
+    const api = createMockApi();
+    const id = (await api.appState()).profiles[0].id;
+    const ready: string[] = [];
+    await api.listen('panorama:ready', (e) => ready.push(e.profileId));
+    expect(await api.panoramaForProfile({ id })).toBeNull();
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(ready).toEqual([id]);
+    expect((await api.panoramaForProfile({ id }))?.faces).toHaveLength(6);
+    expect((await api.profileBackgroundSetImage({ id, filePath: 'blob:abc' })).background).toEqual({ kind: 'image', url: 'blob:abc' });
+    expect((await api.profileBackgroundClear({ id, none: true })).background).toEqual({ kind: 'none' });
+    expect((await api.profileBackgroundClear({ id })).background).toEqual({ kind: 'auto' });
+    await expect(api.profileIconSetImage({ id, filePath: 'x.exe' })).rejects.toMatchObject({ code: 'image_unsupported_type' });
+    vi.useRealTimers();
+  });
+});

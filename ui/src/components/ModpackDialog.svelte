@@ -49,6 +49,7 @@
     <div class="hd">
       <span class="eyebrow">{providerLabel(project.provider)}</span>
       <h3>{project.title}</h3>
+      <p class="hint">{t('flow.pack.logoHint')}</p>
     </div>
   </div>
 

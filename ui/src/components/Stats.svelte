@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
   import { fmtDuration } from '../lib/format';
   import { app, errorText, getApi, lang, t, toast } from '../lib/stores.svelte';
@@ -69,7 +69,7 @@
         {#each data.perProfile as p (p.profileId)}
           {@const prof = app.profiles.find((x) => x.id === p.profileId)}
           <li>
-            <Tile kind="profile" id={p.profileId} src={prof?.coverUrl} size={36} radius={6} />
+            <InstanceIcon profile={prof} id={p.profileId} size={36} radius={6} />
             <div class="nm"><b>{p.name}</b><span class="hint mono">{t('stats.sessionsN', { n: p.sessions })}</span></div>
             <div class="meter" role="presentation"><span style:transform="scaleX({top && top.ms ? p.ms / top.ms : 0})"></span></div>
             <span class="mono val">{fmtDuration(p.ms)}</span>

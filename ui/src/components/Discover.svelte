@@ -10,6 +10,7 @@
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
   import KeyIcon from 'phosphor-svelte/lib/KeyIcon';
   import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import Seg from './Seg.svelte';
   import EmptyState from './EmptyState.svelte';
   import ProjectDrawer from './ProjectDrawer.svelte';
@@ -133,7 +134,7 @@
 
   {#if scope && !isPack}
     <div class="scope">
-      <Tile kind="profile" id={scope.id} src={scope.coverUrl} tint={scope.color} size={40} notch={7} />
+      <InstanceIcon profile={scope} size={40} notch={7} />
       <div class="who"><span class="eyebrow">{t('discover.installingTo')}</span><b>{scope.name}</b>
         <span class="mono hint">{scope.mcVersion} / {scope.loader === 'vanilla' ? t('profile.vanilla') : scope.loader}</span></div>
       <button class="btn ghost small" type="button" onclick={() => openProfile(scope.id, 'content')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('discover.backToProfile')}</button>

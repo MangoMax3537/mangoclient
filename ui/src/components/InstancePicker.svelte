@@ -6,6 +6,7 @@
   import ArrowSquareOutIcon from 'phosphor-svelte/lib/ArrowSquareOutIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import { allBlocked, nextIndex, preselect, REASON_KEY, selectAll, selectionSummary, targetRows, toggleSelection, type TargetRow } from '../lib/install';
   import { actions, app, errorText, getApi, nav, prefs, selectedProfile, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { InstallTarget } from '../lib/types';
@@ -91,7 +92,7 @@
         <li role="option" aria-selected={r.selectable ? on : undefined} aria-disabled={!r.selectable} tabindex={i === focusIdx ? 0 : -1}
           class="row" class:dark={r.dark} class:on class:inst={r.target.state === 'installed'}
           onclick={() => toggle(r.profile.id)} onkeydown={(e) => key(e, i, r)} onfocus={() => (focusIdx = i)}>
-          <Tile kind="profile" id={r.profile.id} src={r.profile.coverUrl} tint={r.profile.color} size={44} notch={8} />
+          <InstanceIcon profile={r.profile} size={44} notch={8} />
           <span class="who">
             <b class="nm">{r.profile.name}</b>
             <span class="mono facts2">{r.profile.mcVersion}<span class="sep">/</span>{r.profile.loader === 'vanilla' ? t('profile.vanilla') : r.profile.loader}</span>

@@ -446,8 +446,9 @@ export function createContentApi(ctx: MockCtx): Part2 {
         ctx.emit('install:progress', { profileId: id, projectId, done: i, total: 9, label: hit.title });
       }
       const p: ProfileView = {
-        id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: null, ram: 4096,
+        id, name: (name?.trim() || hit.title), mcVersion: m.mcVersion, loader: m.loader, loaderVersion: m.loaderVersion, color: null, coverUrl: fallbackImage('profile', hit.slug, 256), ram: 4096,
         javaArgs: '', mangoConfig: null, lastPlayed: null, playTimeMs: 0, created: Date.now(), modCount: 0, pendingBlocked: 0,
+        icon: { kind: 'image' }, autoBlock: null, background: { kind: 'auto' }, // the pack logo becomes the image icon
       };
       if (provider === 'curseforge' && ctx.seedBlocked) p.pendingBlocked = ctx.seedBlocked(id, blockedFilesFor(hit.slug));
       ctx.addProfile(p);

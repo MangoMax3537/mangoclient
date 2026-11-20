@@ -5,9 +5,14 @@
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
+  import BlockIcon from './BlockIcon.svelte';
+  import Tile from './Tile.svelte';
+  import IconPicker from './IconPicker.svelte';
+  import { blockForSeed, choiceFromIcon, findBlock, iconTint, type IconChoice } from '../lib/instanceIcon';
   import { fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
-  import { actions, app, errorText, getApi, nav, startInstall, t } from '../lib/stores.svelte';
+  import { actions, app, blocks, errorText, getApi, nav, startInstall, t } from '../lib/stores.svelte';
   import type { Loader, LoaderVersion, VersionManifest } from '../lib/types';
 
   const LOADERS: Loader[] = ['vanilla', 'fabric', 'quilt', 'forge', 'neoforge'];
@@ -31,6 +36,15 @@
   let loaderLoading = $state(false);
   let ram = $state(app.config?.ram ?? 4096);
   let creating = $state(false);
+  // icon: auto previews a block from a per-dialog seed; on create it is saved as that explicit block so what you saw is what you get
+  const seed = crypto.randomUUID?.() ?? String(Math.random());
+  let iconChoice = $state<IconChoice>(choiceFromIcon(null));
+  let pickIcon = $state(false);
+  const iconTone = $derived(iconTint({ color, loader }));
+  const iconBlock = $derived.by(() => {
+    if (blocks.status?.state !== 'ready') return null;
+    return iconChoice.kind === 'block' ? findBlock(blocks.status, iconChoice.block) : iconChoice.kind === 'auto' ? blockForSeed(seed, blocks.status.blocks) : null;
+  });
   let error = $state('');
 
   const steps = ['new.step.name', 'new.step.version', 'new.step.resources'] as const;
@@ -81,6 +95,11 @@
         { name: name.trim(), mcVersion, loader, loaderVersion: loader === 'vanilla' ? null : loaderVersion },
         { color, ram },
       );
+      try {
+        const b = iconChoice.kind === 'block' ? iconChoice.block : iconChoice.kind === 'auto' ? iconBlock?.id : null;
+        if (iconChoice.kind === 'image') await actions.setIconImage(p.id, iconChoice.path);
+        else if (b) await actions.setIconBlock(p.id, b);
+      } catch { /* the instance exists; the icon can be changed on its page */ }
       close();
       // "Create new instance for this": continue with the dependency dialog for the new instance
       if (prefill?.then) startInstall({ kind: 'content', project: prefill.then, scopeProfileId: p.id });
@@ -108,6 +127,17 @@
         aria-invalid={touched && !nameOk} aria-describedby={touched && !nameOk ? 'np-name-err' : undefined}
         onkeydown={(e) => e.key === 'Enter' && next()} />
       {#if touched && !nameOk}<div id="np-name-err" class="err" role="alert">{t('new.nameRequired')}</div>{/if}
+      <div class="lbl">{t('new.icon')}</div>
+      <div class="irow">
+        <span class="ibox">
+          {#if iconBlock}<BlockIcon faces={iconBlock.faces} size={64} notch={11} tint={iconTone} />
+          {:else if iconChoice.kind === 'image' && iconChoice.preview}<Tile kind="profile" id={seed} src={iconChoice.preview} size={64} notch={11} />
+          {:else}<Tile kind="profile" id={seed} src={null} tint={iconTone} size={64} notch={11} />{/if}
+        </span>
+        <div class="itxt"><b>{iconChoice.kind === 'auto' ? t('icons.auto') + (iconBlock ? `: ${iconBlock.label}` : '') : iconChoice.kind === 'block' ? (iconBlock?.label ?? '') : iconChoice.kind === 'image' ? iconChoice.name : ''}</b>
+          <span class="hint">{t('new.iconHint')}</span></div>
+        <button class="btn" type="button" onclick={() => (pickIcon = true)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('icons.changeShort')}</button>
+      </div>
       <div class="lbl">{t('new.color')}</div>
       <div class="swatches" role="radiogroup" aria-label={t('new.color')}>
         {#each COLORS as c (c)}
@@ -196,6 +226,10 @@
   </footer>
 </dialog>
 
+{#if pickIcon}
+  <IconPicker profileId={null} {seed} tint={iconTone} initial={iconChoice} onchoose={(c) => (iconChoice = c)} onclose={() => (pickIcon = false)} />
+{/if}
+
 <style>
   .dlg { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); }
   .dlg[open] { display: flex; flex-direction: column; }
@@ -209,6 +243,9 @@
   .cur .n { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); }
   .done .n { border-color: var(--leaf); color: var(--leaf); }
   .body { display: grid; gap: 10px; padding: 18px 20px; overflow: auto; align-content: start; min-height: 320px; }
+  .irow { display: flex; align-items: center; gap: 14px; }
+  .ibox { flex: none; display: block; }
+  .itxt { flex: 1; display: grid; gap: 2px; min-width: 0; }
   .lbl { font-size: 13px; font-weight: 600; color: var(--paper-dim); margin-top: 4px; }
   .swatches, .loaders { display: flex; gap: 6px; flex-wrap: wrap; }
   .sw { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-s); border: 2px solid transparent; }

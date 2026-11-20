@@ -3,13 +3,16 @@
   import SquaresFourIcon from 'phosphor-svelte/lib/SquaresFourIcon';
   import ListBulletsIcon from 'phosphor-svelte/lib/ListBulletsIcon';
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
-  import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import EmptyState from './EmptyState.svelte';
   import XIcon from 'phosphor-svelte/lib/XIcon';
+  import DotsThreeIcon from 'phosphor-svelte/lib/DotsThreeIcon';
+  import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
+  import ImageIcon from 'phosphor-svelte/lib/ImageIcon';
   import ProhibitIcon from 'phosphor-svelte/lib/ProhibitIcon';
   import { tip } from '../lib/tooltip';
   import { fmtDuration, fmtRelative } from '../lib/format';
-  import { app, lang, openProfile, nav, t, tp } from '../lib/stores.svelte';
+  import { app, lang, openBackgroundPicker, openIconPicker, openProfile, nav, t, tp } from '../lib/stores.svelte';
 
   let query = $state('');
   let sort = $state<'recent' | 'name' | 'playtime'>('recent');
@@ -24,8 +27,13 @@
         : (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
   });
   const open = (id: string) => openProfile(id);
+  let menu = $state<string | null>(null);
+  function pick(fn: (id: string) => void, id: string) { menu = null; fn(id); }
+  function onDoc(e: MouseEvent) { if (menu && !(e.target as Element | null)?.closest('.cm')) menu = null; }
+  function onKey(e: KeyboardEvent) { if (menu && e.key === 'Escape') menu = null; }
 </script>
 
+<svelte:document onclick={onDoc} onkeydown={onKey} />
 <div class="lib">
   <header>
     <div>
@@ -66,15 +74,24 @@
   {:else if mode === 'grid'}
     <ul class="grid">
       {#each items as p (p.id)}
-        <li>
+        <li class="cell">
           <button class="card notch" style:--n="16px" type="button" onclick={() => open(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
-            <span class="cover"><Tile kind="profile" id={p.id} src={p.coverUrl} tint={p.color} fill radius={0} /><span class="bar3"></span>{#if p.pendingBlocked > 0}<span class="miss" title={tp('blocked.badge', p.pendingBlocked)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</span>{/if}</span>
+            <span class="cover"><InstanceIcon profile={p} fill radius={0} /><span class="bar3"></span>{#if p.pendingBlocked > 0}<span class="miss" title={tp('blocked.badge', p.pendingBlocked)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</span>{/if}</span>
             <span class="info">
               <b>{p.name}</b>
               <span class="mono sub">{p.mcVersion}<span class="sep">/</span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}{#if p.modCount}<span class="sep">/</span>{tp('profile.mods', p.modCount)}{/if}</span>
               <span class="mono sub dim">{fmtDuration(p.playTimeMs)}<span class="sep">/</span>{fmtRelative(p.lastPlayed, lang()) ?? t('home.never')}</span>
             </span>
           </button>
+          <div class="cm">
+            <button class="kebab" type="button" aria-haspopup="menu" aria-expanded={menu === p.id} aria-label={t('library.menu', { name: p.name })} onclick={() => (menu = menu === p.id ? null : p.id)}><DotsThreeIcon weight="bold" size={18} aria-hidden="true" /></button>
+            {#if menu === p.id}
+              <ul class="pop menu-list" role="menu" aria-label={t('library.menu', { name: p.name })}>
+                <li role="none"><button type="button" role="menuitem" onclick={() => pick(openIconPicker, p.id)}><PaletteIcon weight="bold" size={16} aria-hidden="true" />{t('icons.change')}</button></li>
+                <li role="none"><button type="button" role="menuitem" onclick={() => pick(openBackgroundPicker, p.id)}><ImageIcon weight="bold" size={16} aria-hidden="true" />{t('bg.change')}</button></li>
+              </ul>
+            {/if}
+          </div>
         </li>
       {/each}
     </ul>
@@ -85,7 +102,7 @@
         {#each items as p (p.id)}
           <li>
             <button class="row" type="button" onclick={() => open(p.id)}>
-              <Tile kind="profile" id={p.id} src={p.coverUrl} tint={p.color} size={36} notch={6} />
+              <InstanceIcon profile={p} size={36} notch={6} />
               <b class="nm">{p.name}{#if p.pendingBlocked > 0}<span class="miss inl" title={tp('blocked.badge', p.pendingBlocked)}><ProhibitIcon weight="bold" size={12} aria-hidden="true" />{tp('blocked.badge', p.pendingBlocked)}</span>{/if}</b>
               <span class="mono">{p.mcVersion}</span>
               <span>{p.loader === 'vanilla' ? t('profile.vanilla') : p.loader}</span>
@@ -116,6 +133,13 @@
   .seg button:focus-visible { outline-offset: -3px; }
   ul { list-style: none; margin: 0; padding: 0; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: var(--s-4); }
+  .cell { position: relative; }
+  .cm { position: absolute; right: 8px; top: 8px; z-index: 3; }
+  .kebab { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-s); background: rgba(11, 12, 14, 0.62); color: #f4f1ea; opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .cell:hover .kebab, .cell:focus-within .kebab, .kebab[aria-expanded='true'] { opacity: 1; }
+  .kebab:hover { background: rgba(11, 12, 14, 0.85); }
+  .cm .pop { position: absolute; right: 0; top: 34px; min-width: 190px; }
+  .miss { right: 46px; }
   .card { display: grid; width: 100%; text-align: left; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
   .card:hover .info b { color: var(--mango); }

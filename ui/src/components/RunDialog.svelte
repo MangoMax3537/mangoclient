@@ -5,6 +5,7 @@
   import ClockIcon from 'phosphor-svelte/lib/ClockIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import InstanceIcon from './InstanceIcon.svelte';
   import { app, errorText, installs, openProfile, runs, t, tp } from '../lib/stores.svelte';
 
   let { runId, onclose }: { runId: number; onclose: () => void } = $props();
@@ -24,7 +25,7 @@
           {#if run.kind === 'update'}
             <Tile kind="mod" id={j.projectId} src={null} size={36} radius={6} />
           {:else}
-            <Tile kind="profile" id={j.profileId} src={prof(j.profileId)?.coverUrl} tint={prof(j.profileId)?.color} size={36} notch={7} />
+            <InstanceIcon profile={prof(j.profileId)} id={j.profileId} size={36} notch={7} />
           {/if}
           <span class="t">
             <b>{run.kind === 'update' ? j.title : (prof(j.profileId)?.name ?? run.title)}</b>

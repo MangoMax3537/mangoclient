@@ -1,0 +1,17 @@
+{
+  "_doc": "Curated wallpapers. file = image name without extension (webp, jpg, jpeg or png sits next to this file). versions = exact ids (\"1.21.4\"), prefix patterns (\"1.20.*\", \"26.3*\") or inclusive ranges (\"1.21.6-1.21.8\"). When several entries match a version, one is picked by the hash of the instance id. generic = true (only without versions) puts the entry into the pool used when no version rule matches; an entry with versions is never generic. scrim = overlay strength 0.3-0.9 (default 0.6; less for very dark images). Entries whose image is missing are skipped.",
+  "wallpapers": [
+    {"file": "cherry-grove", "label": "Cherry Grove", "versions": ["1.20.*"]},
+    {"file": "trial-chambers", "label": "Trial Chambers", "versions": ["1.21", "1.21.1"]},
+    {"file": "pale-garden", "label": "Pale Garden", "versions": ["1.21.4"]},
+    {"file": "spring-meadow", "label": "Spring Meadow", "versions": ["1.21.5"]},
+    {"file": "sky-islands", "label": "Sky Islands", "versions": ["1.21.6-1.21.8"]},
+    {"file": "dappled-forest-gold", "label": "Dappled Forest (Gold)", "versions": ["26.3*"]},
+    {"file": "dappled-forest-dusk", "label": "Dappled Forest (Dusk)", "versions": ["26.3*"]},
+    {"file": "deep-dark", "label": "Deep Dark", "versions": ["1.19.*"], "scrim": 0.4},
+    {"file": "nether", "label": "Nether", "versions": ["1.16.*"]},
+    {"file": "coral-reef", "label": "Coral Reef", "versions": ["1.13.*"]},
+    {"file": "badlands", "label": "Badlands", "generic": true},
+    {"file": "taiga-aurora", "label": "Taiga Aurora", "generic": true}
+  ]
+}

@@ -3,7 +3,7 @@ import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from '.
 import { runSteps, type RunStep } from './install';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, BlockedFile, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
+  AppState, BlockedFile, BlockIconsStatus, Config, PanoramaSet, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, Provider, PublicAccount,
   ProviderStatus, ServerEntry, ServerStatus, UpdateInfo, UpdateStatus,
 } from './types';
 
@@ -43,7 +43,51 @@ export const nav = $state({
   profileId: null as string | null, profileTab: 'overview' as ProfileTab,
   /** Discover scope: the profile content is installed into (null = no scope), and the initial project type. */
   discoverProfile: null as string | null, discoverType: 'mod' as ProjectType,
+  /** Instance whose icon / background picker is open (mounted once in App). */
+  iconPicker: null as string | null, backgroundPicker: null as string | null,
 });
+export const openIconPicker = (id: string): void => { nav.iconPicker = id; };
+export const openBackgroundPicker = (id: string): void => { nav.backgroundPicker = id; };
+
+/* ---- Part 6 + 7: block gallery and panoramas ---- */
+export const blocks = $state({ status: null as BlockIconsStatus | null, requested: false });
+/** `undefined` = not asked yet, `null` = nothing extracted yet. */
+export const panoramas = $state<Record<string, PanoramaSet | null | undefined>>({});
+const panoramaAsked = new Set<string>();
+export async function loadPanorama(id: string, force = false): Promise<void> {
+  if (!force && panoramaAsked.has(id)) return;
+  panoramaAsked.add(id);
+  try { panoramas[id] = await currentApi.panoramaForProfile({ id }); } catch { panoramas[id] = null; }
+}
+/** UI preference: instances whose `auto` background shows the Minecraft panorama (the backend has no such kind, it keeps `auto`). */
+const PANO_KEY = 'mango-bg-panorama';
+function loadPanoPrefs(): Record<string, boolean> {
+  try { const l = JSON.parse(localStorage.getItem(PANO_KEY) ?? '[]'); return Object.fromEntries((Array.isArray(l) ? l : []).map((id: string) => [id, true])); } catch { return {}; }
+}
+export const bgPanorama = $state<Record<string, boolean>>(loadPanoPrefs());
+export function setPanoramaPref(id: string, on: boolean): void {
+  if (on) bgPanorama[id] = true; else delete bgPanorama[id];
+  try { localStorage.setItem(PANO_KEY, JSON.stringify(Object.keys(bgPanorama))); } catch { /* storage unavailable: preference lasts for the session */ }
+}
+export function applyBlocksStatus(s: BlockIconsStatus): void {
+  const wasReady = blocks.status?.state === 'ready';
+  blocks.status = s;
+  if (s.state === 'ready' && !wasReady) void refresh(); // `autoBlock` is filled in once the gallery is ready
+}
+/** Starts the extraction silently once per session (when the app has instances and the gallery is missing). */
+export async function prepareBlocks(force = false): Promise<void> {
+  try {
+    blocks.requested = true;
+    applyBlocksStatus(await currentApi.blockIconsPrepare(force ? { force } : {}));
+  } catch (e) {
+    const err = toAppError(e);
+    blocks.status = { state: 'error', mcVersion: null, blocks: [], errorCode: err.code };
+  }
+}
+async function initBlocks(): Promise<void> {
+  try { applyBlocksStatus(await currentApi.blockIconsStatus()); } catch { return; }
+  if (app.profiles.length && blocks.status?.state === 'missing' && !blocks.requested) await prepareBlocks();
+}
 
 export function openProfile(id: string, tab: ProfileTab = 'overview'): void {
   nav.profileId = id; nav.profileTab = tab; nav.view = 'profile';
@@ -275,6 +319,8 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
     api.listen('accounts:changed', () => { void refreshAccounts(); }),
     api.listen('blocked:changed', (e) => applyBlocked(e.profileId, e.files)),
+    api.listen('blocks:status', applyBlocksStatus),
+    api.listen('panorama:ready', (e) => { void loadPanorama(e.profileId, true); }),
   ]);
   try {
     applyAppState(await api.appState());
@@ -285,6 +331,7 @@ export async function init(api: Api = defaultApi): Promise<void> {
     app.error = { code: err.code, message: err.message };
   }
   app.ready = true;
+  void initBlocks();
 }
 
 export function applyInstallProgress(e: InstallProgressEvent): void {
@@ -352,7 +399,9 @@ export function resetStores(): void {
   for (const k of Object.keys(launches)) delete launches[k];
   for (const k of Object.keys(consoles)) delete consoles[k];
   nav.view = 'home'; nav.newProfile = false; nav.newProfilePrefill = null; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
-  nav.discoverProfile = null; nav.discoverType = 'mod';
+  nav.discoverProfile = null; nav.discoverType = 'mod'; nav.iconPicker = null; nav.backgroundPicker = null;
+  blocks.status = null; blocks.requested = false; panoramaAsked.clear();
+  for (const k of Object.keys(panoramas)) delete panoramas[k];
   toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
@@ -471,6 +520,18 @@ export const actions = {
   async updateProfile(id: string, patch: Partial<ProfileView>) {
     const p = await currentApi.profileUpdate({ id, patch }); // caller handles errors
     app.profiles = app.profiles.map((x) => (x.id === id ? p : x));
+    return p;
+  },
+  /** Part 6 + 7 commands: the returned view replaces the profile in the list. */
+  async applyView(p: ProfileView) { app.profiles = app.profiles.map((x) => (x.id === p.id ? p : x)); return p; },
+  async setIconBlock(id: string, block: string) { return actions.applyView(await currentApi.profileIconSetBlock({ id, block })); },
+  async setIconImage(id: string, filePath: string) { return actions.applyView(await currentApi.profileIconSetImage({ id, filePath })); },
+  async clearIcon(id: string) { return actions.applyView(await currentApi.profileIconClear({ id })); },
+  async setBackgroundScreenshot(id: string, name: string) { return actions.applyView(await currentApi.profileBackgroundSetScreenshot({ id, name })); },
+  async setBackgroundImage(id: string, filePath: string) { return actions.applyView(await currentApi.profileBackgroundSetImage({ id, filePath })); },
+  async clearBackground(id: string, none = false) {
+    const p = await actions.applyView(await currentApi.profileBackgroundClear(none ? { id, none } : { id }));
+    if (!none) void loadPanorama(id, true);
     return p;
   },
   async deleteProfile(id: string) {
