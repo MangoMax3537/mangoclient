@@ -1,20 +1,45 @@
-//! Envelope logic of `credentials.js`, working on the `accounts.json` account
-//! objects (JSON maps) so unknown fields survive untouched.
+//! Account persistence: encrypted envelopes in `accounts.json`.
 //!
-//! With a secure store the tokens live in the store and the account carries
-//! `encryptedCredentials = "keyring:v1:<uuid>"`. Without one they stay inline
-//! (the accounts file is 0600). An envelope that cannot be read because the
-//! store is locked is kept verbatim with `credentialsLocked: true`.
-//! Envelopes written by the Electron launcher (Chromium OSCrypt) are not
-//! readable and yield [`AuthError::LegacyEnvelope`] so the caller can force
-//! one re-login.
+//! # Threat model
+//!
+//! Only the Microsoft refresh token is persisted, as an envelope v2
+//! (`mc2:<base64(nonce || ciphertext)>`, XChaCha20-Poly1305, AAD binding the
+//! account uuid and format version) inside the account object of
+//! `accounts.json`. The 256-bit key is random per device, lives only in the OS
+//! keystore and is never written to disk. Access tokens are never persisted:
+//! they are empty after load and derived from the refresh token by
+//! [`crate::ensure_fresh_account`].
+//!
+//! Protects against: theft or backup leaks of `accounts.json`, copied
+//! profiles/data dirs, other OS users, disk forensics. There is NO plaintext
+//! fallback: with the keystore locked or unavailable, accounts load with
+//! `credentials_locked = true`, the existing envelope is preserved
+//! byte-for-byte on save, and tokens obtained meanwhile are memory-only
+//! ([`StoredAccount::persisted`] is false).
+//!
+//! Honest limit: malware running as the same user in the same login session
+//! can often call the same OS keystore APIs (or read process memory), so this
+//! does not stop it. Short token lifetimes and no tokens in logs/UI limit the
+//! damage.
+//!
+//! Migration: legacy plaintext `accessToken`/`msaRefreshToken` fields and v1
+//! envelopes (`keyring:v1:<uuid>`, one keyring entry per account) are
+//! converted to v2 on load. The next [`Vault::store_account`] writes no
+//! plaintext and deletes the old keyring entry. Electron (Chromium OSCrypt)
+//! blobs are unreadable and yield [`AuthError::LegacyEnvelope`].
 
-use crate::account::Account;
+use crate::account::{Account, AccountType};
+use crate::envelope;
 use crate::error::{AuthError, StoreError};
+use crate::keystore::DeviceKeyStore;
 use crate::store::CredentialStore;
 use serde_json::{Map, Value};
+use std::sync::Arc;
+use zeroize::Zeroize;
 
+/// Legacy plaintext field names (also stripped defensively on save).
 pub const SECRET_FIELDS: [&str; 2] = ["accessToken", "msaRefreshToken"];
+/// v1 envelope prefix (`keyring:v1:<uuid>`), migrated away on load.
 pub const ENVELOPE_PREFIX: &str = "keyring:v1:";
 const ENVELOPE_KEY: &str = "encryptedCredentials";
 const LOCKED_KEY: &str = "credentialsLocked";
@@ -23,122 +48,203 @@ fn is_secret(v: &Value) -> bool {
     matches!(v, Value::String(s) if !s.is_empty() && s != "0")
 }
 
+/// True if an `accounts.json` entry still carries plaintext tokens.
 pub fn has_plaintext_credentials(account: &Map<String, Value>) -> bool {
     SECRET_FIELDS
         .iter()
         .any(|k| account.get(*k).is_some_and(is_secret))
 }
 
-/// Runtime account -> storable account (secrets moved into the store when it
-/// is secure).
-pub fn serialize_account(
-    account: &Map<String, Value>,
-    store: &dyn CredentialStore,
-) -> Result<Map<String, Value>, AuthError> {
-    let mut out = account.clone();
-    let preserved = out.remove(ENVELOPE_KEY);
-    out.remove(LOCKED_KEY);
-    let mut secrets = Map::new();
-    for key in SECRET_FIELDS {
-        if let Some(v) = out.remove(key) {
-            if is_secret(&v) {
-                secrets.insert(key.to_string(), v);
-            }
-        }
-    }
-    if secrets.is_empty() {
-        if let Some(env @ Value::String(_)) = preserved {
-            out.insert(ENVELOPE_KEY.into(), env);
-        }
-        return Ok(out);
-    }
-    if !store.is_secure() {
-        out.extend(secrets);
-        return Ok(out);
-    }
-    let uuid = out
-        .get("uuid")
-        .and_then(Value::as_str)
-        .filter(|u| !u.is_empty())
-        .ok_or(AuthError::InvalidAccount)?
-        .to_string();
-    store.set(&uuid, &serde_json::to_string(&secrets)?)?;
-    out.insert(
-        ENVELOPE_KEY.into(),
-        Value::String(format!("{ENVELOPE_PREFIX}{uuid}")),
-    );
-    Ok(out)
+/// True if loading and re-saving this entry changes its on-disk form
+/// (plaintext tokens or a v1 envelope); callers should save after load.
+pub fn needs_migration(account: &Map<String, Value>) -> bool {
+    has_plaintext_credentials(account)
+        || account
+            .get(ENVELOPE_KEY)
+            .and_then(Value::as_str)
+            .is_some_and(|e| e.starts_with(ENVELOPE_PREFIX))
 }
 
-/// Stored account -> runtime account with tokens filled in.
-pub fn deserialize_account(
-    stored: &Map<String, Value>,
-    store: &dyn CredentialStore,
-) -> Result<Map<String, Value>, AuthError> {
-    let mut out = stored.clone();
-    let Some(envelope) = out.remove(ENVELOPE_KEY) else {
-        return Ok(out);
-    };
-    let Some(key) = envelope
-        .as_str()
-        .and_then(|e| e.strip_prefix(ENVELOPE_PREFIX))
-    else {
-        return Err(AuthError::LegacyEnvelope);
-    };
-    match store.get(key) {
-        Ok(Some(blob)) => {
-            if let Value::Object(secrets) = serde_json::from_str::<Value>(&blob)? {
-                for k in SECRET_FIELDS {
-                    if let Some(v @ Value::String(_)) = secrets.get(k) {
-                        out.insert(k.to_string(), v.clone());
+/// An account in its `accounts.json` form.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredAccount {
+    pub value: Map<String, Value>,
+    /// False when the account holds tokens that are not in `value` (keystore
+    /// locked or unavailable): show a "not saved" notice.
+    pub persisted: bool,
+}
+
+/// Encrypts and decrypts account secrets with the device key.
+pub struct Vault {
+    keys: Arc<dyn DeviceKeyStore>,
+    legacy: Option<Arc<dyn CredentialStore>>,
+}
+
+impl Vault {
+    /// `legacy` is only read/deleted to migrate v1 envelopes.
+    pub fn new(keys: Arc<dyn DeviceKeyStore>, legacy: Option<Arc<dyn CredentialStore>>) -> Self {
+        Self { keys, legacy }
+    }
+
+    /// OS keystore for the device key and the v1 keyring entries.
+    #[cfg(feature = "keyring")]
+    pub fn system() -> Self {
+        Self::new(
+            Arc::new(crate::keystore::KeyringDeviceKey::new()),
+            Some(Arc::new(crate::store::KeyringStore)),
+        )
+    }
+
+    /// Stored `accounts.json` entry -> runtime account. Access token is empty
+    /// (derived at launch; offline accounts keep `"0"`).
+    pub fn load_account(&self, stored: &Map<String, Value>) -> Result<Account, AuthError> {
+        // Typed errors from serde can quote values: never forward them.
+        let mut acc: Account = serde_json::from_value(Value::Object(stored.clone()))
+            .map_err(|_| AuthError::InvalidAccount)?;
+        acc.access_token.zeroize();
+        acc.credentials_locked = false;
+        acc.memory_only = false;
+        acc.legacy_keyring_key = None;
+        if acc.kind == AccountType::Offline {
+            acc.access_token = "0".into();
+            acc.msa_refresh_token = None;
+            acc.encrypted_credentials = None;
+            return Ok(acc);
+        }
+        if acc.msa_refresh_token.as_deref().is_some_and(|t| t == "0") {
+            acc.msa_refresh_token = None;
+        }
+        let Some(env) = acc.encrypted_credentials.clone() else {
+            return Ok(acc); // plaintext (if any) is migrated on next save
+        };
+        if envelope::is_v2(&env) {
+            match self.keys.get_or_create() {
+                Ok(key) => match envelope::open(&key, &acc.uuid, &env) {
+                    Ok(rt) => acc.msa_refresh_token = Some(rt.to_string()),
+                    Err(_) => {
+                        tracing::warn!("credential envelope could not be decrypted");
+                        acc.credentials_locked = true;
                     }
-                }
+                },
+                Err(_) => acc.credentials_locked = true,
             }
-            Ok(out)
+        } else if let Some(key) = env.strip_prefix(ENVELOPE_PREFIX) {
+            match self.legacy.as_ref().map(|s| s.get(key)) {
+                Some(Ok(Some(mut blob))) => {
+                    acc.msa_refresh_token = refresh_from_v1(&blob);
+                    blob.zeroize();
+                    acc.legacy_keyring_key = Some(key.to_string());
+                }
+                Some(Ok(None)) => {
+                    // Entry gone: needs a fresh sign-in.
+                    acc.encrypted_credentials = None;
+                }
+                Some(Err(_)) | None => acc.credentials_locked = true,
+            }
+        } else {
+            return Err(AuthError::LegacyEnvelope);
         }
-        // Store reachable but the entry is gone: the account loads without
-        // tokens and will need a fresh sign-in.
-        Ok(None) => Ok(out),
-        Err(StoreError::Locked | StoreError::Unavailable(_)) => {
-            out.insert(ENVELOPE_KEY.into(), envelope);
-            out.insert(LOCKED_KEY.into(), Value::Bool(true));
-            Ok(out)
+        Ok(acc)
+    }
+
+    /// Runtime account -> `accounts.json` entry. Never contains plaintext
+    /// tokens. See the module docs for the locked/unavailable behavior.
+    pub fn store_account(&self, account: &Account) -> Result<StoredAccount, AuthError> {
+        let Value::Object(mut out) =
+            serde_json::to_value(account).map_err(|_| AuthError::InvalidAccount)?
+        else {
+            return Err(AuthError::InvalidAccount);
+        };
+        out.remove(ENVELOPE_KEY);
+        out.remove(LOCKED_KEY);
+        for k in SECRET_FIELDS {
+            out.remove(k);
         }
-        Err(e) => Err(e.into()),
+        if account.kind == AccountType::Offline {
+            return Ok(StoredAccount {
+                value: out,
+                persisted: true,
+            });
+        }
+        let refresh = account
+            .msa_refresh_token
+            .as_deref()
+            .filter(|t| !t.is_empty());
+        let existing = account.encrypted_credentials.clone();
+        let (envelope, persisted) = if account.credentials_locked {
+            // Unreadable existing envelope: keep it exactly as it was.
+            (existing, refresh.is_none())
+        } else if let Some(rt) = refresh {
+            match self.keys.get_or_create() {
+                Ok(key) => {
+                    if account.uuid.is_empty() {
+                        return Err(AuthError::InvalidAccount);
+                    }
+                    let env = envelope::seal(&key, &account.uuid, rt)?;
+                    self.delete_legacy(account.legacy_keyring_key.as_deref());
+                    (Some(env), true)
+                }
+                Err(StoreError::Locked | StoreError::Unavailable(_)) => (existing, false),
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            // Signed out / nothing to keep.
+            self.delete_legacy(account.legacy_keyring_key.as_deref());
+            (None, true)
+        };
+        if let Some(env) = envelope {
+            out.insert(ENVELOPE_KEY.into(), Value::String(env));
+        }
+        Ok(StoredAccount {
+            value: out,
+            persisted,
+        })
+    }
+
+    /// Cleanup when an account is deleted: removes a leftover v1 keyring entry.
+    /// v2 envelopes live in the account object itself, nothing else to delete.
+    pub fn delete_credentials(&self, stored: &Map<String, Value>) -> Result<(), AuthError> {
+        if let (Some(store), Some(key)) = (
+            self.legacy.as_ref(),
+            stored
+                .get(ENVELOPE_KEY)
+                .and_then(Value::as_str)
+                .and_then(|e| e.strip_prefix(ENVELOPE_PREFIX)),
+        ) {
+            store.delete(key)?;
+        }
+        Ok(())
+    }
+
+    fn delete_legacy(&self, key: Option<&str>) {
+        if let (Some(store), Some(key)) = (self.legacy.as_ref(), key) {
+            if store.delete(key).is_err() {
+                tracing::warn!("could not delete legacy credential entry");
+            }
+        }
     }
 }
 
-/// Remove an account's secrets from the store (when the account is deleted).
-/// Foreign or legacy envelopes are ignored.
-pub fn delete_credentials(
-    stored: &Map<String, Value>,
-    store: &dyn CredentialStore,
-) -> Result<(), AuthError> {
-    if let Some(key) = stored
-        .get(ENVELOPE_KEY)
-        .and_then(Value::as_str)
-        .and_then(|e| e.strip_prefix(ENVELOPE_PREFIX))
-    {
-        store.delete(key)?;
+fn refresh_from_v1(blob: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct V1 {
+        #[serde(rename = "msaRefreshToken")]
+        msa_refresh_token: Option<String>,
     }
-    Ok(())
+    serde_json::from_str::<V1>(blob)
+        .ok()
+        .and_then(|v| v.msa_refresh_token)
+        .filter(|t| !t.is_empty())
 }
 
 impl Account {
     /// Load from a stored `accounts.json` entry.
-    pub fn from_stored(
-        stored: &Map<String, Value>,
-        store: &dyn CredentialStore,
-    ) -> Result<Self, AuthError> {
-        let runtime = deserialize_account(stored, store)?;
-        Ok(serde_json::from_value(Value::Object(runtime))?)
+    pub fn from_stored(stored: &Map<String, Value>, vault: &Vault) -> Result<Self, AuthError> {
+        vault.load_account(stored)
     }
 
-    /// Storable form with secrets moved into the store when it is secure.
-    pub fn to_stored(&self, store: &dyn CredentialStore) -> Result<Map<String, Value>, AuthError> {
-        match serde_json::to_value(self)? {
-            Value::Object(m) => serialize_account(&m, store),
-            _ => Err(AuthError::InvalidAccount),
-        }
+    /// Storable form (envelope, no plaintext tokens).
+    pub fn to_stored(&self, vault: &Vault) -> Result<Map<String, Value>, AuthError> {
+        Ok(vault.store_account(self)?.value)
     }
 }

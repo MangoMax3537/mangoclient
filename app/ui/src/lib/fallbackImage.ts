@@ -37,8 +37,7 @@ export function heroFallback(id?: string): string {
   return urlFor('placeholder-hero');
 }
 
-/** Skin head for an account: Microsoft accounts try the public head render, everything else (and any load error) uses the bundled head. */
-export function accountHeadUrl(acc: { uuid: string; type: 'microsoft' | 'offline' } | null | undefined): string {
-  if (acc && acc.type === 'microsoft') return `https://mc-heads.net/avatar/${encodeURIComponent(acc.uuid)}/64`;
-  return fallbackImage('account', acc?.uuid ?? '');
+/** Skin head for an account: the backend's `headUrl` (mangoimg://head/<uuid>); the bundled Steve head when absent. */
+export function accountHeadUrl(acc: { headUrl?: string | null; uuid?: string } | null | undefined): string {
+  return acc?.headUrl || fallbackImage('account', acc?.uuid ?? '');
 }

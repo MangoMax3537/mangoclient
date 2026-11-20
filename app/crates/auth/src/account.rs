@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -29,9 +30,11 @@ impl Texture {
     }
 }
 
-/// Runtime account including secrets. Serialized form is the `accounts.json`
-/// shape (camelCase); go through [`crate::serialize_account`] to persist it so
-/// tokens end up in the vault.
+/// Runtime account including secrets. The serialized form is the `accounts.json`
+/// shape (camelCase) and NEVER contains tokens: `access_token` and
+/// `msa_refresh_token` are deserialize-only (so legacy plaintext files can be
+/// migrated). Persist through [`crate::Vault::store_account`], which adds the
+/// encrypted envelope. Token buffers are zeroized on drop.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
@@ -41,9 +44,10 @@ pub struct Account {
     pub uuid: String,
     #[serde(default)]
     pub name: String,
-    #[serde(default)]
+    /// Memory only, empty after load; derived from the refresh token.
+    #[serde(default, skip_serializing)]
     pub access_token: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing)]
     pub msa_refresh_token: Option<String>,
     /// Unix milliseconds; `None` for offline accounts.
     #[serde(default)]
@@ -57,8 +61,31 @@ pub struct Account {
     pub credentials_locked: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encrypted_credentials: Option<String>,
+    /// Tokens held by this account are not persisted (keystore locked or
+    /// unavailable); the UI should show a notice.
+    #[serde(skip)]
+    pub memory_only: bool,
+    /// v1 per-token keyring entry still to delete once migrated to v2.
+    #[serde(skip)]
+    pub legacy_keyring_key: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+impl Account {
+    /// Overwrite the in-memory token buffers.
+    pub fn zeroize_tokens(&mut self) {
+        self.access_token.zeroize();
+        if let Some(t) = self.msa_refresh_token.as_mut() {
+            t.zeroize();
+        }
+    }
+}
+
+impl Drop for Account {
+    fn drop(&mut self) {
+        self.zeroize_tokens();
+    }
 }
 
 impl fmt::Debug for Account {

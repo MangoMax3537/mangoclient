@@ -1,11 +1,38 @@
 <script lang="ts">
-  import { fmtRam } from '../lib/format';
-  import { actions, app, t } from '../lib/stores.svelte';
+  import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
+  import BroomIcon from 'phosphor-svelte/lib/BroomIcon';
+  import ConfirmDialog from './ConfirmDialog.svelte';
+  import { fmtBytes, fmtRam } from '../lib/format';
+  import type { Key } from '../lib/i18n';
+  import { actions, anyGameActive, app, errorText, getApi, lang, t, toast, updates } from '../lib/stores.svelte';
+  import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
   const maxRam = $derived(Math.max(2048, app.totalRamMb || 8192));
   let args = $state(app.config?.javaArgs ?? '');
   let argTimer: ReturnType<typeof setTimeout> | undefined;
+  let usage = $state<StorageUsage[] | null>(null);
+  let clearing = $state<StorageKey | null>(null);
+  let confirmKey = $state<StorageKey | null>(null);
+  const totalBytes = $derived((usage ?? []).reduce((a, u) => a + u.bytes, 0));
+  const gameActive = $derived(anyGameActive());
+  $effect(() => { getApi().storageUsage().then((u) => (usage = u), (e) => toast(errorText(e), 'error')); });
+  async function clearKey(key: StorageKey) {
+    clearing = key;
+    try { usage = await getApi().storageClear({ key }); toast(t('storage.cleared', { name: t(`storage.${key}` as Key) }), 'ok'); }
+    catch (e) { toast(errorText(e), 'error'); }
+    clearing = null; confirmKey = null;
+  }
+  const us = $derived(updates.status);
+  const usText = $derived(
+    us.state === 'checking' ? t('update.status.checking')
+      : us.state === 'downloading' ? t('update.status.downloading', { n: Math.round(us.percent ?? 0), v: us.version ?? '' })
+      : us.state === 'ready' ? t('update.status.ready', { v: us.version ?? '' })
+      : us.state === 'current' ? t('update.status.current')
+      : us.state === 'error' ? t(`update.error.${us.errorCode ?? 'other'}` as Key)
+      : us.state === 'disabled' ? t(`update.disabled.${us.disabledReason ?? 'dev'}` as Key)
+      : t('update.status.idle'),
+  );
   function onArgs() {
     clearTimeout(argTimer);
     argTimer = setTimeout(() => actions.setConfig({ javaArgs: args }), 400);
@@ -56,8 +83,48 @@
       </div>
     </section>
 
+    <section aria-labelledby="s-storage">
+      <h2 id="s-storage" class="eyebrow">{t('storage.title')}</h2>
+      {#if !usage}
+        <p class="hint">{t('common.loading')}</p>
+      {:else}
+        <p class="hint total mono">{t('storage.total', { size: fmtBytes(totalBytes, lang()) })}</p>
+        <ul class="usage">
+          {#each usage as u (u.key)}
+            <li>
+              <div class="lbl"><span>{t(`storage.${u.key}` as Key)}</span><span class="mono dim">{fmtBytes(u.bytes, lang())}</span></div>
+              <div class="bar" role="meter" aria-label={t(`storage.${u.key}` as Key)} aria-valuemin="0" aria-valuemax={totalBytes} aria-valuenow={u.bytes}><span style:transform="scaleX({totalBytes ? u.bytes / totalBytes : 0})"></span></div>
+              <button class="btn" type="button" disabled={!u.clearable || gameActive || u.bytes === 0 || clearing !== null} title={gameActive ? t('storage.gameRunning') : ''} onclick={() => (confirmKey = u.key)}>
+                <BroomIcon weight="bold" size={14} aria-hidden="true" />{t('storage.clear')}
+              </button>
+            </li>
+          {/each}
+        </ul>
+        {#if gameActive}<p class="hint">{t('storage.gameRunning')}</p>{/if}
+      {/if}
+    </section>
+
+    <section aria-labelledby="s-updates">
+      <h2 id="s-updates" class="eyebrow">{t('update.title')}</h2>
+      <div class="row">
+        <div class="txt"><b>{t('settings.version')} <span class="mono">{app.version}</span></b><div class="hint" role="status" aria-live="polite">{usText}</div></div>
+        {#if us.state === 'ready'}
+          <button class="btn accent" type="button" onclick={() => (updates.overlay = true)}>{t('update.install')}</button>
+        {:else}
+          <button class="btn" type="button" disabled={us.state === 'checking' || us.state === 'downloading' || us.state === 'disabled'} onclick={() => actions.updateCheck()}>
+            <ArrowsClockwiseIcon weight="bold" size={16} aria-hidden="true" />{t('update.check')}
+          </button>
+        {/if}
+      </div>
+    </section>
+
     <footer class="hint mono">{t('settings.version')} {app.version} &middot; {t('settings.dataDir')}: {app.rootDir}</footer>
   </div>
+{/if}
+
+{#if confirmKey}
+  <ConfirmDialog danger title={t('storage.confirmTitle', { name: t(`storage.${confirmKey}` as Key) })} body={t(`storage.hint.${confirmKey}` as Key)} confirmLabel={t('storage.clear')} busy={clearing !== null}
+    onconfirm={() => confirmKey && clearKey(confirmKey)} oncancel={() => (confirmKey = null)} />
 {/if}
 
 <style>
@@ -72,4 +139,11 @@
   .ram output { white-space: nowrap; font-size: 13px; }
   .ram b { color: var(--mango); font-weight: 500; }
   footer { word-break: break-all; }
+  .usage { list-style: none; margin: 0; padding: 0; display: grid; }
+  .usage li { display: grid; grid-template-columns: minmax(0, 1fr) 36% auto; gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+  .lbl { display: flex; justify-content: space-between; gap: 8px; }
+  .dim { color: var(--paper-mute); }
+  .bar { height: 8px; background: var(--ink-3); border-radius: 2px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--mango); transform-origin: left; }
+  .total { margin: 6px 0 2px; }
 </style>

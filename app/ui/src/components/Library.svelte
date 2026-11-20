@@ -5,7 +5,7 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import Tile from './Tile.svelte';
   import { fmtDuration } from '../lib/format';
-  import { actions, app, nav, t, tp } from '../lib/stores.svelte';
+  import { app, openProfile, nav, t, tp } from '../lib/stores.svelte';
 
   let query = $state('');
   let sort = $state<'recent' | 'name' | 'playtime'>('recent');
@@ -19,7 +19,7 @@
         : sort === 'playtime' ? b.playTimeMs - a.playTimeMs
         : (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
   });
-  const open = (id: string) => { actions.selectProfile(id); nav.view = 'home'; };
+  const open = (id: string) => openProfile(id);
 </script>
 
 <div class="lib">

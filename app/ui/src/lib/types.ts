@@ -12,6 +12,8 @@ export interface ProfileView {
 }
 export interface PublicAccount {
   uuid: string; name: string; type: 'microsoft' | 'offline'; expiresAt: number | null; expired: boolean; hasCape: boolean;
+  /** `mangoimg://head/<uuid>`: cached Mojang skin head, Steve/Alex for offline. */
+  headUrl: string;
 }
 export interface Config {
   language: 'de' | 'en'; ram: number; javaPath: string; javaArgs: string; fullscreen: boolean; width: number; height: number;
@@ -31,8 +33,63 @@ export interface AppError { code: string; message: string; needsRelogin: boolean
 export interface LaunchStateEvent { profileId: string; state: LaunchState }
 export interface LaunchProgressEvent { profileId: string; phase: ProgressPhase; done: number; total: number; label: string }
 export interface LaunchLogEvent { profileId: string; line: string; level: LogLevel }
+
+
+/* ---- Part 2 (docs/ipc.md): content, discover, servers, media, logs, stats, storage, updates ---- */
+export type ContentType = 'mod' | 'shader' | 'resourcepack' | 'datapack';
+export type ProjectType = ContentType | 'modpack';
+export interface ContentItem {
+  projectId: string; slug: string | null; title: string; type: ContentType; versionId: string | null; versionNumber: string | null;
+  filename: string; enabled: boolean; local: boolean; iconUrl: string | null; requiredBy: string[]; dependency: boolean;
+  updateAvailable: string | null; installedAt: number | null;
+}
+export interface ProjectHit {
+  projectId: string; slug: string; title: string; author: string; description: string; type: ProjectType; iconUrl: string | null;
+  downloads: number; follows: number; categories: string[]; gameVersions: string[]; loaders: string[]; dateModified: string; installedIn: string[];
+}
+export type SearchSort = 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated';
+export interface SearchParams {
+  query: string; projectType: ProjectType; loader?: Loader; mcVersion?: string; categories?: string[];
+  sort: SearchSort; offset: number; limit: number;
+}
+export interface SearchResult { hits: ProjectHit[]; total: number; offset: number }
+export interface ProjectDetail extends ProjectHit {
+  body: string; gallery: string[]; license: string | null; sourceUrl: string | null; issuesUrl: string | null;
+}
+export interface ProjectVersion {
+  versionId: string; versionNumber: string; name: string; type: 'release' | 'beta' | 'alpha'; gameVersions: string[]; loaders: string[];
+  datePublished: string; downloads: number; compatible: boolean;
+}
+export interface UpdateInfo {
+  projectId: string; title: string; type: ContentType; from: string | null; to: string; versionId: string;
+  compatibility: boolean; conflict: boolean; requiredBy: string[];
+}
+export interface ServerEntry { id: string; name: string; address: string; partner: boolean; starred: boolean; iconUrl: string | null }
+export interface ServerStatus {
+  id: string; online: boolean; ping: number | null; motd: string; players: { online: number; max: number } | null; version: string | null;
+}
+export interface Screenshot { name: string; size: number; taken: number; url: string }
+export interface LogEntry { id: string; name: string; size: number; modified: number; kind: 'game' | 'crash' | 'launcher' }
+export interface StatsSummary {
+  days: { date: string; ms: number }[];
+  perProfile: { profileId: string; name: string; ms: number; sessions: number }[];
+  totalMs: number; sessions: number; longestMs: number;
+}
+export type StorageKey = 'instances' | 'versions' | 'libraries' | 'assets' | 'runtimes' | 'natives' | 'cache' | 'logs';
+export interface StorageUsage { key: StorageKey; bytes: number; clearable: boolean }
+export type UpdateStateName = 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error' | 'disabled';
+export interface UpdateStatus {
+  state: UpdateStateName; percent?: number; version?: string; notes?: string;
+  errorCode?: 'no-release' | 'offline' | 'other'; disabledReason?: 'dev' | 'unsupported';
+}
+
+export interface InstallProgressEvent { profileId: string; projectId: string; done: number; total: number; label: string }
 export interface ApiEvents {
   'launch:state': LaunchStateEvent;
   'launch:progress': LaunchProgressEvent;
   'launch:log': LaunchLogEvent;
+  'install:progress': InstallProgressEvent;
+  'servers:pinged': ServerStatus;
+  'update:status': UpdateStatus;
+  'content:changed': { profileId: string };
 }

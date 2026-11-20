@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from './mockApi';
 import {
-  app, applyProgress, applyState, CONSOLE_CAP, consoles, init, isBusy, launchInfo, pushLog, resetStores, stageProgress, t,
+  actions, anyGameActive, app, applyInstallProgress, applyPinged, applyProgress, applyState, CONSOLE_CAP, consoles, init, installs, isBusy,
+  launchInfo, nav, openDiscover, openProfile, pushLog, resetStores, servers, stageProgress, t, toast, toasts, updates,
 } from './stores.svelte';
 
 describe('stores', () => {
@@ -39,5 +40,37 @@ describe('stores', () => {
     expect(launchInfo(id).state).toBe('running');
     expect(consoles[id].length).toBeGreaterThan(0);
     expect(t('home.play')).toBe('Spielen');
+  });
+
+  it('tracks installs, server pings, navigation and toasts', () => {
+    applyInstallProgress({ profileId: 'p', projectId: 'x', done: 2, total: 5, label: 'X' });
+    expect(installs['x'].done).toBe(2);
+    applyInstallProgress({ profileId: 'p', projectId: 'x', done: 5, total: 5, label: 'X' });
+    expect(installs['x']).toBeUndefined();
+    applyPinged({ id: 's1', online: true, ping: 20, motd: '', players: null, version: null });
+    expect(servers.status['s1'].ping).toBe(20);
+    openProfile('abc', 'content');
+    expect(nav).toMatchObject({ view: 'profile', profileId: 'abc', profileTab: 'content' });
+    openDiscover('abc', 'shader');
+    expect(nav).toMatchObject({ view: 'discover', discoverProfile: 'abc', discoverType: 'shader' });
+    toast('hi', 'ok', 1000);
+    expect(toasts).toHaveLength(1);
+    vi.advanceTimersByTime(1100);
+    expect(toasts).toHaveLength(0);
+    applyState('g', 'running');
+    expect(anyGameActive()).toBe(true);
+  });
+
+  it('follows update events and servers via the api', async () => {
+    const api = createMockApi();
+    await init(api);
+    expect(updates.status.state).toBe('idle');
+    await actions.updateCheck();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(updates.status.state).toBe('ready');
+    await actions.loadServers();
+    expect(servers.list.length).toBeGreaterThan(3);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(Object.keys(servers.status)).toHaveLength(servers.list.length);
   });
 });

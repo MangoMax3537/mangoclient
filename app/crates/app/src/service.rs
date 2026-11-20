@@ -2,6 +2,7 @@
 
 use crate::error::{AppError, Res};
 use crate::events::{Event, EventSink, LaunchStateEvent, ProgressThrottle};
+use crate::host::Host;
 use crate::types::{
     installed_versions, AppState, ConfigView, Latest, LaunchState, LoaderVersion, ProfileView,
     PublicAccount, VersionEntry, VersionManifest,
@@ -10,10 +11,16 @@ use mango_core::{validate_profile_id, Account, Paths, Store};
 use mango_minecraft::{get_version_manifest, VERSION_MANIFEST_URL};
 use mango_net::FetchOptions;
 use mango_runtime::GameInstance;
+use mango_servers::{PingOptions, ServerIcons};
+use mango_updater::{NoopInstaller, Updater, UpdaterConfig};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
+
+pub const DEFAULT_UPDATE_URL: &str =
+    "https://github.com/mangomax/mangoclient/releases/latest/download/latest.json";
 
 /// Everything that points outside the data dir, injectable for tests.
 #[derive(Debug, Clone)]
@@ -25,6 +32,30 @@ pub struct ServiceOptions {
     pub app_version: String,
     /// Really launch the OS file manager in `open_folder`.
     pub open_folders: bool,
+    /// Modrinth API base (no trailing slash).
+    pub modrinth_api: String,
+    /// mclo.gs log upload endpoint.
+    pub mclogs_api: String,
+    /// Retry/timeout policy for the service's own HTTP calls.
+    pub fetch: FetchOptions,
+    /// Server list ping settings.
+    pub ping: PingOptions,
+    /// Partner servers, shown first and starred.
+    pub partners: Vec<mango_servers::FeaturedServer>,
+    /// `latest.json` of the updater.
+    pub update_manifest_url: String,
+    /// Unpackaged dev run: the updater reports `disabled`.
+    pub update_dev: bool,
+    /// Check for updates at startup and every 3 h (`start_background`).
+    pub auto_update_check: bool,
+    /// Telemetry base, already validated. `None` = `MANGO_API_BASE` / legacy.
+    pub api_base: Option<String>,
+    /// How often the `mods/` watcher looks at the selected/running profiles.
+    pub watch_interval: Duration,
+    /// Hosts remote images (Modrinth icons, gallery) may be fetched from.
+    pub icon_hosts: Vec<String>,
+    /// Allow plain http for remote images (tests only).
+    pub icon_allow_http: bool,
 }
 
 impl Default for ServiceOptions {
@@ -42,6 +73,21 @@ impl Default for ServiceOptions {
             loader_endpoints: mango_loaders::Endpoints::default(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             open_folders: true,
+            modrinth_api: mango_modrinth::API.to_string(),
+            mclogs_api: "https://api.mclo.gs/1/log".to_string(),
+            fetch: FetchOptions::default(),
+            ping: PingOptions::default(),
+            partners: mango_servers::featured_servers(),
+            update_manifest_url: std::env::var("MANGO_UPDATE_URL")
+                .ok()
+                .filter(|u| !u.is_empty())
+                .unwrap_or_else(|| DEFAULT_UPDATE_URL.to_string()),
+            update_dev: cfg!(debug_assertions),
+            auto_update_check: true,
+            api_base: None,
+            watch_interval: Duration::from_secs(2),
+            icon_hosts: vec!["cdn.modrinth.com".to_string()],
+            icon_allow_http: false,
         }
     }
 }
@@ -55,6 +101,13 @@ pub(crate) struct Inner {
     pub launching: Mutex<HashSet<String>>,
     pub states: Mutex<HashMap<String, LaunchState>>,
     pub throttle: Mutex<ProgressThrottle>,
+    pub host: Host,
+    pub modrinth: mango_modrinth::Client,
+    pub icons: Arc<ServerIcons>,
+    pub updater: Updater,
+    pub telemetry: Mutex<Option<mango_mango::telemetry::Telemetry>>,
+    /// Per profile: project id -> newer version number, from the last check.
+    pub updates: Mutex<HashMap<String, HashMap<String, String>>>,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -99,7 +152,21 @@ pub struct AppService {
 impl AppService {
     /// Open the data dir and re-attach to games that outlived the last run.
     pub fn new(paths: Paths, sink: Arc<dyn EventSink>, opts: ServiceOptions) -> Res<AppService> {
+        let host = Host::system(opts.open_folders);
+        Self::with_host(paths, sink, opts, host)
+    }
+
+    /// Like [`AppService::new`] with the shell's folder opener and clipboard.
+    pub fn with_host(
+        paths: Paths,
+        sink: Arc<dyn EventSink>,
+        opts: ServiceOptions,
+        host: Host,
+    ) -> Res<AppService> {
         let store = Store::open(paths.clone())?;
+        let modrinth = mango_modrinth::Client::with_options(&opts.modrinth_api, opts.fetch.clone());
+        let icons = Arc::new(ServerIcons::in_root(paths.root()));
+        let updater = build_updater(&paths, &opts);
         let svc = AppService {
             inner: Arc::new(Inner {
                 paths,
@@ -110,6 +177,12 @@ impl AppService {
                 launching: Mutex::new(HashSet::new()),
                 states: Mutex::new(HashMap::new()),
                 throttle: Mutex::new(ProgressThrottle::default()),
+                host,
+                modrinth,
+                icons,
+                updater,
+                telemetry: Mutex::new(None),
+                updates: Mutex::new(HashMap::new()),
             }),
         };
         svc.adopt_sessions();
@@ -145,9 +218,12 @@ impl AppService {
     }
 
     pub fn config_set(&self, patch: Value) -> Res<ConfigView> {
-        self.inner
-            .with_store(|s| s.set_config(&patch).map(ConfigView::from))
-            .map_err(Into::into)
+        let view = self
+            .inner
+            .with_store(|s| s.set_config(&patch).map(ConfigView::from))?;
+        // Opting in/out takes effect immediately (needs a runtime to spawn on).
+        self.sync_telemetry();
+        Ok(view)
     }
 
     // ---- profiles ----
@@ -381,10 +457,14 @@ impl AppService {
             id => paths.instance_dir(id)?,
         };
         std::fs::create_dir_all(&dir)?;
-        if self.inner.opts.open_folders {
-            open_in_file_manager(&dir);
-        }
+        self.open_dir(&dir);
         Ok(dir.display().to_string())
+    }
+
+    pub(crate) fn open_dir(&self, dir: &Path) {
+        if let Err(e) = self.inner.host.opener.open(dir) {
+            tracing::warn!("could not open {}: {e}", dir.display());
+        }
     }
 
     pub(crate) fn is_busy(&self, id: &str) -> bool {
@@ -392,17 +472,18 @@ impl AppService {
     }
 }
 
-fn open_in_file_manager(dir: &Path) {
-    let program = if cfg!(target_os = "windows") {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    if let Err(e) = std::process::Command::new(program).arg(dir).spawn() {
-        tracing::warn!("could not open {}: {e}", dir.display());
-    }
+fn build_updater(paths: &Paths, opts: &ServiceOptions) -> Updater {
+    let version =
+        semver::Version::parse(&opts.app_version).unwrap_or_else(|_| semver::Version::new(0, 0, 0));
+    let mut cfg = UpdaterConfig::new(
+        opts.update_manifest_url.clone(),
+        version,
+        // Outside `cache/`, which the storage manager may clear.
+        paths.root().join("updates"),
+    );
+    cfg.dev = opts.update_dev;
+    cfg.fetch = opts.fetch.clone();
+    Updater::new(cfg, Arc::new(NoopInstaller))
 }
 
 fn parse_manifest(raw: &Value, installed: Vec<String>) -> VersionManifest {

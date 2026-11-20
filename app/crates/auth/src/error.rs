@@ -24,6 +24,8 @@ pub enum AuthError {
     NeedsRelogin,
     #[error("credentials were stored by the Electron launcher and cannot be read")]
     LegacyEnvelope,
+    #[error("credential envelope could not be encrypted or decrypted")]
+    Crypto,
     #[error("account has no usable uuid")]
     InvalidAccount,
     #[error("Microsoft sign-in failed: {0}")]
@@ -74,6 +76,7 @@ impl AuthError {
             Self::InvalidUsername => "auth.invalid_username",
             Self::NeedsRelogin => "auth.needs_relogin",
             Self::LegacyEnvelope => "auth.legacy_envelope",
+            Self::Crypto => "auth.crypto",
             Self::InvalidAccount => "auth.invalid_account",
             Self::LoginFailed(_) => "auth.login_failed",
             Self::XboxNoProfile => "auth.xbox.no_profile",

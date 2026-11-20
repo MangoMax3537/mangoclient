@@ -30,6 +30,10 @@ impl AppError {
         AppError::new("profile_not_found", "Profile not found")
     }
 
+    pub fn validation(message: impl Into<String>) -> Self {
+        AppError::new("validation", message)
+    }
+
     pub fn already_running() -> Self {
         AppError::new("already_running", "This profile is already running")
     }
@@ -55,6 +59,9 @@ from_coded!(
     mango_runtime::RuntimeError,
     mango_net::NetError,
     mango_mango::Error,
+    mango_modrinth::Error,
+    mango_servers::ServersError,
+    mango_updater::UpdateError,
 );
 
 impl From<std::io::Error> for AppError {

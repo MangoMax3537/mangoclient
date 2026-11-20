@@ -39,7 +39,7 @@
       {@const active = a.uuid === app.config?.selectedAccount}
       <li class:active>
         <button class="pick" type="button" onclick={() => actions.selectAccount(a.uuid)} aria-pressed={active} aria-label="{t('accounts.select')}: {a.name}">
-          <Tile kind="account" id={a.uuid} accountType={a.type} size={32} radius={4} />
+          <Tile kind="account" id={a.uuid} src={a.headUrl} size={32} radius={4} />
           <span class="who"><b>{a.name}</b>
             <small>{a.type === 'microsoft' ? t('accounts.msa') : t('accounts.offline')}{#if a.expired}&nbsp;&middot;&nbsp;<span class="err">{t('accounts.expired')}</span>{/if}</small>
           </span>

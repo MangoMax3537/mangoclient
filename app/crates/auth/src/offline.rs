@@ -28,6 +28,8 @@ pub fn offline_account(name: &str) -> Result<Account, AuthError> {
         capes: vec![],
         credentials_locked: false,
         encrypted_credentials: None,
+        memory_only: false,
+        legacy_keyring_key: None,
         extra: Map::new(),
     })
 }

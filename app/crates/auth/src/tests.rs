@@ -19,140 +19,294 @@ fn obj(v: Value) -> Map<String, Value> {
 // ---- vault -------------------------------------------------------------
 
 #[derive(Default)]
-struct MockStore {
-    secure: bool,
-    locked: Mutex<bool>,
+struct MockLegacy {
     data: Mutex<HashMap<String, String>>,
 }
 
-impl MockStore {
-    fn new(secure: bool) -> Self {
-        Self {
-            secure,
-            ..Default::default()
-        }
-    }
-}
-
-impl CredentialStore for MockStore {
+impl CredentialStore for MockLegacy {
     fn get(&self, key: &str) -> Result<Option<String>, StoreError> {
-        if *self.locked.lock().unwrap() {
-            return Err(StoreError::Locked);
-        }
         Ok(self.data.lock().unwrap().get(key).cloned())
-    }
-    fn set(&self, key: &str, value: &str) -> Result<(), StoreError> {
-        self.data.lock().unwrap().insert(key.into(), value.into());
-        Ok(())
     }
     fn delete(&self, key: &str) -> Result<(), StoreError> {
         self.data.lock().unwrap().remove(key);
         Ok(())
     }
-    fn is_secure(&self) -> bool {
-        self.secure
-    }
+}
+
+const RT: &str = "M.C5_BAY.0.U.-REFRESH-SECRET-xyz";
+const AT: &str = "eyJ-ACCESS-SECRET-abc";
+
+fn uuid() -> String {
+    "0123456789abcdef0123456789abcdef".into()
+}
+
+fn vault_with(keys: Arc<MemoryDeviceKey>, legacy: Arc<MockLegacy>) -> Vault {
+    Vault::new(keys, Some(legacy))
+}
+
+fn ms_account(rt: Option<&str>) -> Account {
+    let mut a = offline_account("Player").unwrap();
+    a.kind = AccountType::Microsoft;
+    a.uuid = uuid();
+    a.access_token = AT.into();
+    a.msa_refresh_token = rt.map(str::to_string);
+    a.expires_at = Some(crate::account::now_ms() + 3_600_000);
+    a
+}
+
+fn env_of(m: &Map<String, Value>) -> String {
+    m["encryptedCredentials"].as_str().unwrap().to_string()
 }
 
 #[test]
-fn credentials_migrate_to_envelope_and_round_trip() {
-    let store = MockStore::new(true);
-    let legacy = obj(json!({
-        "uuid": "a".repeat(32), "name": "Player",
-        "accessToken": "mc-secret", "msaRefreshToken": "refresh-secret"
-    }));
-    assert!(has_plaintext_credentials(&legacy));
-    let stored = serialize_account(&legacy, &store).unwrap();
-    assert!(!stored.contains_key("accessToken"));
-    assert!(!stored.contains_key("msaRefreshToken"));
-    let env = stored["encryptedCredentials"].as_str().unwrap();
-    assert!(env.starts_with(ENVELOPE_PREFIX));
-    assert!(!env.contains("secret"));
-    assert_eq!(deserialize_account(&stored, &store).unwrap(), legacy);
+fn round_trip_persists_only_refresh_token() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let v = vault_with(keys, Arc::default());
+    let st = v.store_account(&ms_account(Some(RT))).unwrap();
+    assert!(st.persisted);
+    let env = env_of(&st.value);
+    assert!(env.starts_with("mc2:"));
+    let text = serde_json::to_string(&st.value).unwrap();
+    assert!(!text.contains("REFRESH") && !text.contains("ACCESS"));
+    assert!(!st.value.contains_key("accessToken"));
+    assert!(!st.value.contains_key("msaRefreshToken"));
+    let back = v.load_account(&st.value).unwrap();
+    assert_eq!(back.msa_refresh_token.as_deref(), Some(RT));
+    assert!(back.access_token.is_empty());
+    assert!(!back.credentials_locked && !back.memory_only);
+    // Random nonce: two seals differ.
+    assert_ne!(env, env_of(&v.store_account(&back).unwrap().value));
+}
+
+fn flip(env: &str, byte: usize) -> String {
+    let mut blob = STANDARD.decode(&env["mc2:".len()..]).unwrap();
+    blob[byte] ^= 1;
+    format!("mc2:{}", STANDARD.encode(blob))
 }
 
 #[test]
-fn insecure_store_keeps_plaintext_fallback() {
-    let store = MockStore::new(false);
-    let account = obj(json!({ "uuid": "b".repeat(32), "accessToken": "secret" }));
-    assert_eq!(serialize_account(&account, &store).unwrap(), account);
+fn tampering_nonce_or_ciphertext_is_detected() {
+    let key = DeviceKey::generate().unwrap();
+    let env = seal_envelope(&key, &uuid(), RT).unwrap();
+    assert_eq!(&*open_envelope(&key, &uuid(), &env).unwrap(), RT);
+    assert!(open_envelope(&key, &uuid(), &flip(&env, 0)).is_err()); // nonce
+    assert!(open_envelope(&key, &uuid(), &flip(&env, 30)).is_err()); // ciphertext
+    let last = STANDARD.decode(&env[4..]).unwrap().len() - 1;
+    assert!(open_envelope(&key, &uuid(), &flip(&env, last)).is_err()); // tag
+    assert!(open_envelope(&key, &uuid(), "mc2:AAAA").is_err());
+    assert!(open_envelope(&key, &uuid(), "mc2:!!!").is_err());
 }
 
 #[test]
-fn insecure_backend_is_fallback_but_existing_envelopes_stay_readable() {
-    let store = MockStore::new(false);
-    let uuid = "c".repeat(32);
-    let account = obj(json!({ "uuid": uuid, "accessToken": "secret" }));
-    assert_eq!(serialize_account(&account, &store).unwrap(), account);
-    store.set(&uuid, r#"{"accessToken":"secret"}"#).unwrap();
-    let encrypted =
-        obj(json!({ "uuid": uuid, "encryptedCredentials": format!("{ENVELOPE_PREFIX}{uuid}") }));
-    assert_eq!(deserialize_account(&encrypted, &store).unwrap(), account);
-}
-
-#[test]
-fn locked_store_preserves_envelope_losslessly() {
-    let store = MockStore::new(true);
-    *store.locked.lock().unwrap() = true;
-    let uuid = "d".repeat(32);
-    let stored = obj(json!({
-        "uuid": uuid, "name": "Player",
-        "encryptedCredentials": format!("{ENVELOPE_PREFIX}{uuid}")
-    }));
-    let runtime = deserialize_account(&stored, &store).unwrap();
-    assert_eq!(runtime["credentialsLocked"], json!(true));
-    assert_eq!(serialize_account(&runtime, &store).unwrap(), stored);
-    // Typed round trip keeps it too.
-    let typed = Account::from_stored(&stored, &store).unwrap();
-    assert!(typed.credentials_locked);
+fn envelope_is_bound_to_account_and_device() {
+    let a = DeviceKey::generate().unwrap();
+    let b = DeviceKey::generate().unwrap();
+    let env = seal_envelope(&a, &uuid(), RT).unwrap();
+    assert!(open_envelope(&a, &"f".repeat(32), &env).is_err());
+    assert!(open_envelope(&b, &uuid(), &env).is_err());
+    // Loaded on another device the account needs attention but still loads.
+    let va = Vault::new(Arc::new(MemoryDeviceKey::with_key(a)), None);
+    let vb = Vault::new(Arc::new(MemoryDeviceKey::with_key(b)), None);
+    let st = va.store_account(&ms_account(Some(RT))).unwrap();
+    let other = vb.load_account(&st.value).unwrap();
+    assert!(other.msa_refresh_token.is_none());
+    assert!(other.credentials_locked);
+    // ...and its envelope is kept untouched.
     assert_eq!(
-        typed.to_stored(&store).unwrap()["encryptedCredentials"],
-        stored["encryptedCredentials"]
+        env_of(&vb.store_account(&other).unwrap().value),
+        env_of(&st.value)
     );
 }
 
 #[test]
-fn electron_envelope_is_a_distinct_error() {
-    let store = MockStore::new(true);
+fn device_key_never_appears_in_accounts_json() {
+    let key = DeviceKey::generate().unwrap();
+    let key_b64 = STANDARD.encode(key.as_bytes());
+    let key_hex: String = key.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    let v = Vault::new(Arc::new(MemoryDeviceKey::with_key(key.clone())), None);
+    let st = v.store_account(&ms_account(Some(RT))).unwrap();
+    let text = serde_json::to_string(&st.value).unwrap();
+    assert!(!text.contains(&key_b64) && !text.contains(&key_hex));
+    assert!(!format!("{key:?}").contains(&key_b64));
+}
+
+#[test]
+fn locked_store_preserves_envelope_and_keeps_new_tokens_in_memory() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let v = vault_with(keys.clone(), Arc::default());
+    let stored = v.store_account(&ms_account(Some(RT))).unwrap().value;
+    keys.set_locked(true);
+    let loaded = v.load_account(&stored).unwrap();
+    assert!(loaded.credentials_locked);
+    assert!(loaded.msa_refresh_token.is_none());
+    let again = v.store_account(&loaded).unwrap();
+    assert!(again.persisted);
+    assert_eq!(again.value, stored); // byte-for-byte, lossless
+
+    // A token obtained meanwhile (carrying the old envelope) is memory-only.
+    let mut fresh = ms_account(Some("NEW-REFRESH"));
+    fresh.encrypted_credentials = Some(env_of(&stored));
+    let st = v.store_account(&fresh).unwrap();
+    assert!(!st.persisted);
+    assert_eq!(env_of(&st.value), env_of(&stored));
+    assert!(!serde_json::to_string(&st.value).unwrap().contains("NEW-"));
+    // Brand new login with the keystore down: no envelope at all.
+    let st = v.store_account(&ms_account(Some("NEW-REFRESH"))).unwrap();
+    assert!(!st.persisted);
+    assert!(!st.value.contains_key("encryptedCredentials"));
+    assert!(!serde_json::to_string(&st.value).unwrap().contains("NEW-"));
+}
+
+#[test]
+fn migrates_legacy_plaintext_and_scrubs_it() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let v = vault_with(keys, Arc::default());
+    let legacy = obj(json!({
+        "type": "microsoft", "uuid": uuid(), "name": "Player",
+        "accessToken": AT, "msaRefreshToken": RT, "expiresAt": 5, "custom": 1
+    }));
+    assert!(has_plaintext_credentials(&legacy) && needs_migration(&legacy));
+    let acc = v.load_account(&legacy).unwrap();
+    assert!(acc.access_token.is_empty());
+    assert_eq!(acc.msa_refresh_token.as_deref(), Some(RT));
+    let st = v.store_account(&acc).unwrap();
+    assert!(st.persisted);
+    let text = serde_json::to_string(&st.value).unwrap();
+    assert!(!text.contains("SECRET") && !text.contains("accessToken"));
+    assert!(!has_plaintext_credentials(&st.value) && !needs_migration(&st.value));
+    assert_eq!(st.value["custom"], json!(1));
+    assert_eq!(
+        v.load_account(&st.value)
+            .unwrap()
+            .msa_refresh_token
+            .as_deref(),
+        Some(RT)
+    );
+}
+
+#[test]
+fn plaintext_is_scrubbed_even_when_keystore_is_down() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    keys.set_locked(true);
+    let v = vault_with(keys, Arc::default());
+    let legacy = obj(json!({
+        "type": "microsoft", "uuid": uuid(), "name": "P", "msaRefreshToken": RT
+    }));
+    let st = v.store_account(&v.load_account(&legacy).unwrap()).unwrap();
+    assert!(!st.persisted);
+    assert!(!serde_json::to_string(&st.value).unwrap().contains("SECRET"));
+}
+
+#[test]
+fn migrates_v1_envelope_and_deletes_old_entry() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let legacy = Arc::new(MockLegacy::default());
+    legacy.data.lock().unwrap().insert(
+        uuid(),
+        json!({"accessToken": AT, "msaRefreshToken": RT}).to_string(),
+    );
+    let v = vault_with(keys, legacy.clone());
     let stored = obj(json!({
-        "uuid": "e".repeat(32),
+        "type": "microsoft", "uuid": uuid(), "name": "P",
+        "encryptedCredentials": format!("{ENVELOPE_PREFIX}{}", uuid())
+    }));
+    assert!(needs_migration(&stored));
+    let acc = v.load_account(&stored).unwrap();
+    assert_eq!(acc.msa_refresh_token.as_deref(), Some(RT));
+    assert!(acc.access_token.is_empty());
+    assert_eq!(legacy.data.lock().unwrap().len(), 1); // not yet deleted
+    let st = v.store_account(&acc).unwrap();
+    assert!(env_of(&st.value).starts_with("mc2:"));
+    assert!(legacy.data.lock().unwrap().is_empty());
+    assert!(!needs_migration(&st.value));
+}
+
+#[test]
+fn v1_envelope_survives_when_v2_cannot_be_written() {
+    let keys = Arc::new(MemoryDeviceKey::new());
+    let legacy = Arc::new(MockLegacy::default());
+    legacy
+        .data
+        .lock()
+        .unwrap()
+        .insert(uuid(), json!({"msaRefreshToken": RT}).to_string());
+    let v = vault_with(keys.clone(), legacy.clone());
+    let stored = obj(json!({
+        "type": "microsoft", "uuid": uuid(), "name": "P",
+        "encryptedCredentials": format!("{ENVELOPE_PREFIX}{}", uuid())
+    }));
+    let acc = v.load_account(&stored).unwrap();
+    keys.set_locked(true);
+    let st = v.store_account(&acc).unwrap();
+    assert!(!st.persisted);
+    assert_eq!(
+        st.value["encryptedCredentials"],
+        stored["encryptedCredentials"]
+    );
+    assert_eq!(legacy.data.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn electron_envelope_is_a_distinct_error() {
+    let v = Vault::new(Arc::new(MemoryDeviceKey::new()), None);
+    let stored = obj(json!({
+        "uuid": "e".repeat(32), "name": "P",
         "encryptedCredentials": STANDARD.encode(b"v11opaque")
     }));
-    let err = deserialize_account(&stored, &store).unwrap_err();
+    let err = v.load_account(&stored).unwrap_err();
     assert!(matches!(err, AuthError::LegacyEnvelope));
     assert!(err.needs_relogin());
     assert_eq!(err.code(), "auth.legacy_envelope");
 }
 
 #[test]
-fn delete_credentials_removes_store_entry() {
-    let store = MockStore::new(true);
-    let acc = obj(json!({ "uuid": "f".repeat(32), "accessToken": "t" }));
-    let stored = serialize_account(&acc, &store).unwrap();
-    assert_eq!(store.data.lock().unwrap().len(), 1);
-    delete_credentials(&stored, &store).unwrap();
-    assert!(store.data.lock().unwrap().is_empty());
+fn delete_credentials_removes_v1_entry() {
+    let legacy = Arc::new(MockLegacy::default());
+    legacy.data.lock().unwrap().insert(uuid(), "{}".into());
+    let v = vault_with(Arc::new(MemoryDeviceKey::new()), legacy.clone());
+    let stored = obj(json!({
+        "uuid": uuid(), "encryptedCredentials": format!("{ENVELOPE_PREFIX}{}", uuid())
+    }));
+    v.delete_credentials(&stored).unwrap();
+    assert!(legacy.data.lock().unwrap().is_empty());
 }
 
 #[test]
-fn file_fallback_store_is_0600_and_round_trips() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = FileFallbackStore::new(dir.path().join("sub/creds.json"));
-    assert!(!store.is_secure());
-    assert_eq!(store.get("k").unwrap(), None);
-    store.set("k", "v").unwrap();
-    assert_eq!(store.get("k").unwrap().as_deref(), Some("v"));
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(store.path())
-            .unwrap()
-            .permissions()
-            .mode();
-        assert_eq!(mode & 0o777, 0o600);
+fn account_never_serializes_tokens_and_secrets_stay_out_of_debug_and_errors() {
+    let a = ms_account(Some(RT));
+    let json = serde_json::to_string(&a).unwrap();
+    assert!(!json.contains("SECRET") && !json.contains("accessToken"));
+    assert!(!json.contains("msaRefreshToken"));
+    for s in [format!("{a:?}"), format!("{a:#?}")] {
+        assert!(!s.contains("SECRET"));
     }
-    store.delete("k").unwrap();
-    assert_eq!(store.get("k").unwrap(), None);
+    let tokens = MsaTokens {
+        access_token: AT.into(),
+        refresh_token: Some(RT.into()),
+    };
+    assert!(!format!("{tokens:?}").contains("SECRET"));
+    let key = DeviceKey::generate().unwrap();
+    let env = seal_envelope(&key, &uuid(), RT).unwrap();
+    let e = open_envelope(&key, "x", &env).unwrap_err();
+    assert!(!format!("{e} {e:?}").contains("SECRET"));
+    // Bad typed field must not echo the secret back.
+    let bad = obj(json!({"uuid": uuid(), "expiresAt": "TOKEN-SECRET-VALUE"}));
+    let v = Vault::new(Arc::new(MemoryDeviceKey::new()), None);
+    let e = v.load_account(&bad).unwrap_err();
+    assert!(!format!("{e} {e:?}").contains("SECRET"));
+}
+
+#[test]
+fn envelope_file_has_no_token_substrings() {
+    let v = Vault::new(Arc::new(MemoryDeviceKey::new()), None);
+    let st = v.store_account(&ms_account(Some(RT))).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("accounts.json");
+    std::fs::write(&path, serde_json::to_vec_pretty(&st.value).unwrap()).unwrap();
+    let raw = std::fs::read(&path).unwrap();
+    for needle in [RT, AT, "REFRESH", "ACCESS", "M.C5"] {
+        assert!(!raw.windows(needle.len()).any(|w| w == needle.as_bytes()));
+    }
 }
 
 // ---- accounts ----------------------------------------------------------

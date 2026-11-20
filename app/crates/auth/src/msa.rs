@@ -5,12 +5,22 @@ use crate::http::{post_form, post_json};
 use mango_net::{fetch_with_retry, get_json};
 use serde_json::{json, Map, Value};
 use std::fmt;
+use zeroize::Zeroize;
 
 /// Live (MSA) tokens. Redacted in `Debug`.
 #[derive(Clone)]
 pub struct MsaTokens {
     pub access_token: String,
     pub refresh_token: Option<String>,
+}
+
+impl Drop for MsaTokens {
+    fn drop(&mut self) {
+        self.access_token.zeroize();
+        if let Some(t) = self.refresh_token.as_mut() {
+            t.zeroize();
+        }
+    }
 }
 
 impl fmt::Debug for MsaTokens {
@@ -221,6 +231,8 @@ pub async fn minecraft_login(
         capes: textures(&profile, "capes"),
         credentials_locked: false,
         encrypted_credentials: None,
+        memory_only: false,
+        legacy_keyring_key: None,
         extra: Map::new(),
     })
 }
@@ -243,25 +255,29 @@ pub async fn ensure_fresh_account(ep: &Endpoints, account: Account) -> Result<Ac
     {
         return Ok(account);
     }
-    let Some(rt) = account.msa_refresh_token.clone().filter(|s| !s.is_empty()) else {
+    let Some(rt) = account
+        .msa_refresh_token
+        .clone()
+        .filter(|s| !s.is_empty())
+        .map(zeroize::Zeroizing::new)
+    else {
         return Err(AuthError::NeedsRelogin);
     };
-    let tokens = refresh(ep, &rt).await?;
+    let mut tokens = refresh(ep, &rt).await?;
     // Microsoft may omit a rotated refresh token; keep the old one then.
-    let tokens = MsaTokens {
-        refresh_token: tokens.refresh_token.or(Some(rt)),
-        ..tokens
-    };
-    let fresh = login_with_tokens(ep, &tokens).await?;
-    Ok(Account {
-        access_token: fresh.access_token,
-        msa_refresh_token: fresh.msa_refresh_token,
-        expires_at: fresh.expires_at,
-        uuid: fresh.uuid,
-        name: fresh.name,
-        skins: fresh.skins,
-        capes: fresh.capes,
-        credentials_locked: false,
-        ..account
-    })
+    if tokens.refresh_token.is_none() {
+        tokens.refresh_token = Some(rt.to_string());
+    }
+    let mut fresh = login_with_tokens(ep, &tokens).await?;
+    let mut account = account;
+    account.zeroize_tokens();
+    account.access_token = std::mem::take(&mut fresh.access_token);
+    account.msa_refresh_token = fresh.msa_refresh_token.take();
+    account.expires_at = fresh.expires_at;
+    account.uuid = std::mem::take(&mut fresh.uuid);
+    account.name = std::mem::take(&mut fresh.name);
+    account.skins = std::mem::take(&mut fresh.skins);
+    account.capes = std::mem::take(&mut fresh.capes);
+    account.credentials_locked = false;
+    Ok(account)
 }

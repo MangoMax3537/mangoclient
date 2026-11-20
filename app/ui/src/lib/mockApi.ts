@@ -1,6 +1,8 @@
 import type {
   Api, Unlisten,
 } from './api';
+import { createContentApi } from './mockContent';
+import { fallbackImage } from './fallbackImage';
 import type {
   ApiEvents, AppState, Config, LaunchState, LoaderVersion, ProfileView, PublicAccount, VersionManifest, VersionEntry, Loader,
 } from './types';
@@ -8,6 +10,8 @@ import type {
 export interface MockOptions {
   /** Multiplies every simulated delay. 1 = about 6 s per launch. */
   timeScale?: number;
+  /** Start with config.firstRunDone=false so the onboarding shows. */
+  firstRun?: boolean;
 }
 
 const DAY = 86400000;
@@ -30,8 +34,8 @@ function seedProfiles(now: number): ProfileView[] {
 }
 
 const seedAccounts = (now: number): PublicAccount[] => [
-  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', expiresAt: now + 20 * 3600000, expired: false, hasCape: true },
-  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false },
+  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', expiresAt: now + 20 * 3600000, expired: false, hasCape: true, headUrl: fallbackImage('account', 'b0b7') },
+  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', '5d2e') },
 ];
 
 function makeManifest(): VersionManifest {
@@ -66,7 +70,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
     language: 'de', ram: 4096, javaPath: '', javaArgs: '-XX:+UseG1GC', fullscreen: false, width: 1280, height: 720,
     keepLauncherOpen: true, hideOnLaunch: false, showSnapshots: false, mangoConfig: true, performanceMods: true,
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
-    firstRunDone: true, telemetry: true, sidebarOpen: true,
+    firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
   };
   let profiles = seedProfiles(now);
   let accounts = seedAccounts(now);
@@ -75,7 +79,8 @@ export function createMockApi(opts: MockOptions = {}): Api {
   const running = new Set<string>();
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
-    'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(),
+    'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
+    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(),
   };
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
     for (const cb of listeners[name] as Set<(p: ApiEvents[K]) => void>) cb(payload);
@@ -95,14 +100,19 @@ export function createMockApi(opts: MockOptions = {}): Api {
     timers.delete(id);
   };
 
+  const part2 = createContentApi({
+    now, scale, emit, profiles: () => profiles, addProfile: (p) => { profiles = [...profiles, p]; }, find,
+    gameActive: () => running.size > 0 || timers.size > 0,
+  });
   const api: Api = {
+    ...part2,
     async appState(): Promise<AppState> {
       return {
         version: '2.0.0-dev', config: { ...config }, profiles: structuredClone(profiles), accounts: structuredClone(accounts),
         totalRamMb: 16384, running: [...running], rootDir: '~/.mangoclient',
       };
     },
-    async configSet(patch) { Object.assign(config, patch); return { ...config }; },
+    async configSet({ patch }) { Object.assign(config, patch); return { ...config }; },
     async profileCreate({ name, mcVersion, loader, loaderVersion }) {
       const p: ProfileView = {
         id: uuid(), name: name.trim(), mcVersion, loader, loaderVersion: loaderVersion ?? null, color: null, coverUrl: null, ram: null,
@@ -125,7 +135,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
     },
     async accountAddOffline({ name }) {
       if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) throw { code: 'invalid_name', message: 'invalid name', needsRelogin: false };
-      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false };
+      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', name) };
       accounts = [...accounts, a];
       if (!config.selectedAccount) config.selectedAccount = a.uuid;
       return { ...a };

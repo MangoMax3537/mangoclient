@@ -21,3 +21,24 @@ export function fmtRelative(ts: number | null, lang: Lang, now = Date.now()): st
 }
 
 export const fmtRam = (mb: number): string => (mb >= 1024 ? `${+(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
+
+export function fmtBytes(n: number, lang: Lang = 'en'): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  const f = new Intl.NumberFormat(lang, { maximumFractionDigits: v >= 100 || i === 0 ? 0 : 1 });
+  return `${f.format(v)} ${units[i]}`;
+}
+
+export const fmtCompact = (n: number, lang: Lang): string =>
+  new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+
+export const fmtDate = (ts: number | string, lang: Lang): string =>
+  new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(typeof ts === 'string' ? new Date(ts) : ts);
+
+export const fmtDateTime = (ts: number, lang: Lang): string =>
+  new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }).format(ts);
+
+/** Strips Minecraft section-sign colour codes from a MOTD. */
+export const stripMotd = (s: string): string => s.replace(/§[0-9a-fk-or]/gi, '').trim();

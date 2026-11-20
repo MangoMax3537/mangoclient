@@ -1,3 +1,4 @@
+use crate::models::{ServerStatus, UpdateStatus};
 use crate::types::LaunchState;
 use serde::Serialize;
 use serde_json::Value;
@@ -48,12 +49,32 @@ pub struct LaunchLogEvent {
     pub level: LogLevelName,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallProgressEvent {
+    pub profile_id: String,
+    pub project_id: String,
+    pub done: u64,
+    pub total: u64,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentChangedEvent {
+    pub profile_id: String,
+}
+
 /// Rust -> UI events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     LaunchState(LaunchStateEvent),
     LaunchProgress(LaunchProgressEvent),
     LaunchLog(LaunchLogEvent),
+    InstallProgress(InstallProgressEvent),
+    ServersPinged(ServerStatus),
+    UpdateStatus(UpdateStatus),
+    ContentChanged(ContentChangedEvent),
 }
 
 impl Event {
@@ -63,6 +84,10 @@ impl Event {
             Event::LaunchState(_) => "launch:state",
             Event::LaunchProgress(_) => "launch:progress",
             Event::LaunchLog(_) => "launch:log",
+            Event::InstallProgress(_) => "install:progress",
+            Event::ServersPinged(_) => "servers:pinged",
+            Event::UpdateStatus(_) => "update:status",
+            Event::ContentChanged(_) => "content:changed",
         }
     }
 
@@ -72,6 +97,10 @@ impl Event {
             Event::LaunchState(e) => serde_json::to_value(e),
             Event::LaunchProgress(e) => serde_json::to_value(e),
             Event::LaunchLog(e) => serde_json::to_value(e),
+            Event::InstallProgress(e) => serde_json::to_value(e),
+            Event::ServersPinged(e) => serde_json::to_value(e),
+            Event::UpdateStatus(e) => serde_json::to_value(e),
+            Event::ContentChanged(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

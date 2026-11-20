@@ -1,9 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { dictionaries, plural, translate } from './i18n';
+import { dictionaries, hasKey, plural, translate } from './i18n';
 
 describe('i18n', () => {
   it('de and en have identical keys', () => {
     expect(Object.keys(dictionaries.de).sort()).toEqual(Object.keys(dictionaries.en).sort());
+  });
+  it('no empty strings; de differs from en for most keys (catches untranslated copies)', () => {
+    const keys = Object.keys(dictionaries.en);
+    for (const k of keys) {
+      expect(dictionaries.en[k], k).toBeTruthy();
+      expect(dictionaries.de[k], k).toBeTruthy();
+    }
+    const same = keys.filter((k) => dictionaries.de[k] === dictionaries.en[k]);
+    expect(same.length / keys.length).toBeLessThan(0.2);
+  });
+  it('every {var} placeholder in en also appears in de', () => {
+    const vars = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join(',');
+    for (const k of Object.keys(dictionaries.en)) expect(vars(dictionaries.de[k] as string), k).toBe(vars(dictionaries.en[k] as string));
+  });
+  it('every literal t()/tp() key used by the UI exists (no hard-coded or missing strings)', () => {
+    const files = import.meta.glob('../**/*.svelte', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
+    expect(Object.keys(files).length).toBeGreaterThan(20);
+    const missing: string[] = [];
+    for (const [f, src] of Object.entries(files)) {
+      for (const m of src.matchAll(/\bt(p?)\('([a-zA-Z0-9_.-]+)'/g)) {
+        const k = m[2];
+        const ok = m[1] ? hasKey('en', `${k}.other`) : hasKey('en', k);
+        if (!ok) missing.push(`${f}: ${k}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
   it('translates per language', () => {
     expect(translate('de', 'home.play')).toBe('Spielen');

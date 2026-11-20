@@ -43,7 +43,7 @@ impl From<&Profile> for ProfileView {
             loader: p.loader,
             loader_version: (!p.loader_version.is_empty()).then(|| p.loader_version.clone()),
             color: p.color.clone(),
-            cover_url: p.cover.then(|| format!("mangoimg://cover/{}", p.id)),
+            cover_url: p.cover.then(|| crate::image_protocol::cover_url(&p.id)),
             ram: p.ram,
             java_args: p.java_args.clone(),
             mango_config: p.mango_config,
@@ -66,6 +66,8 @@ pub struct PublicAccount {
     pub expires_at: Option<i64>,
     pub expired: bool,
     pub has_cape: bool,
+    /// `mangoimg://head/<uuid>`.
+    pub head_url: String,
 }
 
 impl PublicAccount {
@@ -85,6 +87,7 @@ impl PublicAccount {
             expires_at: a.expires_at,
             expired,
             has_cape,
+            head_url: crate::image_protocol::head_url(&a.uuid),
         }
     }
 }

@@ -6,7 +6,8 @@ license.workspace = true
 
 [features]
 default = ["keyring"]
-# OS keychain backend. Without it only the 0600 file fallback is available.
+# OS keystore backend for the per-device key. Without it nothing can be
+# persisted (accounts stay memory-only); there is no file fallback.
 keyring = ["dep:keyring"]
 
 [dependencies]
@@ -19,6 +20,9 @@ reqwest.workspace = true
 tracing.workspace = true
 md-5 = "0.10"
 base64 = "0.22"
+chacha20poly1305 = "0.10"
+zeroize = "1"
+getrandom = "0.2"
 url = "2"
 keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "tokio", "crypto-rust"], optional = true }
 

@@ -4,12 +4,16 @@
 //! Port of `src/main/auth.js`, `credentials.js` and the network/cache parts of
 //! `skins.js`. No UI and no Tauri: the caller opens the sign-in window, feeds
 //! navigations into [`Endpoints::parse_redirect`] and passes the code on.
-//! Tokens never appear in `Debug` output or in [`PublicAccount`].
+//! Tokens never appear in `Debug` output or in [`PublicAccount`]. Token
+//! storage design and threat model: see the `vault` module docs (re-exported
+//! as [`Vault`]).
 
 mod account;
 mod endpoints;
+mod envelope;
 mod error;
 mod http;
+mod keystore;
 mod msa;
 mod offline;
 mod skins;
@@ -21,7 +25,11 @@ mod tests;
 
 pub use account::{Account, AccountType, PublicAccount, Texture};
 pub use endpoints::{Endpoints, Redirect};
+pub use envelope::{open as open_envelope, seal as seal_envelope, ENVELOPE_V2_PREFIX};
 pub use error::{AuthError, StoreError};
+#[cfg(feature = "keyring")]
+pub use keystore::KeyringDeviceKey;
+pub use keystore::{DeviceKey, DeviceKeyStore, MemoryDeviceKey};
 pub use msa::{
     ensure_fresh_account, exchange_code, login_with_tokens, minecraft_login, refresh, MsaTokens,
 };
@@ -29,10 +37,10 @@ pub use offline::offline_account;
 pub use skins::{
     default_skin_png, get_cached_skin, get_skin, upload_skin, SkinResult, SkinSource, SkinVariant,
 };
+pub use store::CredentialStore;
 #[cfg(feature = "keyring")]
 pub use store::KeyringStore;
-pub use store::{CredentialStore, FileFallbackStore};
 pub use vault::{
-    delete_credentials, deserialize_account, has_plaintext_credentials, serialize_account,
-    ENVELOPE_PREFIX, SECRET_FIELDS,
+    has_plaintext_credentials, needs_migration, StoredAccount, Vault, ENVELOPE_PREFIX,
+    SECRET_FIELDS,
 };

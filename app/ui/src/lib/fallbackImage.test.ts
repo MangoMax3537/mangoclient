@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fallbackImage, fallbackIndex, hashId } from './fallbackImage';
+import { accountHeadUrl, fallbackImage, fallbackIndex, hashId } from './fallbackImage';
 
 describe('fallbackImage', () => {
   it('is deterministic', () => {
@@ -22,5 +22,10 @@ describe('fallbackImage', () => {
   });
   it('accounts always use the bundled head', () => {
     expect(fallbackImage('account', 'a')).toBe(fallbackImage('account', 'b'));
+  });
+  it('account heads come from the backend headUrl, never a third-party host', () => {
+    expect(accountHeadUrl({ uuid: 'u', headUrl: 'mangoimg://head/u' })).toBe('mangoimg://head/u');
+    expect(accountHeadUrl({ uuid: 'u', headUrl: '' })).toBe(fallbackImage('account', 'u'));
+    expect(accountHeadUrl(null)).toBe(fallbackImage('account', ''));
   });
 });

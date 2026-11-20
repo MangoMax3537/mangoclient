@@ -1,3 +1,5 @@
+import { de2, en2 } from './i18n2';
+
 export type Lang = 'de' | 'en';
 
 const en = {
@@ -48,6 +50,7 @@ const en = {
   'err.invalid_name': 'That name is not valid.', 'err.launch_failed': 'The game could not be started.',
   'err.relogin': 'Please sign in again.',
   'time.justNow': 'just now',
+  ...en2,
 } as const;
 
 export type Key = keyof typeof en;
@@ -102,6 +105,7 @@ const de: Record<Key, string> = {
   'err.invalid_name': 'Dieser Name ist ungültig.', 'err.launch_failed': 'Das Spiel konnte nicht gestartet werden.',
   'err.relogin': 'Bitte melde dich erneut an.',
   'time.justNow': 'gerade eben',
+  ...de2,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };

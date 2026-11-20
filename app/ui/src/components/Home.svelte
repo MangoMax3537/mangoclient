@@ -11,11 +11,13 @@
   import LaunchProgress from './LaunchProgress.svelte';
   import Console from './Console.svelte';
   import ProfileMenu from './ProfileMenu.svelte';
+  import QuickJoin from './QuickJoin.svelte';
+  import SlidersIcon from 'phosphor-svelte/lib/SlidersIcon';
   import { heroFallback } from '../lib/fallbackImage';
   import { fmtDuration, fmtRam, fmtRelative } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import {
-    actions, app, consoles, isBusy, isRunning, lang, launchInfo, nav, selectedProfile, t, tp,
+    actions, app, consoles, isBusy, isRunning, lang, launchInfo, nav, openProfile, selectedProfile, t, tp,
   } from '../lib/stores.svelte';
 
   const p = $derived(selectedProfile());
@@ -56,6 +58,7 @@
         <div class="actions">
           <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
           <ProfileMenu currentId={p.id} disabled={busy} />
+          <button class="btn" type="button" onclick={() => openProfile(p.id)}><SlidersIcon weight="bold" size={16} aria-hidden="true" />{t('home.openProfile')}</button>
         </div>
         {#if busy && info.state !== 'running'}
           <LaunchProgress profileId={p.id} />
@@ -65,6 +68,7 @@
 
     {#if showConsole}<Console profileId={p.id} />{/if}
 
+    <div class="lower">
     <section class="recent" aria-labelledby="recent-h">
       <header>
         <h2 id="recent-h" class="eyebrow">{t('home.continue')}</h2>
@@ -97,6 +101,8 @@
         </tbody>
       </table>
     </section>
+    <QuickJoin />
+    </div>
   {:else}
     <section class="empty">
       <h1>{t('home.noProfiles')}</h1>
@@ -117,6 +123,7 @@
   .live { color: var(--leaf); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
   .actions { display: flex; gap: 12px; align-items: center; }
+  .lower { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
   .recent header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 12px; font-weight: 600; color: var(--paper-mute); padding: 6px 10px; border-bottom: 1px solid var(--line); }

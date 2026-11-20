@@ -89,7 +89,7 @@ Professional, distinctive, not a generic dark dashboard, no AI-slop tells: no pu
 
 ## Network hosts (privacy)
 
-The app talks only to the hosts listed in `docs/port-spec.md` (Mojang, Microsoft/Xbox, Modrinth, Adoptium, loader metas, mclo.gs, GitHub releases, the MangoClient API). No third-party image/CDN/analytics hosts in the UI. Account heads come from the skin cache in `mango-auth` (Mojang session server), served through the image protocol. The first UI slice still loads Microsoft heads from `mc-heads.net` as a temporary stand-in: replace it before release.
+The app talks only to the hosts listed in `docs/port-spec.md` (Mojang, Microsoft/Xbox, Modrinth (incl. cdn.modrinth.com icons, fetched and cached by Rust, never by the webview), Adoptium, loader metas, mclo.gs, GitHub releases, the MangoClient API). No third-party image/CDN/analytics hosts in the UI. Account heads come from the skin cache in `mango-auth` (Mojang session server), served through the image protocol. Heads are now served via `mangoimg://head/<uuid>` (no `mc-heads.net`).
 
 ## Porting the tests (checklist)
 

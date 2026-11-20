@@ -1,7 +1,8 @@
 import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
-  AppState, Config, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, PublicAccount,
+  AppState, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, PublicAccount,
+  ServerEntry, ServerStatus, UpdateStatus,
 } from './types';
 
 export const CONSOLE_CAP = 800;
@@ -30,7 +31,45 @@ export const app = $state({
 
 export const launches = $state<Record<string, LaunchInfo>>({});
 export const consoles = $state<Record<string, ConsoleLine[]>>({});
-export const nav = $state({ view: 'home' as 'home' | 'library' | 'settings', newProfile: false, accounts: false });
+export type View = 'home' | 'library' | 'discover' | 'servers' | 'stats' | 'settings' | 'profile';
+export type ProfileTab = 'overview' | 'content' | 'media' | 'logs' | 'settings';
+export const nav = $state({
+  view: 'home' as View, newProfile: false, accounts: false,
+  /** Profile page target and tab. */
+  profileId: null as string | null, profileTab: 'overview' as ProfileTab,
+  /** Discover scope: the profile content is installed into (null = no scope), and the initial project type. */
+  discoverProfile: null as string | null, discoverType: 'mod' as ProjectType,
+});
+
+export function openProfile(id: string, tab: ProfileTab = 'overview'): void {
+  nav.profileId = id; nav.profileTab = tab; nav.view = 'profile';
+}
+export function openDiscover(profileId: string | null = null, type: ProjectType = 'mod'): void {
+  nav.discoverProfile = profileId ?? selectedProfile()?.id ?? null;
+  nav.discoverType = type; nav.view = 'discover';
+}
+
+/* ---- toasts ---- */
+export interface Toast { id: number; text: string; kind: 'info' | 'ok' | 'error' }
+export const toasts = $state<Toast[]>([]);
+let toastId = 0;
+export function toast(text: string, kind: Toast['kind'] = 'info', ms = 4500): void {
+  const id = ++toastId;
+  toasts.push({ id, text, kind });
+  setTimeout(() => dismissToast(id), ms);
+}
+export function dismissToast(id: number): void {
+  const i = toasts.findIndex((x) => x.id === id);
+  if (i >= 0) toasts.splice(i, 1);
+}
+
+/* ---- part 2 state ---- */
+export const servers = $state({ list: [] as ServerEntry[], status: {} as Record<string, ServerStatus>, loaded: false, pinging: false });
+/** Running installs keyed by projectId (modpacks have no profile yet, so projectId is the only stable key). */
+export const installs = $state<Record<string, InstallProgressEvent>>({});
+/** Bumped when a profile's content folder changed on disk; content views watch it. */
+export const contentRev = $state<Record<string, number>>({});
+export const updates = $state({ status: { state: 'idle' } as UpdateStatus, overlay: false, installing: false });
 
 let lineId = 0;
 let currentApi: Api = defaultApi;
@@ -58,6 +97,8 @@ export const isBusy = (id: string): boolean => {
   const s = launchInfo(id).state;
   return s !== 'idle' && s !== 'stopped' && s !== 'crashed';
 };
+/** True while any game is starting or running (storage clearing is refused then). */
+export const anyGameActive = (): boolean => Object.keys(launches).some((id) => isBusy(id));
 export const isRunning = (id: string): boolean => launchInfo(id).state === 'running';
 
 /** 0..1 across the staged bar. Downloading interpolates with progress events. */
@@ -116,15 +157,28 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('launch:state', (e) => applyState(e.profileId, e.state)),
     api.listen('launch:progress', applyProgress),
     api.listen('launch:log', (e) => pushLog(e.profileId, e.line, e.level)),
+    api.listen('install:progress', applyInstallProgress),
+    api.listen('servers:pinged', applyPinged),
+    api.listen('update:status', (u) => { updates.status = u; }),
+    api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
   ]);
   try {
     applyAppState(await api.appState());
     app.error = null;
+    api.updateStatus().then((u) => { updates.status = u; }, () => {});
   } catch (e) {
     const err = toAppError(e);
     app.error = { code: err.code, message: err.message };
   }
   app.ready = true;
+}
+
+export function applyInstallProgress(e: InstallProgressEvent): void {
+  if (e.done >= e.total) delete installs[e.projectId];
+  else installs[e.projectId] = e;
+}
+export function applyPinged(s: ServerStatus): void {
+  servers.status[s.id] = s;
 }
 
 export const getApi = (): Api => currentApi;
@@ -133,7 +187,12 @@ export function resetStores(): void {
   app.ready = false; app.config = null; app.profiles = []; app.accounts = []; app.error = null;
   for (const k of Object.keys(launches)) delete launches[k];
   for (const k of Object.keys(consoles)) delete consoles[k];
-  nav.view = 'home'; nav.newProfile = false; nav.accounts = false;
+  nav.view = 'home'; nav.newProfile = false; nav.accounts = false; nav.profileId = null; nav.profileTab = 'overview';
+  nav.discoverProfile = null; nav.discoverType = 'mod';
+  toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
+  for (const k of Object.keys(installs)) delete installs[k];
+  for (const k of Object.keys(contentRev)) delete contentRev[k];
+  updates.status = { state: 'idle' }; updates.overlay = false; updates.installing = false;
 }
 
 /* ---- actions (thin wrappers; logic stays in Rust) ---- */
@@ -175,11 +234,46 @@ export const actions = {
     await actions.selectProfile(p.id);
     return p;
   },
-  async play(id: string) {
+  async play(id: string, quickJoin?: string) {
     clearConsole(id);
     applyState(id, 'preparing');
-    const r = await guard(() => currentApi.gameLaunch({ profileId: id }));
+    const r = await guard(() => currentApi.gameLaunch(quickJoin ? { profileId: id, quickJoin } : { profileId: id }));
     if (!r) applyState(id, 'crashed');
+  },
+  async updateProfile(id: string, patch: Partial<ProfileView>) {
+    const p = await currentApi.profileUpdate({ id, patch }); // caller handles errors
+    app.profiles = app.profiles.map((x) => (x.id === id ? p : x));
+    return p;
+  },
+  async deleteProfile(id: string) {
+    await currentApi.profileDelete({ id });
+    await refresh();
+    if (nav.profileId === id) { nav.profileId = null; nav.view = 'library'; }
+  },
+  async addProfile(p: ProfileView) {
+    app.profiles = [...app.profiles.filter((x) => x.id !== p.id), p];
+    await actions.selectProfile(p.id);
+  },
+  async loadServers(force = false) {
+    if (servers.loaded && !force) return;
+    const l = await guard(() => currentApi.serversList());
+    if (!l) return;
+    servers.list = l; servers.loaded = true;
+    await actions.pingServers();
+  },
+  async pingServers() {
+    servers.pinging = true;
+    await guard(() => currentApi.serversPingAll());
+    setTimeout(() => { servers.pinging = false; }, 2500);
+  },
+  async updateCheck() {
+    const u = await guard(() => currentApi.updateCheck());
+    if (u) updates.status = u;
+  },
+  async updateInstall() {
+    updates.installing = true;
+    const ok = await guard(() => currentApi.updateInstall());
+    if (!ok) { updates.installing = false; updates.overlay = false; }
   },
   async stop(id: string) { await guard(() => currentApi.gameStop({ profileId: id })); },
 };

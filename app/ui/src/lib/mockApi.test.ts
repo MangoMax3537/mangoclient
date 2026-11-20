@@ -53,4 +53,12 @@ describe('mockApi', () => {
     await expect(api.accountAddOffline({ name: 'x' })).rejects.toMatchObject({ code: 'invalid_name' });
     await expect(api.accountSignInMicrosoft()).rejects.toMatchObject({ code: 'not_implemented' });
   });
+
+  it('config_set applies the patch and onboarding starts unfinished with firstRun', async () => {
+    const api = createMockApi({ firstRun: true });
+    expect((await api.appState()).config.firstRunDone).toBe(false);
+    const c = await api.configSet({ patch: { language: 'en', firstRunDone: true, ram: 6144 } });
+    expect(c).toMatchObject({ language: 'en', firstRunDone: true, ram: 6144 });
+    expect((await api.appState()).config.language).toBe('en');
+  });
 });
