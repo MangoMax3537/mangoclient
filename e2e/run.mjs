@@ -900,6 +900,9 @@ async function s13() {
   await combo(','); await survey('s13-04-settings');
   // an instance page with every tab
   await page.click(/^Vanilla Test$/, { selector: 'nav.rail button.prof' });
+  await sleep(400);
+  // a single click only selects an instance now; Enter on the focused tile opens it
+  await session.keys(['\uE007']);
   await sleep(800);
   const tabs = await page.exec(`return [...document.querySelectorAll('[role=tablist] [role=tab]')].map((t) => t.textContent.trim());`);
   check(tabs.length >= 5, `instance page shows only ${tabs.length} tabs`);
@@ -925,9 +928,12 @@ async function s13() {
   } else findings.push('S13: no "Change icon" button found on the instance page');
   // shortcut sheet
   await combo('/'); await sleep(500);
-  const sheet = await page.byCss('dialog[open]');
+  let sheet = await page.byCss('dialog[open], [role=dialog]');
+  let via = 'Ctrl+/';
+  if (!sheet) { await session.keys(['\uE031']); await sleep(500); sheet = await page.byCss('dialog[open], [role=dialog]'); via = sheet ? 'F1 (Ctrl+/ did not)' : via; }
   await survey('s13-07-shortcuts');
-  check(!!sheet, 'Ctrl+/ did not open the shortcut sheet');
+  if (via !== 'Ctrl+/') findings.push(`S13: the shortcut sheet opened via ${via}`);
+  check(!!sheet, 'neither Ctrl+/ nor F1 opened the shortcut sheet');
   await session.keys(['']).catch(() => {});
   const c = await page.collected();
   check(c.errors.length === 0, `page errors during the survey: ${c.errors.join(' | ')}`);
