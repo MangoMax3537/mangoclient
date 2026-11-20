@@ -18,16 +18,20 @@ MangoClient brings Modrinth discovery, separate Minecraft setups, and account sw
 
 ## Features
 
-- **Profiles that stay separate** — each profile has its own game version, loader, mods, worlds, settings, memory limit, cover image, and playtime.
-- **Built-in Modrinth browser** — find and install mods, modpacks, resource packs, and shaders without leaving the launcher. Required dependencies are resolved automatically.
-- **Manual mod support** — drop `.jar` files into a profile's `mods` folder and MangoClient detects them. Individual mods can be enabled or disabled without deleting them.
-- **Multiple loaders** — create Vanilla, Fabric, Quilt, Forge, and NeoForge profiles and choose a loader version per profile.
-- **Microsoft and offline accounts** — keep multiple Microsoft accounts signed in and switch between them without restarting the launcher. Offline accounts are available for single-player and offline-mode servers.
-- **Automatic Java setup** — MangoClient finds a compatible local Java installation or downloads the required Eclipse Temurin runtime for the selected Minecraft version.
-- **One-click performance setup** — optionally manages Sodium, Lithium, and FerriteCore for compatible Fabric and Quilt profiles while respecting manually installed or conflicting mods.
-- **MangoConfig included** — an optional in-game HUD and settings layer with features such as zoom, ping and armor displays, fullbright, and Discord Rich Presence.
-- **Useful tools** — live server status and quick join, screenshot management, launcher/game/crash logs, mclo.gs sharing, storage controls, and automatic launcher updates.
-- **English and German UI** — switch languages from the launcher settings.
+- **Profiles that stay separate** — each profile has its own game version, loader, mods, worlds, settings, memory, Java, window size, icon, background, group and tags, and playtime. Right-click an instance for its menu; double-click opens it.
+- **Modrinth built in** — mods, shaders, resource packs and modpacks. Installing asks which instances to use (instances that already have the project or cannot take it are dimmed with the reason) and shows required and optional dependencies before anything is installed. Mods, shaders and resource packs have their own tabs per instance.
+- **Import and export** — import Modrinth `.mrpack` files and Prism/MultiMC instances, export an instance as `.mrpack`.
+- **Safety nets** — world backups and instance snapshots (automatic before updates and removals), crash analysis in plain language, and a diagnostics export that scrubs paths and tokens.
+- **Microsoft and offline accounts** — switch accounts without restarting. Sign-in tokens are encrypted with a key that only exists on your device (kept in the system keystore). A skins page offers a 3D preview, skin upload, capes and a skin library.
+- **Automatic Java setup** — a compatible local Java or the matching Eclipse Temurin runtime, with a per-instance override.
+- **Sensible memory** — 4 GB on 16 GB machines, 5 GB on 32 GB, 6 GB on 64 GB and more, adjustable per instance; packs can recommend their own value.
+- **Performance setup** — optionally manages Sodium, Lithium and FerriteCore for compatible Fabric and Quilt profiles while respecting your own mods.
+- **MangoConfig included** — an optional in-game HUD and settings layer with zoom, ping and armor displays, fullbright, and Discord Rich Presence.
+- **Looks like a game launcher** — a Minecraft-style angular design, backgrounds per Minecraft version (or your own), instance icons from real blocks read from your own game files, skeleton loading, smooth transitions, keyboard shortcuts (press `?`), a custom title bar and a settings search that understands aliases.
+- **Useful tools** — live server status with icons and quick join, screenshots, launcher/game/crash logs, mclo.gs sharing, storage controls, signed automatic updates.
+- **English and German UI.**
+
+CurseForge is not supported in 2.0 (Modrinth only).
 
 ## Download
 
@@ -68,7 +72,7 @@ Game data is stored outside the application installation so launcher updates do 
 | macOS | `~/Library/Application Support/mangoclient` |
 | Linux | `~/.mangoclient` |
 
-Microsoft credentials use the operating system's secure storage when available. Downloads are checked against their published sizes and checksums, and archive extraction is restricted to the selected profile.
+Microsoft sign-in tokens are encrypted with a random key that exists only on your device and lives in the operating system's keystore, so a copied profile folder cannot be used on another machine. If no keystore is available, the login is kept in memory only for that session. Nothing from Mojang's game files is shipped with MangoClient: block icons and panoramas are read at runtime from your own Minecraft installation. Downloads are checked against their published sizes and checksums, and archive extraction is restricted to the selected profile.
 
 Optional telemetry powers the public install and online counters. When enabled, it sends only a random installation ID, the MangoClient version, and the operating-system platform. It does not send a Minecraft account, player name, or hardware information, and it can be disabled in Settings.
 
