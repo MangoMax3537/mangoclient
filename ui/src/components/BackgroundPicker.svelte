@@ -11,10 +11,12 @@
   import PanoramaBackground from './PanoramaBackground.svelte';
   import ImagePick from './ImagePick.svelte';
   import { fmtDateTime } from '../lib/format';
-  import { autoWallpaper, uniqueWallpapers, wallpapers } from '../lib/wallpapers';
+  import { MANGO_CLIENT_ID, uniqueWallpapers, wallpapers } from '../lib/wallpapers';
+  import { buildPool, resolveAuto } from '../lib/bgCycle';
+  import BgLayer from './BgLayer.svelte';
   import { BLUR_MAX, backgroundStyle, choiceFromBackground, previewBackground, resolveBackground, sameBackground, type BackgroundChoice } from '../lib/instanceIcon';
   import { imageDrop, type PickedImage } from '../lib/pickImage';
-  import { actions, app, errorText, getApi, lang, loadPanorama, panoramas, t, toast } from '../lib/stores.svelte';
+  import { actions, app, errorText, getApi, lang, loadPanorama, loadPanoramaPool, panoramaPool, panoramas, t, toast } from '../lib/stores.svelte';
   import type { Screenshot } from '../lib/types';
 
   let { profileId, onclose }: { profileId: string; onclose: () => void } = $props();
@@ -33,7 +35,7 @@
   let bad = $state(false);
   let shots = $state<Screenshot[] | null>(null);
 
-  $effect(() => { void loadPanorama(profileId); });
+  $effect(() => { void loadPanorama(profileId); if (!panoramaPool.loaded) void loadPanoramaPool(); });
   $effect(() => {
     if (shots) return;
     let dead = false;
@@ -55,14 +57,17 @@
   const dimNow = $derived(effDim ?? defaults.dim);
   const blurNow = $derived(effBlur ?? defaults.blur);
   const all = uniqueWallpapers(wallpapers);
-  const auto = $derived(autoWallpaper(wallpapers, profile?.mcVersion ?? '', profileId));
-  const autoText = $derived(!auto ? t('bg.auto.empty') : auto.rule === 'version'
-    ? t('bg.auto.version', { v: profile?.mcVersion ?? '', name: auto.wallpaper.label }) : t('bg.auto.generic', { name: auto.wallpaper.label }));
+  const mangoOn = $derived(draft.kind === 'wallpaper' && draft.id === MANGO_CLIENT_ID);
   const panoText = $derived(!pano ? t('bg.auto.none') : pano.source === 'own' ? t('bg.auto.own', { v: pano.mcVersion }) : t('bg.auto.nearest', { v: pano.mcVersion }));
+  // the text must name exactly what the hero resolves to (same rules and pool as PanoramaBackground)
+  const auto = $derived(resolveAuto({ mcVersion: profile?.mcVersion ?? '', profileId, wallpapers, ownPanorama: pano, pool: buildPool(wallpapers, panoramaPool.sets) }));
+  const autoName = $derived(auto.item.kind === 'wallpaper' ? (wallpapers.find((w) => w.id === (auto.item as { id: string }).id)?.label ?? '') : auto.item.kind === 'panorama' ? t('bg.tab.panorama') : t('bg.wallpaper.mango'));
+  const autoText = $derived(auto.rule === 'version' ? t('bg.auto.version', { v: profile?.mcVersion ?? '', name: autoName })
+    : auto.rule === 'panorama' ? panoText : t('bg.auto.generic', { name: autoName }));
 
   const tabs = $derived([
     { value: 'auto', label: t('bg.tab.auto') },
-    ...(all.length ? [{ value: 'wallpapers', label: t('bg.tab.wallpapers') }] : []),
+    { value: 'wallpapers', label: t('bg.tab.wallpapers') },
     // a tab with nothing behind it is not rendered: no panorama extracted, no screenshots taken
     ...(pano || tab === 'panorama' || draft.kind === 'panorama' ? [{ value: 'panorama', label: t('bg.tab.panorama') }] : []),
     ...(shots?.length || tab === 'screenshot' || draft.kind === 'screenshot' ? [{ value: 'screenshot', label: t('bg.tab.screenshot') }] : []),
@@ -123,7 +128,7 @@
             {#each shots as s (s.name)}
               {@const on = draft.kind === 'screenshot' && draft.name === s.name}
               <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => (draft = { kind: 'screenshot', name: s.name, url: s.url })}>
-                <Img src={s.url} lazy fallback={fallbackImage('world', s.name, 300)} />
+                <span class="ar"><Img src={s.url} lazy fallback={fallbackImage('world', s.name, 300)} /></span>
                 <span class="cap mono">{fmtDateTime(s.taken, lang())}</span>
                 {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
               </button>
@@ -135,10 +140,15 @@
         {#if draft.kind === 'image' && !draft.preview}<p class="chip"><FileImageIcon weight="bold" size={16} aria-hidden="true" />{draft.name}</p>{/if}
       {:else if tab === 'wallpapers'}
         <div class="g" role="radiogroup" aria-label={t('bg.tab.wallpapers')}>
+          <button type="button" role="radio" aria-checked={mangoOn} class="th" class:on={mangoOn} onclick={() => { reset = false; draft = { kind: 'wallpaper', id: MANGO_CLIENT_ID, label: t('bg.wallpaper.mango'), url: '' }; }}>
+            <span class="ar"><BgLayer res={{ kind: 'watermark' }} look={{ dim: 0.6, blur: 0 }} tint={null} angle={0} paused /></span>
+            <span class="cap">{t('bg.wallpaper.mango')}</span>
+            {#if mangoOn}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
+          </button>
           {#each all as w (w.id)}
             {@const on = draft.kind === 'wallpaper' && draft.id === w.id}
             <button type="button" role="radio" aria-checked={on} class="th" class:on onclick={() => { reset = false; draft = { kind: 'wallpaper', id: w.id, label: w.label, url: w.url }; }}>
-              <Img src={w.url} lazy fallback={fallbackImage('world', w.id, 300)} />
+              <span class="ar"><Img src={w.url} lazy fallback={fallbackImage('world', w.id, 300)} /></span>
               <span class="cap">{w.label}</span>
               {#if on}<span class="chk" aria-hidden="true"><CheckIcon weight="bold" size={12} /></span>{/if}
             </button>
@@ -177,14 +187,15 @@
   .tabscroll { overflow-x: auto; }
   .panel { min-height: 190px; display: grid; align-content: start; gap: 8px; }
   .panel p { margin: 0; }
-  .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 250px; overflow: auto; padding: 4px; margin: -4px; }
-  .th { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--r-m); border: 2px solid transparent; background: var(--ink-3); }
+  .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; grid-auto-rows: max-content; max-height: 250px; overflow-y: auto; overflow-x: hidden; padding: 6px; scroll-padding: 6px; align-content: start; }
+  .ar { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; }
+  .th { position: relative; display: block; padding: 0; overflow: hidden; border-radius: var(--r-m); border: 2px solid transparent; background: var(--ink-3); }
   .th:hover { border-color: var(--line); }
   .th.on { border-color: var(--accent-fill); }
   .th:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 4px; font-size: var(--fs-xs); text-align: left; color: #f4f1ea; background: linear-gradient(0deg, rgba(11, 12, 14, 0.8), transparent); }
   .chk { position: absolute; right: 6px; top: 6px; width: 18px; height: 18px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); border-radius: var(--r-s); }
-  .sh { aspect-ratio: 16 / 9; border-radius: var(--r-m); }
+  .sh { aspect-ratio: 16 / 9; border-radius: var(--r-m); display: block; }
   .chip { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-dim); font-size: var(--fs-sm); }
   .reset { margin-right: auto; }
   .look { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }

@@ -116,3 +116,17 @@ describe('CycleScheduler (fake timers)', () => {
     vi.useRealTimers();
   });
 });
+
+import { resolveBackground, choiceFromBackground } from './instanceIcon';
+import { MANGO_CLIENT_ID } from './wallpapers';
+describe('built-in Mango Client wallpaper', () => {
+  const ctx = { mcVersion: '1.21.4', profileId: 'p', panorama: null, wallpapers: [] as never[] };
+  it('fits the backend wallpaper-id rule ([a-z0-9-], 1..64)', () => { expect(MANGO_CLIENT_ID).toMatch(/^[a-z0-9-]{1,64}$/); });
+  it('wallpaper:mango-client resolves to the brand surface even without any image file', () => {
+    expect(resolveBackground({ kind: 'wallpaper', id: MANGO_CLIENT_ID }, ctx)).toEqual({ kind: 'watermark' });
+  });
+  it('the picker keeps it as a wallpaper choice (not "auto")', () => {
+    expect(choiceFromBackground({ kind: 'wallpaper', id: MANGO_CLIENT_ID }, [])).toMatchObject({ kind: 'wallpaper', id: 'mango-client' });
+  });
+  it('it is one member of the auto / Home pool', () => { expect(buildPool([], []).map(poolKey)).toContain('brand'); });
+});

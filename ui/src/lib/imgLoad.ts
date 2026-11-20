@@ -34,3 +34,16 @@ export function imgWatch(node: HTMLImageElement, cb: ImgWatch & { src?: string |
     destroy() { node.removeEventListener('load', onload); node.removeEventListener('error', onerror); },
   };
 }
+
+/**
+ * `img.decode()` with a ceiling. WebKitGTK can leave decode() pending for a large image on an element that is still invisible
+ * (opacity 0) and never settle it, which kept the layer behind its grey skeleton for good. The `load` event already means the image
+ * is usable, so decode only smooths the first paint: it may delay by `ms` at most, and any failure counts as done.
+ */
+export async function decodeSoon(el: Pick<HTMLImageElement, 'decode'> | null | undefined, ms = 600): Promise<void> {
+  if (!el || typeof el.decode !== 'function') return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([el.decode().catch(() => undefined), new Promise<void>((r) => { timer = setTimeout(r, ms); })]);
+  } catch { /* a decode failure still shows the image */ } finally { clearTimeout(timer); }
+}

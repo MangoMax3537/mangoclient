@@ -56,3 +56,15 @@ describe('imgWatch', () => {
     expect(onerror).not.toHaveBeenCalled();
   });
 });
+
+import { decodeSoon } from './imgLoad';
+describe('decodeSoon', () => {
+  it('returns once decode settles', async () => { await expect(decodeSoon({ decode: () => Promise.resolve() })).resolves.toBeUndefined(); });
+  it('a decode that rejects still counts as done', async () => { await expect(decodeSoon({ decode: () => Promise.reject(new Error('x')) })).resolves.toBeUndefined(); });
+  it('a decode that never settles (WebKitGTK) is cut off after the ceiling', async () => {
+    const t0 = Date.now();
+    await decodeSoon({ decode: () => new Promise<void>(() => {}) }, 40);
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
+  it('no element / no decode() is fine', async () => { await decodeSoon(null); await decodeSoon({} as never); });
+});

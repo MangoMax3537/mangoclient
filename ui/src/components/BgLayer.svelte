@@ -2,7 +2,7 @@
   // One drawn background: a wallpaper / custom image (ken-burns), the Minecraft panorama as a slowly rotating CSS 3D cube, or the surface
   // with the MangoClient icon. It stays a plain grey (pulsing) box until its image(s) have loaded AND decoded, then fades in (opacity only);
   // `onready` fires at that moment (Home waits for it before swapping layers). Resolution lives in PanoramaBackground / HomeBackground.
-  import { imgWatch } from '../lib/imgLoad';
+  import { decodeSoon, imgWatch } from '../lib/imgLoad';
   import { brandIcon } from '../lib/fallbackImage';
   import { PANORAMA_SECONDS, panoramaDelay, type ResolvedBackground } from '../lib/instanceIcon';
 
@@ -31,7 +31,7 @@
 
   let artEl: HTMLImageElement | undefined = $state();
   let faceEls: (HTMLImageElement | undefined)[] = $state([]);
-  const decode = async (el: HTMLImageElement | undefined) => { try { await el?.decode(); } catch { /* a decode failure still shows the image */ } };
+  const decode = (el: HTMLImageElement | undefined) => decodeSoon(el);
   async function onArt() { const k = artKey; await decode(artEl); if (k === artKey) artLoaded = true; }
   async function onFace() {
     faces += 1;

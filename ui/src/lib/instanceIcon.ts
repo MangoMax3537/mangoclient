@@ -1,6 +1,6 @@
 // Pure rules for instance icons and backgrounds (docs/ipc.md Parts 6 and 7). No Svelte, no Tauri: unit tested.
 import { hashId } from './fallbackImage';
-import { DEFAULT_SCRIM, type Wallpaper } from './wallpapers';
+import { DEFAULT_SCRIM, MANGO_CLIENT_ID, type Wallpaper } from './wallpapers';
 import { resolveAuto, type PoolItem } from './bgCycle';
 import type { BlockIcon, Loader, BlockIconsStatus, InstanceIcon, PanoramaSet, ProfileBackground, ProfileView } from './types';
 
@@ -93,6 +93,7 @@ export function resolveBackground(bg: ProfileBackground | null | undefined, c: B
   if (b.kind === 'none') return { kind: 'plain' };
   if (b.kind === 'panorama') return c.panorama && c.panorama.faces.length === 6 ? { kind: 'panorama', set: c.panorama } : { kind: 'watermark' };
   if (b.kind === 'wallpaper') {
+    if (b.id === MANGO_CLIENT_ID) return { kind: 'watermark' };
     const w = c.wallpapers.find((x) => x.id === b.id);
     if (w) return { kind: 'image', url: w.url, scrim: w.scrim, source: 'wallpaper' };
   }
@@ -147,6 +148,7 @@ export function choiceFromBackground(b: ProfileBackground, list: readonly Wallpa
     case 'none': return { kind: 'none' };
     case 'panorama': return { kind: 'panorama' };
     case 'wallpaper': {
+      if (b.id === MANGO_CLIENT_ID) return { kind: 'wallpaper', id: b.id, label: 'Mango Client', url: '' };
       const w = list.find((x) => x.id === b.id);
       return w ? { kind: 'wallpaper', id: w.id, label: w.label, url: w.url } : { kind: 'auto' };
     }

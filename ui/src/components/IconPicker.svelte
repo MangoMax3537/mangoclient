@@ -183,7 +183,7 @@
   .cap { margin: 0; text-align: center; font-size: var(--fs-sm); max-width: 168px; overflow-wrap: anywhere; }
   .main { min-width: 0; display: grid; align-content: start; gap: 10px; }
   .panel { display: grid; gap: 10px; align-content: start; min-height: 260px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; padding: 4px; margin: -4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; padding: 6px; }
   .cell { display: grid; gap: 4px; justify-items: stretch; text-align: center; padding: 6px 6px 8px; border: 1px solid transparent; border-radius: var(--r-m); }
   .cell:hover { background: var(--ink-3); }
   .cell.on { border-color: var(--accent-fill); background: var(--ink-3); }

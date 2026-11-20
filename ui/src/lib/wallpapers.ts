@@ -5,6 +5,9 @@ import { hashId } from './fallbackImage';
 export interface WallpaperEntry { file: string; label: string; versions?: string[]; generic?: boolean; scrim?: number }
 export interface Wallpaper { id: string; file: string; label: string; url: string; path: string; versions: string[]; generic: boolean; scrim: number }
 
+/** The built-in wallpaper id of the MangoClient brand surface (token surface + the icon as a watermark). No image file; persisted as `wallpaper:mango-client`. */
+export const MANGO_CLIENT_ID = 'mango-client';
+
 export const DEFAULT_SCRIM = 0.6;
 export const clampScrim = (n: unknown): number => (typeof n === 'number' && isFinite(n) ? Math.min(0.9, Math.max(0.3, n)) : DEFAULT_SCRIM);
 
