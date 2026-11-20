@@ -37,6 +37,14 @@ pub struct ServiceOptions {
     pub open_folders: bool,
     /// Modrinth API base (no trailing slash).
     pub modrinth_api: String,
+    /// CurseForge Core API base (no trailing slash).
+    pub curseforge_api: String,
+    /// CurseForge key baked in at build time (`CURSEFORGE_API_KEY`) or read
+    /// from the environment at startup. The config field `curseforgeApiKey`
+    /// overrides it.
+    pub curseforge_key: Option<mango_core::Secret>,
+    /// Retry/timeout/CDN policy of the CurseForge client.
+    pub curseforge: mango_curseforge::Options,
     /// mclo.gs log upload endpoint.
     pub mclogs_api: String,
     /// Retry/timeout policy for the service's own HTTP calls.
@@ -79,6 +87,9 @@ impl Default for ServiceOptions {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             open_folders: true,
             modrinth_api: mango_modrinth::API.to_string(),
+            curseforge_api: mango_curseforge::API.to_string(),
+            curseforge_key: default_curseforge_key(),
+            curseforge: mango_curseforge::Options::default(),
             mclogs_api: "https://api.mclo.gs/1/log".to_string(),
             fetch: FetchOptions::default(),
             ping: PingOptions::default(),
@@ -91,11 +102,24 @@ impl Default for ServiceOptions {
             auto_update_check: true,
             api_base: None,
             watch_interval: Duration::from_secs(2),
-            icon_hosts: vec!["cdn.modrinth.com".to_string()],
+            icon_hosts: vec![
+                "cdn.modrinth.com".to_string(),
+                "media.forgecdn.net".to_string(),
+            ],
             icon_allow_http: false,
             auth_endpoints: mango_auth::Endpoints::default(),
         }
     }
+}
+
+/// Build-time key first (`option_env!`), then the environment at startup.
+fn default_curseforge_key() -> Option<mango_core::Secret> {
+    option_env!("CURSEFORGE_API_KEY")
+        .map(str::to_string)
+        .or_else(|| std::env::var("CURSEFORGE_API_KEY").ok())
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
+        .map(mango_core::Secret::new)
 }
 
 pub(crate) struct Inner {
@@ -109,6 +133,8 @@ pub(crate) struct Inner {
     pub throttle: Mutex<ProgressThrottle>,
     pub host: Host,
     pub modrinth: mango_modrinth::Client,
+    /// The CurseForge client for the key it was built with.
+    pub curseforge: Mutex<Option<(String, Arc<mango_curseforge::Client>)>>,
     pub icons: Arc<ServerIcons>,
     pub updater: Updater,
     pub telemetry: Mutex<Option<mango_mango::telemetry::Telemetry>>,
@@ -193,6 +219,7 @@ impl AppService {
                 throttle: Mutex::new(ProgressThrottle::default()),
                 host,
                 modrinth,
+                curseforge: Mutex::new(None),
                 icons,
                 updater,
                 telemetry: Mutex::new(None),

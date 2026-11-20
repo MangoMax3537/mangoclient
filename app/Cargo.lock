@@ -1186,9 +1186,11 @@ dependencies = [
  "chrono",
  "flate2",
  "hex",
+ "mango-archive",
  "mango-auth",
  "mango-content",
  "mango-core",
+ "mango-curseforge",
  "mango-java",
  "mango-loaders",
  "mango-mango",
@@ -1297,6 +1299,24 @@ dependencies = [
  "tempfile",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "mango-curseforge"
+version = "2.0.0-dev"
+dependencies = [
+ "hex",
+ "mango-archive",
+ "mango-core",
+ "mango-net",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "zip",
 ]
 
 [[package]]

@@ -26,10 +26,12 @@
 
 <style>
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--ink-1); max-width: 100%; }
-  button { height: 34px; padding: 0 12px; color: var(--paper-dim); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border-right: 1px solid var(--line-soft); }
+  button { position: relative; height: 34px; padding: 0 14px; color: var(--paper-dim); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border-right: 1px solid var(--line-soft); transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
   button:last-child { border-right: 0; }
   button:hover { color: var(--paper); background: var(--ink-3); }
-  button.on { background: var(--ink-4); color: var(--mango); }
-  .c { font-size: 12px; color: var(--paper-mute); }
+  button.on { background: var(--ink-4); color: var(--paper); }
+  button.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--accent-fill); }
+  button:focus-visible { outline-offset: -3px; border-radius: 0; }
+  .c { font-size: var(--fs-xs); color: var(--paper-mute); }
   button.on .c { color: var(--paper-dim); }
 </style>

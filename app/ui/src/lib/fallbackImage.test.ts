@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountHeadUrl, fallbackImage, fallbackIndex, hashId } from './fallbackImage';
+import { SURFACE_TONES, accountHeadUrl, brandIcon, fallbackImage, fallbackIndex, hashId } from './fallbackImage';
 
 describe('fallbackImage', () => {
   it('is deterministic', () => {
@@ -7,21 +7,26 @@ describe('fallbackImage', () => {
     expect(fallbackImage('profile', id)).toBe(fallbackImage('profile', id));
     expect(hashId(id)).toBe(hashId(id));
   });
-  it('returns a non-empty url per kind', () => {
+  it('returns a non-empty url per kind (the MangoClient icon)', () => {
     for (const k of ['profile', 'mod', 'server', 'account'] as const) expect(fallbackImage(k, 'x')).toBeTruthy();
   });
-  it('spreads profile ids over the 16 tiles within range', () => {
+  it('picks the smallest bundled size that is large enough', () => {
+    expect(brandIcon(10)).toContain('16x16');
+    expect(brandIcon(100)).toContain('128x128');
+    expect(brandIcon(9999)).toContain('512x512');
+  });
+  it('spreads ids over the surface tones within range', () => {
     const seen = new Set<number>();
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 200; i++) {
       const n = fallbackIndex('profile', `id-${i}`);
       expect(n).toBeGreaterThanOrEqual(0);
-      expect(n).toBeLessThan(16);
+      expect(n).toBeLessThan(SURFACE_TONES);
       seen.add(n);
     }
-    expect(seen.size).toBe(16);
+    expect(seen.size).toBe(SURFACE_TONES);
   });
-  it('accounts always use the bundled head', () => {
-    expect(fallbackImage('account', 'a')).toBe(fallbackImage('account', 'b'));
+  it('accounts always use the same tone', () => {
+    expect(fallbackIndex('account', 'a')).toBe(fallbackIndex('account', 'b'));
   });
   it('account heads come from the backend headUrl, never a third-party host', () => {
     expect(accountHeadUrl({ uuid: 'u', headUrl: 'mangoimg://head/u' })).toBe('mangoimg://head/u');

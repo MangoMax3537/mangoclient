@@ -21,11 +21,11 @@
 
 <svelte:document onclick={onDoc} />
 <div class="menu" bind:this={root} onkeydown={onKey} role="presentation">
-  <button class="btn" type="button" {disabled} aria-haspopup="listbox" aria-expanded={open} onclick={() => (open = !open)}>
+  <button class="btn text" type="button" {disabled} aria-haspopup="listbox" aria-expanded={open} onclick={() => (open = !open)}>
     {t('home.switch')}<CaretDownIcon weight="bold" size={14} aria-hidden="true" />
   </button>
   {#if open}
-    <ul class="list" role="listbox" aria-label={t('home.switch')}>
+    <ul class="list pop menu-list" role="listbox" aria-label={t('home.switch')}>
       {#each app.profiles as p (p.id)}
         <li role="option" aria-selected={p.id === currentId}>
           <button type="button" class:cur={p.id === currentId} onclick={() => pick(p.id)}>
@@ -41,13 +41,7 @@
 
 <style>
   .menu { position: relative; }
-  .list {
-    position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20; min-width: 280px; margin: 0; padding: 4px; list-style: none;
-    background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-    max-height: 300px; overflow: auto;
-  }
-  li button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: var(--r-s); text-align: left; }
-  li button:hover, li button.cur { background: var(--ink-4); }
+  .list { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 20; min-width: 280px; max-height: min(300px, 40vh); overflow: auto; }
   .n { flex: 1; font-weight: 500; }
-  .v { color: var(--paper-mute); font-size: 12px; }
+  .v { color: var(--paper-mute); font-size: var(--fs-xs); }
 </style>

@@ -46,18 +46,19 @@
 </dialog>
 
 <style>
-  dialog { padding: 0; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7); max-height: min(86vh, 760px); }
-  dialog[open] { display: flex; flex-direction: column; animation: pop 160ms var(--ease); }
-  dialog::backdrop { background: rgba(5, 6, 7, 0.72); }
+  dialog { padding: 0; color: var(--paper); background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-modal); max-height: min(86vh, 760px); overflow: hidden; }
+  dialog[open] { display: flex; flex-direction: column; animation: pop var(--dur-slow) var(--ease); }
+  dialog::before { content: ''; flex: none; height: 3px; background: linear-gradient(90deg, var(--accent-fill) 0 56px, transparent 56px); }
+  dialog::backdrop { background: var(--backdrop); }
   dialog.dialog { width: min(480px, calc(100vw - 48px)); }
-  dialog.drawer { width: min(560px, 100vw); height: 100vh; max-height: none; margin: 0 0 0 auto; border-radius: var(--r-l) 0 0 var(--r-l); border-right: 0; animation: slide 200ms var(--ease); }
+  dialog.drawer { width: min(560px, 100vw); height: 100vh; max-height: none; margin: 0 0 0 auto; border-radius: var(--r-l) 0 0 var(--r-l); border-right: 0; animation: slide var(--dur-slow) var(--ease); }
   dialog.lightbox { width: min(1100px, calc(100vw - 40px)); max-height: calc(100vh - 40px); background: var(--ink-1); }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px 20px; border-bottom: 1px solid var(--line-soft); flex: none; }
-  h2 { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  h2 { font-size: var(--fs-xl); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { display: flex; align-items: center; gap: 4px; }
   .x { width: 34px; padding: 0; justify-content: center; }
   .body { padding: 16px 20px; overflow: auto; min-height: 0; flex: 1; user-select: text; }
   footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-soft); flex: none; }
-  @keyframes pop { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px); } }
   @keyframes slide { from { transform: translateX(32px); opacity: 0; } }
 </style>

@@ -6,11 +6,11 @@ use std::sync::{Arc, Mutex};
 use mango_app::image_protocol::Image;
 use mango_app::{
     AppError, AppService, AppState, ClipboardImage, ConfigView, ContentItem, ContentType, Event,
-    EventSink, Host, LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome,
-    LoginWindow, ProfileView, ProjectDetail, ProjectVersion, PublicAccount, Screenshot,
-    ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus, ServiceOptions,
-    StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult, UpdateInfo,
-    UpdateStatus, VersionManifest,
+    EventSink, Host, InstallPlan, InstallTarget, LaunchResult, LoaderVersion, LogEntry, LogText,
+    LogUpload, LoginOutcome, LoginWindow, ModpackPlan, ProfileView, ProjectDetail, ProjectVersion,
+    Provider, ProviderStatus, PublicAccount, Screenshot, ScreenshotAction, SearchParams,
+    SearchResult, ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey,
+    StorageUsage, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
 };
 use mango_core::Paths;
 use serde::Deserialize;
@@ -231,6 +231,94 @@ async fn modrinth_install_modpack(
     name: Option<String>,
 ) -> Res<ProfileView> {
     svc.modrinth_install_modpack(project_id, version_id, name)
+        .await
+}
+
+// ---- providers (Modrinth + CurseForge), install planning, modpacks ----
+
+#[tauri::command]
+async fn providers_status(svc: Svc<'_>) -> Res<Vec<ProviderStatus>> {
+    svc.providers_status()
+}
+
+#[tauri::command]
+async fn search_projects(svc: Svc<'_>, params: SearchParams) -> Res<SearchResult> {
+    svc.search_projects(params).await
+}
+
+#[tauri::command]
+async fn project_detail(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+) -> Res<ProjectDetail> {
+    svc.project_detail(provider, project_id).await
+}
+
+#[tauri::command]
+async fn project_versions(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    profile_id: Option<String>,
+) -> Res<Vec<ProjectVersion>> {
+    svc.project_versions(provider, project_id, profile_id).await
+}
+
+#[tauri::command]
+async fn install_targets(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    version_id: Option<String>,
+) -> Res<Vec<InstallTarget>> {
+    svc.install_targets(provider, project_id, version_id).await
+}
+
+#[tauri::command]
+async fn install_plan(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    version_id: Option<String>,
+    profile_id: String,
+) -> Res<InstallPlan> {
+    svc.install_plan(provider, project_id, version_id, profile_id)
+        .await
+}
+
+#[tauri::command]
+async fn install_apply(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    version_id: Option<String>,
+    profile_id: String,
+    include: Vec<String>,
+) -> Res<Vec<ContentItem>> {
+    svc.install_apply(provider, project_id, version_id, profile_id, include)
+        .await
+}
+
+#[tauri::command]
+async fn modpack_plan(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    version_id: Option<String>,
+) -> Res<ModpackPlan> {
+    svc.modpack_plan(provider, project_id, version_id).await
+}
+
+#[tauri::command]
+async fn modpack_install(
+    svc: Svc<'_>,
+    provider: Provider,
+    project_id: String,
+    version_id: Option<String>,
+    name: Option<String>,
+) -> Res<ProfileView> {
+    svc.modpack_install(provider, project_id, version_id, name)
         .await
 }
 
@@ -515,6 +603,15 @@ pub fn run() {
             modrinth_versions,
             modrinth_install,
             modrinth_install_modpack,
+            providers_status,
+            search_projects,
+            project_detail,
+            project_versions,
+            install_targets,
+            install_plan,
+            install_apply,
+            modpack_plan,
+            modpack_install,
             servers_list,
             servers_ping_all,
             servers_ping,

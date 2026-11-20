@@ -59,6 +59,7 @@ from_coded!(
     mango_net::NetError,
     mango_mango::Error,
     mango_modrinth::Error,
+    mango_curseforge::Error,
     mango_servers::ServersError,
     mango_updater::UpdateError,
 );

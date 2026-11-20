@@ -11,9 +11,11 @@ mod events;
 mod host;
 pub mod image_protocol;
 mod images;
+mod install;
 mod launch;
 mod media;
 mod models;
+mod providers;
 mod servers;
 mod service;
 mod types;
@@ -24,6 +26,8 @@ mod tests;
 mod tests_p2;
 #[cfg(test)]
 mod tests_p3;
+#[cfg(test)]
+mod tests_p4;
 
 pub use accounts::LaunchCredentials;
 pub use error::{AppError, Res};
@@ -37,10 +41,12 @@ pub use host::{
     SystemOpener,
 };
 pub use models::{
-    ContentItem, ContentType, LogEntry, LogKind, LogText, LogUpload, ProjectDetail, ProjectHit,
-    ProjectVersion, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,
-    ServerPlayers, ServerStatus, StatsDay, StatsProfile, StatsSummary, StorageKey, StorageUsage,
-    ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
+    BlockedFile, ContentItem, ContentType, InstallPlan, InstallPlanItem, InstallTarget, LogEntry,
+    LogKind, LogText, LogUpload, ModpackPlan, PlanConflict, PlanRole, ProjectDetail, ProjectHit,
+    ProjectVersion, Provider, ProviderStatus, Screenshot, ScreenshotAction, SearchParams,
+    SearchResult, ServerEntry, ServerPlayers, ServerStatus, StatsDay, StatsProfile, StatsSummary,
+    StatusReason, StorageKey, StorageUsage, TargetReason, TargetState, ToggleResult,
+    UninstallResult, UpdateInfo, UpdateStatus,
 };
 pub use service::{AppService, ServiceOptions};
 pub use types::{

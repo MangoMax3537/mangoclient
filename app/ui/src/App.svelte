@@ -33,7 +33,10 @@
     <Rail />
     <main>
       {#if !app.ready}
-        <div class="loading" role="status"><span class="sr-only">{t('common.loading')}</span></div>
+        <div class="loading" role="status"><span class="sr-only">{t('common.loading')}</span>
+          <div class="skel hero-sk" aria-hidden="true"></div>
+          <div class="cards-sk" aria-hidden="true">{#each Array(4) as _, i (i)}<div class="skel notch" style:--n="14px"></div>{/each}</div>
+        </div>
       {:else}
         {#if app.error}
           <div class="banner" role="alert">{errorText(app.error)}
@@ -67,5 +70,8 @@
   .body { flex: 1; display: flex; min-height: 0; }
   main { flex: 1; min-width: 0; position: relative; background: var(--ink-0); }
   .banner { position: absolute; z-index: 10; top: 8px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--ink-3); border: 1px solid var(--tomato); border-radius: var(--r-m); color: var(--paper); }
-  .loading { height: 100%; }
+  .loading { height: 100%; display: grid; grid-template-rows: 46vh auto; gap: var(--s-5); align-content: start; }
+  .hero-sk { opacity: 0.6; }
+  .cards-sk { display: flex; gap: var(--s-3); padding: 0 32px 0 44px; }
+  .cards-sk div { width: 212px; height: 200px; }
 </style>

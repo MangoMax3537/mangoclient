@@ -1,12 +1,11 @@
 // Single entry point for every bundled fallback image (CLAUDE.md image-first rule).
-// The files are TEMPORARY placeholders, see src/assets/fallbacks/README.md.
+// The only bundled fallback is the real MangoClient icon (src/assets/brand/). Real art can be
+// dropped in later by swapping the lookup here; no caller needs to change.
 export type FallbackKind = 'profile' | 'mod' | 'server' | 'account';
 
-const files = import.meta.glob('../assets/fallbacks/*.png', {
+const icons = import.meta.glob('../assets/brand/*x*.png', {
   eager: true, query: '?url', import: 'default',
 }) as Record<string, string>;
-
-const COUNTS: Record<FallbackKind, number> = { profile: 16, mod: 3, server: 1, account: 1 };
 
 /** FNV-1a, 32 bit. Stable across runs and platforms. */
 export function hashId(id: string): number {
@@ -18,26 +17,29 @@ export function hashId(id: string): number {
   return h >>> 0;
 }
 
+/** Number of neutral surface tones a tile can sit on (CSS only, the icon itself is never altered). */
+export const SURFACE_TONES = 4;
+
+/** Deterministic surface tone for (kind, id): 0..SURFACE_TONES-1. Accounts always use tone 0. */
 export function fallbackIndex(kind: FallbackKind, id: string): number {
-  return kind === 'account' ? 0 : hashId(id) % COUNTS[kind];
+  return kind === 'account' ? 0 : hashId(id) % SURFACE_TONES;
 }
 
-function urlFor(stem: string): string {
-  return files[`../assets/fallbacks/${stem}.png`] ?? '';
+const SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
+
+/** The MangoClient icon at the smallest bundled size that is at least `px` device pixels. */
+export function brandIcon(px = 128): string {
+  const s = SIZES.find((n) => n >= px) ?? 512;
+  return icons[`../assets/brand/${s}x${s}.png`] ?? '';
 }
 
-/** Deterministically map (kind, id) to a bundled image URL. */
-export function fallbackImage(kind: FallbackKind, id: string): string {
-  const n = fallbackIndex(kind, id);
-  return urlFor(kind === 'account' ? 'placeholder-account-steve' : `placeholder-${kind}-${n}`);
+/** Map (kind, id) to the bundled fallback image URL (the MangoClient icon). */
+export function fallbackImage(kind: FallbackKind, id: string, px = 128): string {
+  void kind; void id;
+  return brandIcon(px);
 }
 
-export function heroFallback(id?: string): string {
-  void id;
-  return urlFor('placeholder-hero');
-}
-
-/** Skin head for an account: the backend's `headUrl` (mangoimg://head/<uuid>); the bundled Steve head when absent. */
+/** Skin head for an account: the backend's `headUrl` (mangoimg://head/<uuid>); the MangoClient icon when absent. */
 export function accountHeadUrl(acc: { headUrl?: string | null; uuid?: string } | null | undefined): string {
   return acc?.headUrl || fallbackImage('account', acc?.uuid ?? '');
 }

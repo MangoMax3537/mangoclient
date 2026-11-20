@@ -48,13 +48,13 @@
 </section>
 
 <style>
-  .console { background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+  .console { background: var(--ink-1); border: 1px solid var(--line-soft); border-left: 3px solid var(--line); overflow: hidden; }
   header { display: flex; align-items: center; justify-content: space-between; padding-right: 6px; }
   .toggle { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex: 1; text-align: left; font-weight: 600; }
-  .count { color: var(--paper-mute); font-size: 12px; font-weight: 400; }
+  .count { color: var(--paper-mute); font-size: var(--fs-xs); font-weight: 400; }
   .caret { margin-left: auto; display: inline-flex; transition: transform var(--dur) var(--ease); transform: rotate(-90deg); }
   .caret.open { transform: none; }
-  .small { height: 28px; font-size: 13px; }
+  .small { height: 28px; font-size: var(--fs-sm); }
   .body { max-height: 220px; overflow: auto; padding: 8px 14px 12px; font-size: 12.5px; line-height: 1.55; border-top: 1px solid var(--line-soft); user-select: text; }
   .ln { white-space: pre-wrap; word-break: break-word; color: var(--paper-dim); }
   .ln.warn { color: var(--mango); }

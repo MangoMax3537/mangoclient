@@ -716,6 +716,7 @@ async fn search_maps_hits_and_clamps_parameters() {
     let r = f
         .svc
         .modrinth_search(SearchParams {
+            provider: Provider::Modrinth,
             query: "cool".into(),
             project_type: "mod".into(),
             loader: Some("fabric".into()),
@@ -778,6 +779,7 @@ async fn search_maps_hits_and_clamps_parameters() {
     );
 
     let base_params = SearchParams {
+        provider: Provider::Modrinth,
         query: String::new(),
         project_type: "mod".into(),
         loader: None,

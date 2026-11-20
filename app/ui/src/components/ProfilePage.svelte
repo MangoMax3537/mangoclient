@@ -11,7 +11,7 @@
   import Media from './profile/Media.svelte';
   import Logs from './profile/Logs.svelte';
   import ProfileSettings from './profile/ProfileSettings.svelte';
-  import { heroFallback } from '../lib/fallbackImage';
+  import HeroArt from './HeroArt.svelte';
   import { fmtDuration, fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { actions, app, isBusy, nav, t, type ProfileTab } from '../lib/stores.svelte';
@@ -34,9 +34,8 @@
 
 {#if p}
   <div class="page">
-    <section class="hero" class:compact={nav.profileTab !== 'overview'} style:--cover="url({p.coverUrl ?? heroFallback(p.id)})" style:--tint={p.color ?? 'var(--mango)'}>
-      <div class="art px" aria-hidden="true"></div>
-      <div class="scrim" aria-hidden="true"></div>
+    <section class="hero" class:compact={nav.profileTab !== 'overview'}>
+      <HeroArt cover={p.coverUrl} tint={p.color} />
       <div class="inner">
         <button class="btn ghost back" type="button" onclick={() => (nav.view = 'library')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('nav.library')}</button>
         <div class="row">
@@ -72,9 +71,6 @@
 <style>
   .page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 16px 20px 0; gap: 12px; }
   .hero { position: relative; flex: none; min-height: 168px; border-radius: var(--r-l); overflow: hidden; border: 1px solid var(--line); display: flex; }
-  .art { position: absolute; inset: 0; background: var(--cover) center / cover no-repeat; }
-  .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(11, 12, 14, 0.94) 0%, rgba(11, 12, 14, 0.72) 50%, rgba(11, 12, 14, 0.2) 100%); }
-  .scrim::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tint); }
   .inner { position: relative; width: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 10px 24px 18px 28px; gap: 12px; }
   .back { align-self: flex-start; height: 28px; margin-left: -10px; }
   .row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }

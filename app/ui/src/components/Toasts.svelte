@@ -20,8 +20,8 @@
 
 <style>
   .toasts { position: fixed; z-index: 100; left: 88px; bottom: 16px; display: grid; gap: 8px; max-width: min(460px, calc(100vw - 112px)); pointer-events: none; }
-  .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 6px 8px 14px; background: var(--ink-3); border: 1px solid var(--line); border-left: 3px solid var(--paper-dim); border-radius: var(--r-m); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); animation: in 180ms var(--ease); }
-  .toast span { flex: 1; font-size: 14px; }
+  .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 6px 8px 14px; background: var(--ink-2); border: 1px solid var(--line); border-left: 4px solid var(--paper-dim); border-radius: var(--r-s); box-shadow: var(--shadow-float); animation: in var(--dur-slow) var(--ease); }
+  .toast span { flex: 1; font-size: var(--fs-md); }
   .toast.ok { border-left-color: var(--leaf); }
   .toast.ok :global(svg) { color: var(--leaf); }
   .toast.error { border-left-color: var(--tomato); }

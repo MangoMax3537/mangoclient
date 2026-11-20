@@ -3,77 +3,236 @@
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
 
+/* ==========================================================================
+   MangoClient design tokens
+   Names --ink-*, --paper-*, --mango*, --line* are kept for every existing screen; they are
+   re-mapped for the light theme. Theme: follows prefers-color-scheme, override with
+   <html data-theme="light|dark">.
+   ========================================================================== */
 :root {
+  /* surfaces, darkest to most raised (warm ink) */
   --ink-0: #0b0c0e; --ink-1: #111316; --ink-2: #16181c; --ink-3: #1c1f24; --ink-4: #262a31;
-  --line: #2a2e35; --line-soft: #1f2328;
-  --paper: #f4f1ea; --paper-dim: #b4b0a6; --paper-mute: #8d8a82;
-  --mango: #ffad32; --mango-ink: #1a1100; --leaf: #86b86b; --tomato: #ed665c;
+  --line: #2f333b; --line-soft: #1f2328;
+  /* text */
+  --paper: #f4f1ea; --paper-dim: #b8b4a9; --paper-mute: #9a978e;
+  /* brand + status. --mango is the accent usable as TEXT on the page surface; fills use --accent-fill */
+  --mango: #ffad32; --mango-ink: #1a1100; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
+  --leaf: #86b86b; --tomato: #ed665c; --sky: #7fa9c4;
+  --focus: #ffad32;
+  /* the hero is a stage: always dark, whatever the theme */
+  --hero-bg: #21252c; --hero-ink: #f4f1ea; --hero-dim: #c4c0b5; --hero-line: rgba(244, 241, 234, 0.22);
+  --scrim: 11, 12, 14;
+
+  /* radius: controls 8, small parts 4, floating panels 14. Primary shapes use the notch instead. */
   --r-s: 4px; --r-m: 8px; --r-l: 14px;
+  --notch-s: 6px; --notch-m: 10px; --notch-l: 16px;
+
+  /* spacing (4px grid) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* type */
   --font-display: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
   --font-ui: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px; --fs-3xl: 40px;
+  --fs-hero: clamp(44px, 6.4vw, 84px);
+
+  /* elevation: only for things that float */
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 28px 72px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(5, 6, 7, 0.72);
+
+  /* motion: <= 250ms, ease-out, transform and opacity only */
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --dur: 160ms;
+  --dur-fast: 100ms; --dur: 160ms; --dur-slow: 240ms;
+
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --ink-0: #f3efe6; --ink-1: #eae5da; --ink-2: #fbf9f4; --ink-3: #efeade; --ink-4: #e4decf;
+    --line: #c9c1ae; --line-soft: #ddd7c9;
+    --paper: #1b1a17; --paper-dim: #4a473f; --paper-mute: #5f5b53;
+    --mango: #854d00; --mango-ink: #ffffff; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
+    --leaf: #356a25; --tomato: #b02f26; --sky: #2d6182;
+    --focus: #854d00;
+    --shadow-float: 0 10px 28px rgba(60, 45, 20, 0.22), 0 0 0 1px rgba(60, 45, 20, 0.12);
+    --shadow-modal: 0 24px 64px rgba(60, 45, 20, 0.3), 0 0 0 1px rgba(60, 45, 20, 0.16);
+    --backdrop: rgba(40, 32, 16, 0.5);
+    color-scheme: light;
+  }
+}
+:root[data-theme='light'] {
+  --ink-0: #f3efe6; --ink-1: #eae5da; --ink-2: #fbf9f4; --ink-3: #efeade; --ink-4: #e4decf;
+  --line: #c9c1ae; --line-soft: #ddd7c9;
+  --paper: #1b1a17; --paper-dim: #4a473f; --paper-mute: #5f5b53;
+  --mango: #854d00; --mango-ink: #ffffff; --accent-fill: #ffad32; --on-fill: #1a1100; --accent-fill-hover: #ffbd57;
+  --leaf: #356a25; --tomato: #b02f26; --sky: #2d6182;
+  --focus: #854d00;
+  --shadow-float: 0 10px 28px rgba(60, 45, 20, 0.22), 0 0 0 1px rgba(60, 45, 20, 0.12);
+  --shadow-modal: 0 24px 64px rgba(60, 45, 20, 0.3), 0 0 0 1px rgba(60, 45, 20, 0.16);
+  --backdrop: rgba(40, 32, 16, 0.5);
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
 body {
-  background: var(--ink-0); color: var(--paper); font: 14px/1.45 var(--font-ui);
+  background: var(--ink-0); color: var(--paper); font: var(--fs-md)/1.45 var(--font-ui);
   -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:disabled { cursor: not-allowed; }
-h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; letter-spacing: -0.01em; }
-.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; letter-spacing: -0.015em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 0; }
 .px { image-rendering: pixelated; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hint { color: var(--paper-mute); font-size: var(--fs-sm); }
+.err { color: var(--tomato); font-size: var(--fs-sm); }
+.eyebrow { font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper-dim); font-weight: 600; }
+.display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; line-height: 0.95; }
 
-:focus-visible { outline: 2px solid var(--mango); outline-offset: 2px; border-radius: var(--r-s); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-s); }
 
+/* Always-dark scope (hero stage, consoles on art): re-declares the dark tokens whatever the theme. */
+.on-stage {
+  --ink-0: #0b0c0e; --ink-1: #111316; --ink-2: #16181c; --ink-3: #1c1f24; --ink-4: #262a31;
+  --line: #3a3f48; --line-soft: #1f2328;
+  --paper: #f4f1ea; --paper-dim: #c4c0b5; --paper-mute: #a19e95;
+  --mango: #ffad32; --mango-ink: #1a1100; --leaf: #86b86b; --tomato: #ed665c; --focus: #ffad32;
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  color: var(--paper); color-scheme: dark;
+}
+
+/* ---- signature shapes -------------------------------------------------------------------- */
+/* Notched corner: top-right and bottom-left are cut. Size via --n. clip-path hides outlines,
+   so focus is drawn inside. */
+.notch {
+  --n: var(--notch-m);
+  clip-path: polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+}
+.notch:focus-visible { outline: 2px solid var(--paper); outline-offset: -5px; border-radius: 0; }
+/* Stepped pixel edge: an irregular staircase that closes a surface (hero bottom, progress end).
+   Put it on a pseudo-element or empty element filled with the colour of whatever is below. */
+.step-edge {
+  height: 18px;
+  clip-path: polygon(0 100%, 0 55%, 3% 55%, 3% 30%, 8% 30%, 8% 55%, 15% 55%, 15% 80%, 23% 80%, 23% 45%, 29% 45%, 29% 20%, 36% 20%, 36% 45%, 44% 45%, 44% 70%, 52% 70%, 52% 40%, 60% 40%, 60% 15%, 66% 15%, 66% 40%, 73% 40%, 73% 65%, 81% 65%, 81% 35%, 88% 35%, 88% 60%, 94% 60%, 94% 25%, 100% 25%, 100% 100%);
+}
+/* Stepped end for bars: the right end is a two-step staircase. */
+.step-end { clip-path: polygon(0 0, calc(100% - 6px) 0, calc(100% - 6px) 33%, calc(100% - 3px) 33%, calc(100% - 3px) 66%, 100% 66%, 100% 100%, 0 100%); }
+
+/* ---- buttons ------------------------------------------------------------------------------ */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: var(--r-m);
-  border: 1px solid var(--line); background: var(--ink-3); font-weight: 500;
-  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); height: 36px; padding: 0 14px; border-radius: var(--r-m);
+  border: 1px solid var(--line); background: var(--ink-3); font-weight: 500; white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .btn:hover:not(:disabled) { background: var(--ink-4); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--paper-dim); }
 .btn.ghost:hover:not(:disabled) { color: var(--paper); background: var(--ink-3); }
-.btn.accent { background: var(--mango); border-color: var(--mango); color: var(--mango-ink); font-weight: 700; }
-.btn.accent:hover:not(:disabled) { background: #ffbd57; }
+/* quiet text button: underline on hover, no box */
+.btn.text { background: none; border-color: transparent; padding: 0 4px; height: 28px; color: var(--paper-dim); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.btn.text:hover:not(:disabled) { background: none; color: var(--paper); text-decoration-color: var(--mango); }
+/* primary: notched, filled mango */
+.btn.accent {
+  --n: var(--notch-s);
+  background: var(--accent-fill); border-color: transparent; color: var(--on-fill); font-weight: 700; padding: 0 18px;
+  clip-path: polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+}
+.btn.accent:hover:not(:disabled) { background: var(--accent-fill-hover); }
+.btn.accent:focus-visible { outline: 2px solid var(--on-fill); outline-offset: -4px; border-radius: var(--r-m); }
 .btn.danger { color: var(--tomato); }
+.btn.danger:hover:not(:disabled) { border-color: var(--tomato); }
+.btn.small { height: 28px; padding: 0 10px; font-size: var(--fs-sm); }
 
+/* ---- inputs ------------------------------------------------------------------------------- */
 .field {
   height: 36px; padding: 0 12px; background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--r-m);
-  user-select: text; min-width: 0;
+  user-select: text; min-width: 0; transition: border-color var(--dur) var(--ease);
 }
-.field:focus-visible { outline-offset: 0; border-color: var(--mango); }
+.field:hover:not(:disabled) { border-color: var(--paper-mute); }
+.field:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
 .field[aria-invalid='true'] { border-color: var(--tomato); }
-.hint { color: var(--paper-mute); font-size: 13px; }
-.err { color: var(--tomato); font-size: 13px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: var(--r-s);
-  background: rgba(244, 241, 234, 0.08); border: 1px solid rgba(244, 241, 234, 0.12); font-size: 13px;
+.field::placeholder { color: var(--paper-mute); opacity: 1; }
+select.field {
+  appearance: none; padding-right: 32px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--paper-dim) 50%), linear-gradient(135deg, var(--paper-dim) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 15px, calc(100% - 12px) 15px; background-size: 5px 5px; background-repeat: no-repeat;
 }
-.chip svg { color: var(--paper-dim); }
-.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper-dim); font-weight: 600; }
+select.field option { background: var(--ink-2); color: var(--paper); }
+textarea.field { height: auto; padding: 8px 12px; }
 
-input[type='range'] { accent-color: var(--mango); width: 100%; }
+/* labels: mono, tabular, hairline box */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: var(--r-s);
+  background: transparent; border: 1px solid var(--line); font-size: var(--fs-sm); color: var(--paper-dim);
+}
+.chip svg { color: var(--paper-mute); }
+
+/* inline facts line: 1.21.4 / Fabric / 6 GB, separators are slashes drawn by CSS */
+.facts { display: flex; flex-wrap: wrap; align-items: center; list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--fs-md); }
+.facts li { display: inline-flex; align-items: center; gap: 6px; }
+.facts li + li::before { content: ''; width: 1px; height: 12px; margin: 0 12px; background: currentColor; opacity: 0.35; transform: skewX(-20deg); }
+
+/* status square: pixel-edged, never a circle */
+.sq { display: inline-block; width: 8px; height: 8px; flex: none; background: var(--paper-mute); }
+.sq.ok { background: var(--leaf); }
+.sq.bad { background: var(--tomato); }
+.sq.warn { background: var(--mango); }
+
+input[type='range'] { accent-color: var(--accent-fill); width: 100%; }
+input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-fill); }
+
+/* ---- toggle ------------------------------------------------------------------------------- */
 .switch { position: relative; width: 40px; height: 22px; flex: none; }
 .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.switch span { position: absolute; inset: 0; background: var(--ink-4); border: 1px solid var(--line); border-radius: 11px; transition: background var(--dur) var(--ease); pointer-events: none; }
-.switch span::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--paper-dim); transition: transform var(--dur) var(--ease); }
-.switch input:checked + span { background: var(--mango); border-color: var(--mango); }
-.switch input:checked + span::after { transform: translateX(18px); background: var(--mango-ink); }
-.switch input:focus-visible + span { outline: 2px solid var(--mango); outline-offset: 2px; }
+.switch span { position: absolute; inset: 0; background: var(--ink-4); border: 1px solid var(--line); border-radius: 4px; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); pointer-events: none; }
+.switch span::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 2px; background: var(--paper-dim); transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
+.switch input:checked + span { background: var(--accent-fill); border-color: var(--accent-fill); }
+.switch input:checked + span::after { transform: translateX(18px); background: var(--on-fill); }
+.switch input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.switch input:disabled + span { opacity: 0.45; }
+
+/* ---- tabs (underline, for page sections; Seg.svelte is the boxed control) ----------------- */
+.tabs { display: flex; gap: var(--s-5); border-bottom: 1px solid var(--line); }
+.tabs button, .tabs a { position: relative; padding: 10px 0; color: var(--paper-dim); font-weight: 500; }
+.tabs button:hover { color: var(--paper); }
+.tabs [aria-selected='true'], .tabs .on { color: var(--paper); }
+.tabs [aria-selected='true']::after, .tabs .on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--accent-fill); }
+
+/* ---- dropdown / menu ---------------------------------------------------------------------- */
+.pop {
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: var(--shadow-float);
+  animation: pop-in var(--dur) var(--ease);
+}
+.menu-list { list-style: none; margin: 0; padding: 4px; }
+.menu-list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: var(--r-s); text-align: left; }
+.menu-list button:hover, .menu-list button.cur { background: var(--ink-4); }
+.menu-list button:focus-visible { outline-offset: -2px; }
+
+/* ---- tooltip (see lib/tooltip.ts) --------------------------------------------------------- */
+.tooltip {
+  position: fixed; z-index: 400; pointer-events: none; max-width: 260px; padding: 6px 10px; border-radius: var(--r-s);
+  background: var(--paper); color: var(--ink-0); font-size: var(--fs-sm); font-weight: 500; line-height: 1.3;
+  opacity: 0; transform: translateX(-4px); transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.tooltip[data-open='true'] { opacity: 1; transform: none; }
+.tooltip[data-side='top'] { transform: translateY(4px); }
+.tooltip[data-side='top'][data-open='true'] { transform: none; }
+
+/* ---- skeletons: image-shaped, opacity pulse only ------------------------------------------ */
+.skel { background: var(--ink-3); animation: skel 1.4s ease-in-out infinite; }
+@keyframes skel { 50% { opacity: 0.45; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(4px); } }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 5px; border: 2px solid var(--ink-0); }
+::-webkit-scrollbar-thumb:hover { background: var(--line); }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }

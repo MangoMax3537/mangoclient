@@ -207,6 +207,37 @@ fn extract_overrides(pack: &Path, game_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// What a pack would install, read without touching an instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackSummary {
+    pub info: ModpackInfo,
+    /// Sum of the sizes of the files that would be downloaded.
+    pub download_bytes: u64,
+}
+
+/// Validate a downloaded `.mrpack` and summarize it. `scratch_root` is only
+/// used to check override paths; it does not have to exist and nothing is
+/// written there.
+pub fn inspect_pack(pack: &Path, scratch_root: &Path) -> Result<PackSummary> {
+    let index = read_pack(pack, scratch_root)?;
+    let files: Vec<&PackFile> = index
+        .files
+        .iter()
+        .filter(|f| f.env.as_ref().and_then(|e| e.client.as_deref()) != Some("unsupported"))
+        .collect();
+    let (loader, loader_version) = detect_loader(&index.dependencies);
+    Ok(PackSummary {
+        download_bytes: files.iter().filter_map(|f| f.file_size).sum(),
+        info: ModpackInfo {
+            name: index.name.clone(),
+            mc_version: index.dependencies.get("minecraft").cloned(),
+            loader,
+            loader_version,
+            file_count: files.len(),
+        },
+    })
+}
+
 /// Install a Modrinth modpack version into a profile's instance.
 pub async fn install_modpack(
     client: &Client,

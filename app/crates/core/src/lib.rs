@@ -11,7 +11,8 @@ pub mod validation;
 
 pub use error::{Error, Result};
 pub use model::{
-    Account, AccountType, Config, Loader, ModDependency, ModRecord, ModType, Profile, Session,
+    Account, AccountType, Config, Loader, ModDependency, ModRecord, ModType, Profile, Secret,
+    Session,
 };
 pub use paths::{validate_profile_id, Paths};
 pub use store::Store;

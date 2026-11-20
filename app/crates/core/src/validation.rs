@@ -105,6 +105,27 @@ fn enum_value(v: &Value, name: &str, values: &[&str]) -> R<Value> {
     }
 }
 
+/// A CurseForge API key: bcrypt-style characters, 16 to 128 long. `null` or an
+/// empty string clears it.
+fn api_key(v: &Value) -> R<Value> {
+    match v {
+        Value::Null => Ok(Value::Null),
+        Value::String(s) if s.trim().is_empty() => Ok(Value::Null),
+        Value::String(s) => {
+            let s = s.trim();
+            let ok = (16..=128).contains(&s.len())
+                && s.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"$./_+=-".contains(&b));
+            if ok {
+                Ok(json!(s))
+            } else {
+                Err(invalid("curseforgeApiKey"))
+            }
+        }
+        _ => Err(invalid("curseforgeApiKey")),
+    }
+}
+
 /// Validate a single config key; `None` when the key is unknown.
 pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
     Some(match key {
@@ -122,6 +143,7 @@ pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
             enum_value(v, "performancePreset", &["potato", "balanced", "quality"])
         }
         "selectedProfile" | "selectedAccount" => nullable_id(v, key),
+        "curseforgeApiKey" => api_key(v),
         _ => return None,
     })
 }
@@ -157,7 +179,7 @@ const MOD_STRING_KEYS: [&str; 8] = [
     "file",
     "icon",
 ];
-const MOD_KNOWN_KEYS: [&str; 16] = [
+const MOD_KNOWN_KEYS: [&str; 17] = [
     "projectId",
     "slug",
     "title",
@@ -174,6 +196,7 @@ const MOD_KNOWN_KEYS: [&str; 16] = [
     "gameVersions",
     "loaders",
     "requiredDependencies",
+    "provider",
 ];
 
 /// Validate one mod record. Unknown keys are dropped.
@@ -199,6 +222,12 @@ pub fn validate_mod(v: &Value) -> R<Map<String, Value>> {
                 "mod type",
                 &["mod", "shader", "resourcepack", "datapack"],
             )?,
+        );
+    }
+    if let Some(x) = get("provider") {
+        clean.insert(
+            "provider".into(),
+            enum_value(x, "mod provider", &["modrinth", "curseforge"])?,
         );
     }
     for key in ["enabled", "dependency", "local"] {
@@ -412,5 +441,44 @@ mod tests {
         assert!(profile_patch(&json!({"session": {"pid": 0}})).is_err());
         assert!(profile_patch(&json!({"session": {"pid": 5}})).is_ok());
         assert!(profile_patch(&json!({"session": null})).is_ok());
+    }
+
+    #[test]
+    fn curseforge_key_is_validated_and_cleared_by_empty() {
+        let good = "$2a$10$abcdefghijklmnopqrstuv.wxyz0123456789";
+        let p = config_patch(&json!({"curseforgeApiKey": format!(" {good} ")})).unwrap();
+        assert_eq!(p["curseforgeApiKey"], json!(good));
+        for clear in [json!(""), json!("  "), Value::Null] {
+            let p = config_patch(&json!({"curseforgeApiKey": clear})).unwrap();
+            assert!(p["curseforgeApiKey"].is_null());
+        }
+        for bad in [
+            json!("short"),
+            json!("has space 0123456789abcdef"),
+            json!(5),
+            json!("a\"b0123456789abcdef"),
+        ] {
+            assert!(
+                config_patch(&json!({"curseforgeApiKey": bad})).is_err(),
+                "{bad}"
+            );
+        }
+        let mut c = crate::Config::with_total_ram(8192);
+        c.apply_patch(&json!({"curseforgeApiKey": good})).unwrap();
+        assert_eq!(c.curseforge_api_key.as_ref().unwrap().expose(), good);
+        assert!(!format!("{c:?}").contains("abcdefgh"));
+        c.apply_patch(&json!({"curseforgeApiKey": null})).unwrap();
+        assert!(c.curseforge_api_key.is_none());
+    }
+
+    #[test]
+    fn mod_provider_survives_validation_and_rejects_unknown_values() {
+        let m = validate_mod(&json!({"projectId": "1", "provider": "curseforge"})).unwrap();
+        assert_eq!(m["provider"], json!("curseforge"));
+        assert!(validate_mod(&json!({"projectId": "1", "provider": "gitlab"})).is_err());
+        let mods = validate_mods(&json!([{"projectId": "1", "provider": "modrinth"}])).unwrap();
+        assert_eq!(mods[0].provider.as_deref(), Some("modrinth"));
+        let legacy = validate_mods(&json!([{"projectId": "1"}])).unwrap();
+        assert!(legacy[0].provider.is_none());
     }
 }

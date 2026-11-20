@@ -8,7 +8,7 @@ use crate::error::{AppError, Res};
 use crate::events::{Event, InstallProgressEvent};
 use crate::image_protocol::remote_url;
 use crate::models::{
-    ContentItem, ProjectDetail, ProjectHit, ProjectVersion, SearchParams, SearchResult,
+    ContentItem, ProjectDetail, ProjectHit, ProjectVersion, Provider, SearchParams, SearchResult,
     ToggleResult, UninstallResult, UpdateInfo,
 };
 use crate::service::{lock, AppService, Inner};
@@ -20,8 +20,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-const PROJECT_TYPES: [&str; 5] = ["mod", "shader", "resourcepack", "datapack", "modpack"];
-const SORTS: [&str; 5] = ["relevance", "downloads", "follows", "newest", "updated"];
+pub(crate) const PROJECT_TYPES: [&str; 5] =
+    ["mod", "shader", "resourcepack", "datapack", "modpack"];
 const HIT_LOADERS: [&str; 9] = [
     "fabric",
     "quilt",
@@ -35,7 +35,7 @@ const HIT_LOADERS: [&str; 9] = [
 ];
 
 /// Modrinth ids and slugs: `[A-Za-z0-9_-]{1,64}`.
-fn valid_project_ref(s: &str) -> bool {
+pub(crate) fn valid_project_ref(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 64
         && s.bytes()
@@ -71,6 +71,7 @@ fn to_item(rec: &ModRecord, all: &[ModRecord], newer: Option<&String>) -> Conten
         })
         .unwrap_or_default();
     ContentItem {
+        provider: Provider::of_record(rec),
         project_id: pid.to_string(),
         slug: rec.slug.clone().filter(|s| !s.is_empty()),
         title: rec
@@ -109,13 +110,13 @@ impl AppService {
             .ok_or_else(AppError::profile_not_found)
     }
 
-    fn save_mods(&self, id: &str, mods: &[ModRecord]) -> Res<()> {
+    pub(crate) fn save_mods(&self, id: &str, mods: &[ModRecord]) -> Res<()> {
         self.inner
             .with_store(|s| s.update_profile(id, &json!({ "mods": mods })).map(|_| ()))?;
         Ok(())
     }
 
-    fn items(&self, profile_id: &str, mods: &[ModRecord]) -> Vec<ContentItem> {
+    pub(crate) fn items(&self, profile_id: &str, mods: &[ModRecord]) -> Vec<ContentItem> {
         let updates = lock(&self.inner.updates)
             .get(profile_id)
             .cloned()
@@ -163,8 +164,13 @@ impl AppService {
             }
             (out, vec![project_id.clone()])
         } else {
-            let outcome =
-                modrinth::toggle(&self.inner.modrinth, &mods, &project_id, enabled).await?;
+            let outcome = modrinth::toggle(
+                &self.inner.modrinth,
+                &shield_foreign(&mods),
+                &project_id,
+                enabled,
+            )
+            .await?;
             (
                 outcome.mods,
                 outcome.affected.into_iter().map(|a| a.project_id).collect(),
@@ -186,7 +192,12 @@ impl AppService {
         if !profile.mods.iter().any(|r| record_pid(r) == project_id) {
             return Err(content_not_found());
         }
-        let outcome = modrinth::uninstall(&self.inner.modrinth, &profile.mods, &project_id).await?;
+        let outcome = modrinth::uninstall(
+            &self.inner.modrinth,
+            &shield_foreign(&profile.mods),
+            &project_id,
+        )
+        .await?;
         let (blocked, dependents, mods) = match outcome {
             modrinth::UninstallOutcome::Blocked { dependents, mods } => (
                 true,
@@ -212,15 +223,30 @@ impl AppService {
 
     pub async fn content_check_updates(&self, profile_id: String) -> Res<Vec<UpdateInfo>> {
         let mut profile = self.profile(&profile_id)?;
+        // Modrinth's checker only ever sees Modrinth records (it would ask
+        // Modrinth about CurseForge file ids otherwise).
+        let mut mr_profile = profile.clone();
+        mr_profile.mods = profile
+            .mods
+            .iter()
+            .filter(|r| !is_curseforge(r))
+            .cloned()
+            .collect();
         // Backfill dependency metadata once and keep it, so later checks and
         // toggles do not have to ask Modrinth again.
         let hydrated =
-            modrinth::hydrate_dependency_metadata(&self.inner.modrinth, &profile.mods).await?;
+            modrinth::hydrate_dependency_metadata(&self.inner.modrinth, &mr_profile.mods).await?;
         if hydrated.changed {
-            self.save_mods(&profile_id, &hydrated.mods)?;
-            profile.mods = hydrated.mods;
+            let mut fresh = hydrated.mods.iter();
+            for rec in profile.mods.iter_mut().filter(|r| !is_curseforge(r)) {
+                if let Some(h) = fresh.next() {
+                    *rec = h.clone();
+                }
+            }
+            self.save_mods(&profile_id, &profile.mods)?;
+            mr_profile.mods = hydrated.mods;
         }
-        let found = modrinth::check_updates(&self.inner.modrinth, &profile).await?;
+        let found = modrinth::check_updates(&self.inner.modrinth, &mr_profile).await?;
         let mut newer = HashMap::new();
         let mut out = Vec::new();
         for u in found {
@@ -230,6 +256,7 @@ impl AppService {
                 }
             }
             out.push(UpdateInfo {
+                provider: Some(Provider::Modrinth),
                 project_id: u.project_id,
                 title: u.title,
                 kind: u.kind,
@@ -240,6 +267,10 @@ impl AppService {
                 conflict: u.conflict,
                 required_by: u.required_by.into_iter().map(|r| r.project_id).collect(),
             });
+        }
+        for u in self.check_curseforge_updates(&profile).await {
+            newer.insert(u.project_id.clone(), u.to.clone());
+            out.push(u);
         }
         lock(&self.inner.updates).insert(profile_id, newer);
         Ok(out)
@@ -252,224 +283,30 @@ impl AppService {
         Ok(dir.display().to_string())
     }
 
-    // ---- Modrinth browsing ----
+    // ---- Modrinth browsing (deprecated aliases of the provider commands) ----
 
+    /// Deprecated alias of [`AppService::search_projects`].
     pub async fn modrinth_search(&self, params: SearchParams) -> Res<SearchResult> {
-        if !PROJECT_TYPES.contains(&params.project_type.as_str()) {
-            return Err(AppError::validation("Unknown project type"));
-        }
-        if !SORTS.contains(&params.sort.as_str()) {
-            return Err(AppError::validation("Unknown sort order"));
-        }
-        let loader = params.loader.filter(|l| !l.is_empty());
-        if let Some(l) = &loader {
-            if mango_loaders::Loader::parse(l).is_none() {
-                return Err(AppError::validation("Invalid loader"));
-            }
-        }
-        let query = modrinth::SearchParams {
-            query: params.query.chars().take(200).collect(),
-            // No loader means no loader facet ("vanilla").
-            loader: loader.unwrap_or_else(|| "vanilla".into()),
-            game_version: params.mc_version.unwrap_or_default(),
-            project_type: params.project_type,
-            categories: params
-                .categories
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|c| valid_project_ref(c))
-                .take(16)
-                .collect(),
-            limit: params.limit.clamp(1, 100),
-            offset: params.offset,
-            index: params.sort,
-            open_source_only: false,
-        };
-        let raw = self.inner.modrinth.search(&query).await?;
-        let installed = self.installed_index();
-        let hits = raw
-            .get("hits")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(|h| hit_from_search(h, &installed))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok(SearchResult {
-            hits,
-            total: raw.get("total_hits").and_then(Value::as_u64).unwrap_or(0),
-            offset: raw.get("offset").and_then(Value::as_u64).unwrap_or(0),
+        self.search_projects(SearchParams {
+            provider: Provider::Modrinth,
+            ..params
         })
+        .await
     }
 
-    /// project id -> profile ids that have it installed.
-    fn installed_index(&self) -> HashMap<String, Vec<String>> {
-        self.inner.with_store(|s| {
-            let mut index: HashMap<String, Vec<String>> = HashMap::new();
-            for p in &s.profiles {
-                for m in &p.mods {
-                    if let Some(id) = m.project_id.as_deref().filter(|i| !i.starts_with("local:")) {
-                        index.entry(id.to_string()).or_default().push(p.id.clone());
-                    }
-                }
-            }
-            index
-        })
-    }
-
+    /// Deprecated alias of [`AppService::project_detail`].
     pub async fn modrinth_project(&self, project_id: String) -> Res<ProjectDetail> {
-        if !valid_project_ref(&project_id) {
-            return Err(AppError::validation("Invalid project id"));
-        }
-        let project = self.inner.modrinth.project(&project_id).await?;
-        let x = &project.extra;
-        let str_of = |k: &str| x.get(k).and_then(Value::as_str).map(str::to_string);
-        let strings = |k: &str| -> Vec<String> {
-            x.get(k)
-                .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        let author = self.project_author(&project.id).await;
-        let installed = self.installed_index();
-        let hit = ProjectHit {
-            project_id: project.id.clone(),
-            slug: project.slug.clone(),
-            title: project.title.clone(),
-            author,
-            description: str_of("description").unwrap_or_default(),
-            kind: project.project_type.clone(),
-            icon_url: project.icon_url.as_deref().and_then(public_icon),
-            downloads: x.get("downloads").and_then(Value::as_u64).unwrap_or(0),
-            follows: x.get("followers").and_then(Value::as_u64).unwrap_or(0),
-            categories: strings("categories"),
-            game_versions: strings("game_versions"),
-            loaders: strings("loaders"),
-            date_modified: str_of("updated").unwrap_or_default(),
-            installed_in: installed.get(&project.id).cloned().unwrap_or_default(),
-        };
-        let gallery = x
-            .get("gallery")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(|g| g.get("url").and_then(Value::as_str))
-                    .filter_map(public_icon)
-                    .collect()
-            })
-            .unwrap_or_default();
-        let license = x.get("license").and_then(|l| {
-            l.get("name")
-                .or_else(|| l.get("id"))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
-        });
-        Ok(ProjectDetail {
-            hit,
-            body: str_of("body").unwrap_or_default(),
-            gallery,
-            license,
-            source_url: str_of("source_url")
-                .filter(|u| mango_mango::security::is_allowed_external_url(u)),
-            issues_url: str_of("issues_url")
-                .filter(|u| mango_mango::security::is_allowed_external_url(u)),
-        })
+        self.project_detail(Provider::Modrinth, project_id).await
     }
 
-    /// Owner's name (`/project/<id>/members`); empty when unavailable. The
-    /// crate has no members call, so this uses the shared HTTP layer.
-    async fn project_author(&self, project_id: &str) -> String {
-        let url = format!(
-            "{}/project/{project_id}/members",
-            self.inner.modrinth.base()
-        );
-        let members: Vec<Value> = mango_net::get_json(&url, &self.inner.opts.fetch)
-            .await
-            .unwrap_or_default();
-        let name = |m: &Value| {
-            m.pointer("/user/username")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        };
-        members
-            .iter()
-            .find(|m| m.get("role").and_then(Value::as_str) == Some("Owner"))
-            .and_then(name)
-            .or_else(|| members.first().and_then(name))
-            .unwrap_or_default()
-    }
-
+    /// Deprecated alias of [`AppService::project_versions`].
     pub async fn modrinth_versions(
         &self,
         project_id: String,
         profile_id: Option<String>,
     ) -> Res<Vec<ProjectVersion>> {
-        if !valid_project_ref(&project_id) {
-            return Err(AppError::validation("Invalid project id"));
-        }
-        let profile = match profile_id {
-            Some(id) => Some(self.profile(&id)?),
-            None => None,
-        };
-        let versions = self
-            .inner
-            .modrinth
-            .versions(&project_id, None, None)
-            .await?;
-        // Loaders only matter for mods; shaders and packs match on the game version.
-        let loader_matters = match &profile {
-            Some(_) => {
-                let kind = self.inner.modrinth.project(&project_id).await?.project_type;
-                kind == "mod"
-            }
-            None => false,
-        };
-        let mut out: Vec<ProjectVersion> = versions
-            .into_iter()
-            .map(|v| {
-                let compatible = profile.as_ref().is_none_or(|p| {
-                    let mc = v.game_versions.contains(&p.mc_version);
-                    let loader = !loader_matters
-                        || p.loader == mango_core::Loader::Vanilla
-                        || loader_accepts(modrinth::loader_name(p.loader), &v.loaders);
-                    mc && loader
-                });
-                ProjectVersion {
-                    version_id: v.id,
-                    version_number: v.version_number,
-                    name: v.name,
-                    kind: match v.version_type.as_str() {
-                        "beta" => "beta",
-                        "alpha" => "alpha",
-                        _ => "release",
-                    }
-                    .to_string(),
-                    game_versions: v.game_versions,
-                    loaders: v.loaders,
-                    date_published: v.date_published,
-                    downloads: v
-                        .extra
-                        .get("downloads")
-                        .and_then(Value::as_u64)
-                        .unwrap_or(0),
-                    compatible,
-                }
-            })
-            .collect();
-        // Compatible builds first, newest first inside each group.
-        out.sort_by(|a, b| {
-            b.compatible
-                .cmp(&a.compatible)
-                .then_with(|| b.date_published.cmp(&a.date_published))
-        });
-        Ok(out)
+        self.project_versions(Provider::Modrinth, project_id, profile_id)
+            .await
     }
 
     pub async fn modrinth_install(
@@ -648,13 +485,32 @@ impl AppService {
     }
 }
 
+pub(crate) fn is_curseforge(r: &ModRecord) -> bool {
+    r.provider.as_deref() == Some("curseforge")
+}
+
+/// A copy of the list in which CurseForge records carry an (empty) dependency
+/// list when they have none stored, so Modrinth's metadata backfill never asks
+/// Modrinth about CurseForge ids.
+pub(crate) fn shield_foreign(mods: &[ModRecord]) -> Vec<ModRecord> {
+    mods.iter()
+        .cloned()
+        .map(|mut r| {
+            if is_curseforge(&r) && r.required_dependencies.is_none() {
+                r.required_dependencies = Some(Vec::new());
+            }
+            r
+        })
+        .collect()
+}
+
 fn content_not_found() -> AppError {
     AppError::new("content_not_found", "That content is not installed")
 }
 
 /// Does a version built for `loaders` run on `loader`? Quilt also loads Fabric
 /// mods, NeoForge also loads (older) Forge ones.
-fn loader_accepts(loader: &str, loaders: &[String]) -> bool {
+pub(crate) fn loader_accepts(loader: &str, loaders: &[String]) -> bool {
     let has = |l: &str| loaders.iter().any(|x| x == l);
     match loader {
         "quilt" => has("quilt") || has("fabric"),
@@ -663,7 +519,10 @@ fn loader_accepts(loader: &str, loaders: &[String]) -> bool {
     }
 }
 
-fn hit_from_search(h: &Value, installed: &HashMap<String, Vec<String>>) -> Option<ProjectHit> {
+pub(crate) fn hit_from_search(
+    h: &Value,
+    installed: &HashMap<String, Vec<String>>,
+) -> Option<ProjectHit> {
     let s = |k: &str| {
         h.get(k)
             .and_then(Value::as_str)
@@ -700,6 +559,7 @@ fn hit_from_search(h: &Value, installed: &HashMap<String, Vec<String>>) -> Optio
         _ => "mod",
     };
     Some(ProjectHit {
+        provider: Provider::Modrinth,
         installed_in: installed.get(&project_id).cloned().unwrap_or_default(),
         project_id,
         slug: s("slug"),
@@ -722,14 +582,14 @@ fn hit_from_search(h: &Value, installed: &HashMap<String, Vec<String>>) -> Optio
 
 /// Emits `install:progress` for one install operation.
 #[derive(Clone)]
-struct InstallReporter {
+pub(crate) struct InstallReporter {
     inner: Arc<Inner>,
     profile_id: String,
     project_id: String,
 }
 
 impl InstallReporter {
-    fn new(inner: &Arc<Inner>, profile_id: &str, project_id: &str) -> Self {
+    pub(crate) fn new(inner: &Arc<Inner>, profile_id: &str, project_id: &str) -> Self {
         InstallReporter {
             inner: Arc::clone(inner),
             profile_id: profile_id.to_string(),
@@ -748,12 +608,12 @@ impl InstallReporter {
             }));
     }
 
-    fn emit(&self, done: u64, total: u64, label: &str) {
+    pub(crate) fn emit(&self, done: u64, total: u64, label: &str) {
         self.send(done, total, label);
     }
 
     /// At most 10 per second; the last one (done == total) always passes.
-    fn emit_throttled(&self, done: u64, total: u64, label: &str) {
+    pub(crate) fn emit_throttled(&self, done: u64, total: u64, label: &str) {
         let key = format!("install:{}", self.profile_id);
         let due = lock(&self.inner.throttle).ready(&key, done >= total, Instant::now());
         if due {

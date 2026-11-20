@@ -6,9 +6,41 @@ use serde::{Deserialize, Serialize};
 /// `mod | shader | resourcepack | datapack`. Shares the stored type's names.
 pub type ContentType = ModType;
 
+/// Where a project comes from. A project id is only unique together with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    #[default]
+    Modrinth,
+    Curseforge,
+}
+
+impl Provider {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Provider::Modrinth => "modrinth",
+            Provider::Curseforge => "curseforge",
+        }
+    }
+
+    /// The provider a stored record belongs to. Records written before
+    /// providers existed (no `provider`) are Modrinth's. Local jars have none.
+    pub fn of_record(rec: &mango_core::ModRecord) -> Option<Provider> {
+        if rec.local == Some(true) {
+            return None;
+        }
+        Some(match rec.provider.as_deref() {
+            Some("curseforge") => Provider::Curseforge,
+            _ => Provider::Modrinth,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentItem {
+    /// `null` = local jar.
+    pub provider: Option<Provider>,
     pub project_id: String,
     pub slug: Option<String>,
     pub title: String,
@@ -30,6 +62,7 @@ pub struct ContentItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectHit {
+    pub provider: Provider,
     pub project_id: String,
     pub slug: String,
     pub title: String,
@@ -72,6 +105,7 @@ pub struct SearchResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectVersion {
+    pub provider: Provider,
     pub version_id: String,
     pub version_number: String,
     pub name: String,
@@ -88,6 +122,8 @@ pub struct ProjectVersion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
+    /// `null` = local jar (never reported, kept for the shared shape).
+    pub provider: Option<Provider>,
     pub project_id: String,
     pub title: String,
     #[serde(rename = "type")]
@@ -122,6 +158,9 @@ pub struct UninstallResult {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchParams {
+    /// The source; Modrinth when omitted.
+    #[serde(default)]
+    pub provider: Provider,
     #[serde(default)]
     pub query: String,
     /// A content type or `modpack`.
@@ -383,4 +422,122 @@ impl From<&mango_updater::UpdateStatus> for UpdateStatus {
             },
         }
     }
+}
+
+// ---------- Part 4: providers, install planning, modpacks ----------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusReason {
+    NoApiKey,
+    Offline,
+    Disabled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderStatus {
+    pub provider: Provider,
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<StatusReason>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetState {
+    Available,
+    Installed,
+    Incompatible,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetReason {
+    Loader,
+    McVersion,
+    ContentType,
+    NoCompatibleVersion,
+    DistributionBlocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallTarget {
+    pub profile_id: String,
+    pub state: TargetState,
+    pub installed_version: Option<String>,
+    pub reason: Option<TargetReason>,
+    pub detail: Option<String>,
+    pub required_deps: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanRole {
+    Requested,
+    Required,
+    Optional,
+    Incompatible,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallPlanItem {
+    pub provider: Provider,
+    pub project_id: String,
+    pub version_id: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub kind: ContentType,
+    pub icon_url: Option<String>,
+    pub role: PlanRole,
+    pub already_installed: bool,
+    pub installed_version: Option<String>,
+    pub distribution_blocked: bool,
+    pub size_bytes: Option<u64>,
+    /// Only set when `distribution_blocked`: the page the user must use.
+    pub download_url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanConflict {
+    pub project_id: String,
+    pub title: String,
+    /// Title of the item that declares the incompatibility.
+    pub with: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallPlan {
+    pub profile_id: String,
+    pub items: Vec<InstallPlanItem>,
+    /// Bytes the default selection would download (requested + required items
+    /// that are not installed yet, minus blocked ones).
+    pub total_bytes: u64,
+    pub conflicts: Vec<PlanConflict>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BlockedFile {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackPlan {
+    pub provider: Provider,
+    pub project_id: String,
+    pub version_id: String,
+    pub name: String,
+    pub mc_version: String,
+    pub loader: mango_core::Loader,
+    pub loader_version: Option<String>,
+    pub file_count: u64,
+    pub size_bytes: Option<u64>,
+    pub icon_url: Option<String>,
+    pub blocked_files: Vec<BlockedFile>,
 }

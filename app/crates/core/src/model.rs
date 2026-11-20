@@ -32,6 +32,28 @@ pub fn total_ram_mb() -> u64 {
     8192
 }
 
+/// A string that never shows up in `Debug` output (API keys). Serializes as a
+/// plain string so it can live in `config.json`.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(String);
+
+impl Secret {
+    pub fn new(value: impl Into<String>) -> Self {
+        Secret(value.into())
+    }
+
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret(<redacted>)")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -55,6 +77,9 @@ pub struct Config {
     pub selected_account: Option<String>,
     pub first_run_done: bool,
     pub telemetry: bool,
+    /// Optional CurseForge API key supplied by the user. Never sent to the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curseforge_api_key: Option<Secret>,
 }
 
 impl Config {
@@ -80,6 +105,7 @@ impl Config {
             selected_account: None,
             first_run_done: false,
             telemetry: true,
+            curseforge_api_key: None,
         }
     }
 
@@ -185,6 +211,10 @@ pub struct ModRecord {
     pub loaders: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_dependencies: Option<Vec<ModDependency>>,
+    /// `modrinth` or `curseforge`. Absent means `modrinth` (records written
+    /// before providers existed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }

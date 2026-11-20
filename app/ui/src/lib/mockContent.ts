@@ -1,6 +1,6 @@
 // Part 2 of the mock backend: content, discover, servers, media, logs, stats, storage, updates (docs/ipc.md Part 2).
 import type { Api } from './api';
-import { fallbackImage, heroFallback } from './fallbackImage';
+import { fallbackImage } from './fallbackImage';
 import { CONTENT, DEPS, FULL_PROFILE, rng, rowOf, TABLES, titleOf } from './mockData';
 import type {
   ApiEvents, ContentItem, ContentType, LogEntry, ProfileView, ProjectDetail, ProjectHit, ProjectType, ProjectVersion, Screenshot,
@@ -159,7 +159,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
         const pad = (x: number) => String(x).padStart(2, '0');
         return {
           name: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(20 - (i % 5))}.${pad(4 + i * 3)}.${pad(10 + i)}.png`,
-          size: 1_400_000 + i * 91_000, taken: d.getTime(), url: heroFallback(),
+          size: 1_400_000 + i * 91_000, taken: d.getTime(), url: fallbackImage('profile', `shot-${i}`, 256),
         };
       });
       shots.set(profileId, l);
@@ -282,7 +282,7 @@ export function createContentApi(ctx: MockCtx): Part2 {
       const hit = toHit(projectId, now);
       const body = `# ${hit.title}\n\n${hit.description}\n\n## Features\n\n- Works with **Fabric** and Quilt\n- Tuned for \`${hit.gameVersions[0]}\`\n- Configurable in game\n\n## Notes\n\nThis is mock data. HTML such as <script>alert(1)</script> or <img src=x onerror=alert(1)> and [links](https://example.com) are shown as plain text.\n\n\`\`\`\nrequires: java >= 21\n\`\`\`\n`;
       return {
-        ...hit, body, gallery: [heroFallback(), fallbackImage('profile', `${projectId}-a`), fallbackImage('profile', `${projectId}-b`)],
+        ...hit, body, gallery: [fallbackImage('profile', `${projectId}-g`, 256), fallbackImage('profile', `${projectId}-a`), fallbackImage('profile', `${projectId}-b`)],
         license: hit.type === 'shader' ? 'Custom' : 'LGPL-3.0-only', sourceUrl: `https://github.com/example/${projectId}`, issuesUrl: `https://github.com/example/${projectId}/issues`,
       };
     },

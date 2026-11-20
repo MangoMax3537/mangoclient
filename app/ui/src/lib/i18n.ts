@@ -1,5 +1,6 @@
 import { de2, en2 } from './i18n2';
 import { de3, en3 } from './i18n3';
+import { de4, en4 } from './i18n4';
 
 export type Lang = 'de' | 'en';
 
@@ -53,6 +54,7 @@ const en = {
   'time.justNow': 'just now',
   ...en2,
   ...en3,
+  ...en4,
 } as const;
 
 export type Key = keyof typeof en;
@@ -109,6 +111,7 @@ const de: Record<Key, string> = {
   'time.justNow': 'gerade eben',
   ...de2,
   ...de3,
+  ...de4,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };

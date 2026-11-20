@@ -62,10 +62,10 @@ function seedProfiles(now: number): ProfileView[] {
 }
 
 const seedAccounts = (now: number, o: MockOptions): PublicAccount[] => [
-  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', hasCape: true, headUrl: fallbackImage('account', 'b0b7'),
+  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', hasCape: true, headUrl: fallbackImage('account', ''),
     expiresAt: o.needsRelogin ? now - 3600000 : now + 20 * 3600000, expired: !!o.needsRelogin, needsRelogin: !!o.needsRelogin,
     credentialsPersisted: !o.noKeystore, credentialsLocked: !!o.locked },
-  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', '5d2e'),
+  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', ''),
     credentialsPersisted: true, credentialsLocked: false, needsRelogin: false },
 ];
 
@@ -166,7 +166,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
     },
     async accountAddOffline({ name }) {
       if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) throw { code: 'invalid_name', message: 'invalid name', needsRelogin: false };
-      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', name),
+      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', ''),
         credentialsPersisted: true, credentialsLocked: false, needsRelogin: false };
       accounts = [...accounts, a];
       if (!config.selectedAccount) config.selectedAccount = a.uuid;
@@ -188,7 +188,7 @@ export function createMockApi(opts: MockOptions = {}): Api {
       const stale = accounts.find((a) => a.type === 'microsoft' && (a.needsRelogin || a.expired));
       const base = stale ?? {
         uuid: '7c1d4e90-3b52-4a8f-a6e7-2d9b0c5f8a14', name: 'CreeperKing', type: 'microsoft' as const, hasCape: false,
-        headUrl: fallbackImage('account', '7c1d'), credentialsLocked: false,
+        headUrl: fallbackImage('account', ''), credentialsLocked: false,
       };
       const a: PublicAccount = {
         ...base, expiresAt: Date.now() + 24 * 3600000, expired: false, needsRelogin: false, credentialsLocked: false,
