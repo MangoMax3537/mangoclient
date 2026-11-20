@@ -444,8 +444,13 @@ impl GameInstance {
 
     /// Ask the game to terminate. Refuses a pid that is not verifiably Java.
     pub fn stop(&self) -> Result<()> {
-        terminate_java(self.inner.pid)?;
+        // Set the flag first: the exit watcher can observe the exit before
+        // this method returns, and a requested stop must never read as a crash.
         self.inner.stop_requested.store(true, Ordering::SeqCst);
+        if let Err(e) = terminate_java(self.inner.pid) {
+            self.inner.stop_requested.store(false, Ordering::SeqCst);
+            return Err(e);
+        }
         Ok(())
     }
 

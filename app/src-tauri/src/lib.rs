@@ -1,24 +1,25 @@
 //! Thin Tauri shell: one command per entry of `docs/ipc.md`, each forwarding to
 //! the managed `mango_app::AppService`. No logic lives here.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use mango_app::image_protocol::Image;
 use mango_app::{
     AppError, AppService, AppState, ClipboardImage, ConfigView, ContentItem, ContentType, Event,
-    EventSink, Host, LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, ProfileView,
-    ProjectDetail, ProjectVersion, PublicAccount, Screenshot, ScreenshotAction, SearchParams,
-    SearchResult, ServerEntry, ServerStatus, ServiceOptions, StatsSummary, StorageKey,
-    StorageUsage, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus, VersionManifest,
+    EventSink, Host, LaunchResult, LoaderVersion, LogEntry, LogText, LogUpload, LoginOutcome,
+    LoginWindow, ProfileView, ProjectDetail, ProjectVersion, PublicAccount, Screenshot,
+    ScreenshotAction, SearchParams, SearchResult, ServerEntry, ServerStatus, ServiceOptions,
+    StatsSummary, StorageKey, StorageUsage, ToggleResult, UninstallResult, UpdateInfo,
+    UpdateStatus, VersionManifest,
 };
 use mango_core::Paths;
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
-/// Emits the service events (`launch:*`, `install:progress`, `servers:pinged`,
+/// Emits the service events (`accounts:changed`, `launch:*`, `install:progress`, `servers:pinged`,
 /// `update:status`, `content:changed`).
 struct TauriSink(AppHandle);
 
@@ -91,6 +92,16 @@ async fn account_remove(svc: Svc<'_>, uuid: String) -> Res<()> {
 #[tauri::command]
 async fn account_sign_in_microsoft(svc: Svc<'_>) -> Res<Option<PublicAccount>> {
     svc.account_sign_in_microsoft().await
+}
+
+#[tauri::command]
+async fn account_refresh(svc: Svc<'_>, uuid: String) -> Res<PublicAccount> {
+    svc.account_refresh(uuid).await
+}
+
+#[tauri::command]
+async fn open_external(svc: Svc<'_>, url: String) -> Res<()> {
+    svc.open_external(url)
 }
 
 #[tauri::command]
@@ -324,6 +335,93 @@ impl ClipboardImage for TauriClipboard {
     }
 }
 
+// ---- Microsoft sign-in window ----
+
+const LOGIN_LABEL: &str = "ms-login";
+
+type Outcome = Arc<Mutex<Option<tokio::sync::oneshot::Sender<LoginOutcome>>>>;
+
+/// First outcome wins; later ones (window destroyed after a redirect, ...)
+/// are dropped.
+fn resolve(tx: &Outcome, outcome: LoginOutcome) {
+    let sender = tx.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(sender) = sender {
+        let _ = sender.send(outcome);
+    }
+}
+
+/// Isolated sign-in window: non-persistent data store, no devtools, no IPC
+/// (the window label is not listed in any capability), navigation limited to
+/// the Microsoft hosts by `mango_app::login_navigation_allowed`.
+struct TauriLogin(AppHandle);
+
+#[async_trait::async_trait]
+impl LoginWindow for TauriLogin {
+    async fn authorize(&self, authorize_url: &str, redirect_prefix: &str) -> LoginOutcome {
+        let Ok(url) = authorize_url.parse::<tauri::Url>() else {
+            return LoginOutcome::Error("invalid sign-in URL".into());
+        };
+        if !mango_app::login_navigation_allowed(authorize_url) {
+            return LoginOutcome::Error("sign-in URL is not allowed".into());
+        }
+        // A stale window from an earlier attempt must not linger.
+        if let Some(old) = self.0.get_webview_window(LOGIN_LABEL) {
+            let _ = old.destroy();
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel::<LoginOutcome>();
+        let tx: Outcome = Arc::new(Mutex::new(Some(tx)));
+
+        let nav_tx = tx.clone();
+        let prefix = redirect_prefix.to_string();
+        let built = WebviewWindowBuilder::new(&self.0, LOGIN_LABEL, WebviewUrl::External(url))
+            .title("Microsoft sign-in")
+            .inner_size(480.0, 680.0)
+            .center()
+            .incognito(true)
+            .devtools(false)
+            .on_navigation(move |target| {
+                let target = target.as_str();
+                if mango_app::is_login_redirect(target, &prefix) {
+                    // Hand the redirect to the service and never load it.
+                    resolve(&nav_tx, LoginOutcome::Code(target.to_string()));
+                    return false;
+                }
+                mango_app::login_navigation_allowed(target)
+            })
+            .build();
+        let window = match built {
+            Ok(w) => w,
+            Err(e) => return LoginOutcome::Error(e.to_string()),
+        };
+        let close_tx = tx.clone();
+        window.on_window_event(move |event| {
+            if matches!(event, WindowEvent::Destroyed) {
+                resolve(&close_tx, LoginOutcome::Cancelled);
+            }
+        });
+
+        let outcome = rx.await.unwrap_or(LoginOutcome::Cancelled);
+        // Closes the window after a redirect; a no-op when the user did.
+        if let Some(w) = self.0.get_webview_window(LOGIN_LABEL) {
+            let _ = w.destroy();
+        }
+        outcome
+    }
+}
+
+/// Opens help links with the OS default browser. Policy is enforced by
+/// `AppService::open_external`.
+struct TauriExternal;
+
+impl mango_app::ExternalOpener for TauriExternal {
+    fn open_url(&self, url: &str) -> Result<(), String> {
+        <mango_app::SystemExternal as mango_app::ExternalOpener>::open_url(
+            &mango_app::SystemExternal { enabled: true },
+            url,
+        )
+    }
+}
+
 fn http_response(status: u16, mime: &str, body: Vec<u8>) -> tauri::http::Response<Vec<u8>> {
     tauri::http::Response::builder()
         .status(status)
@@ -376,8 +474,10 @@ pub fn run() {
                 }
             }
             let sink = Arc::new(TauriSink(app.handle().clone()));
-            let host =
-                Host::system(true).with_clipboard(Arc::new(TauriClipboard(app.handle().clone())));
+            let host = Host::system(true)
+                .with_clipboard(Arc::new(TauriClipboard(app.handle().clone())))
+                .with_login(Arc::new(TauriLogin(app.handle().clone())))
+                .with_external(Arc::new(TauriExternal));
             let svc = AppService::with_host(Paths::from_env(), sink, opts, host)?;
             app.manage(svc.clone());
             // Telemetry, update checks and the mods/ watcher need a tokio
@@ -397,6 +497,8 @@ pub fn run() {
             account_select,
             account_remove,
             account_sign_in_microsoft,
+            account_refresh,
+            open_external,
             versions_manifest,
             loader_versions,
             game_launch,

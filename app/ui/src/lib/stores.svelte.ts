@@ -1,4 +1,5 @@
 import { api as defaultApi, toAppError, type Api, type Unlisten } from './api';
+import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from './auth';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
   AppState, Config, InstallProgressEvent, LaunchProgressEvent, LaunchState, LogLevel, ProfileView, ProjectType, PublicAccount,
@@ -62,6 +63,21 @@ export function dismissToast(id: number): void {
   const i = toasts.findIndex((x) => x.id === id);
   if (i >= 0) toasts.splice(i, 1);
 }
+
+/* ---- part 3 state: Microsoft login ---- */
+export const auth = $state({
+  /** The login window is open (or the request is in flight). */
+  signingIn: false,
+  error: null as LoginErrorInfo | null,
+  /** Set when game_launch failed with needsRelogin; the dialog retries this launch after a successful login. */
+  relogin: null as { profileId: string; quickJoin?: string } | null,
+  /** The "login lasts only this session" notice was dismissed (in memory only, so it returns next start). */
+  noticeDismissed: false,
+  refreshing: {} as Record<string, boolean>,
+});
+/** True when some account's login is memory-only because no system keystore exists. */
+export const keystoreMissing = (): boolean => app.accounts.some((a) => a.credentialsPersisted === false);
+export const accountNeedsLogin = (a: PublicAccount): boolean => a.type === 'microsoft' && (a.needsRelogin || a.expired);
 
 /* ---- part 2 state ---- */
 export const servers = $state({ list: [] as ServerEntry[], status: {} as Record<string, ServerStatus>, loaded: false, pinging: false });
@@ -161,6 +177,7 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('servers:pinged', applyPinged),
     api.listen('update:status', (u) => { updates.status = u; }),
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
+    api.listen('accounts:changed', () => { void refreshAccounts(); }),
   ]);
   try {
     applyAppState(await api.appState());
@@ -193,6 +210,8 @@ export function resetStores(): void {
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
   updates.status = { state: 'idle' }; updates.overlay = false; updates.installing = false;
+  auth.signingIn = false; auth.error = null; auth.relogin = null; auth.noticeDismissed = false;
+  for (const k of Object.keys(auth.refreshing)) delete auth.refreshing[k];
 }
 
 /* ---- actions (thin wrappers; logic stays in Rust) ---- */
@@ -227,6 +246,54 @@ export const actions = {
     await guard(() => currentApi.accountRemove({ uuid }));
     await refresh();
   },
+  /**
+   * Opens the Microsoft login. Resolves the signed-in account, `null` when the user cancelled (silent), or `undefined` on a
+   * failure (then `auth.error` holds a localized, classified error).
+   */
+  async signInMicrosoft(): Promise<PublicAccount | null | undefined> {
+    if (auth.signingIn) return undefined;
+    auth.signingIn = true; auth.error = null;
+    try {
+      const a = await currentApi.accountSignInMicrosoft();
+      if (!a) return null;
+      app.accounts = app.accounts.some((x) => x.uuid === a.uuid) ? app.accounts.map((x) => (x.uuid === a.uuid ? a : x)) : [...app.accounts, a];
+      await actions.selectAccount(a.uuid);
+      return a;
+    } catch (e) {
+      auth.error = classifyLoginError(e);
+      return undefined;
+    } finally {
+      auth.signingIn = false;
+    }
+  },
+  async refreshAccount(uuid: string) {
+    auth.refreshing[uuid] = true;
+    try {
+      const a = await currentApi.accountRefresh({ uuid });
+      app.accounts = app.accounts.map((x) => (x.uuid === uuid ? a : x));
+      return a;
+    } catch (e) {
+      // A dead refresh token is not a failure to report, the card just switches to "Sign in again".
+      await refreshAccounts();
+      if (!toAppError(e).needsRelogin) toast(errorText(e), 'error');
+      return undefined;
+    } finally {
+      delete auth.refreshing[uuid];
+    }
+  },
+  /** Login from the "session expired" dialog; on success the failed launch is retried automatically. */
+  async reloginAndRetry() {
+    const pending = auth.relogin;
+    if (!pending) return;
+    const a = await actions.signInMicrosoft();
+    if (!a || auth.relogin !== pending) return; // cancelled, failed (error stays visible) or dialog closed meanwhile
+    auth.relogin = null;
+    await actions.play(pending.profileId, pending.quickJoin);
+  },
+  openExternal(url: string) {
+    if (!isAllowedExternalUrl(url)) return Promise.resolve();
+    return currentApi.openExternal({ url }).catch(() => {});
+  },
   async createProfile(a: { name: string; mcVersion: string; loader: ProfileView['loader']; loaderVersion?: string | null }, extra: Partial<ProfileView>) {
     let p = await currentApi.profileCreate(a);
     if (Object.keys(extra).length) p = await currentApi.profileUpdate({ id: p.id, patch: extra });
@@ -237,8 +304,19 @@ export const actions = {
   async play(id: string, quickJoin?: string) {
     clearConsole(id);
     applyState(id, 'preparing');
-    const r = await guard(() => currentApi.gameLaunch(quickJoin ? { profileId: id, quickJoin } : { profileId: id }));
-    if (!r) applyState(id, 'crashed');
+    try {
+      await currentApi.gameLaunch(quickJoin ? { profileId: id, quickJoin } : { profileId: id });
+    } catch (e) {
+      const err = toAppError(e);
+      if (err.needsRelogin) {
+        applyState(id, 'stopped');
+        auth.error = null;
+        auth.relogin = quickJoin ? { profileId: id, quickJoin } : { profileId: id };
+        return;
+      }
+      app.error = { code: err.code, message: err.message };
+      applyState(id, 'crashed');
+    }
   },
   async updateProfile(id: string, patch: Partial<ProfileView>) {
     const p = await currentApi.profileUpdate({ id, patch }); // caller handles errors
@@ -277,6 +355,14 @@ export const actions = {
   },
   async stop(id: string) { await guard(() => currentApi.gameStop({ profileId: id })); },
 };
+
+/** Re-reads the account list (accounts:changed); keeps everything else untouched. */
+export async function refreshAccounts(): Promise<void> {
+  const s = await guard(() => currentApi.appState());
+  if (!s) return;
+  app.accounts = s.accounts;
+  if (app.config) app.config.selectedAccount = s.config.selectedAccount;
+}
 
 export async function refresh(): Promise<void> {
   const s = await guard(() => currentApi.appState());

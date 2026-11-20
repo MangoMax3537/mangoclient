@@ -51,7 +51,9 @@ describe('mockApi', () => {
     const p = await api.profileCreate({ name: ' Test ', mcVersion: '1.21.4', loader: 'vanilla' });
     expect(p.name).toBe('Test');
     await expect(api.accountAddOffline({ name: 'x' })).rejects.toMatchObject({ code: 'invalid_name' });
-    await expect(api.accountSignInMicrosoft()).rejects.toMatchObject({ code: 'not_implemented' });
+    const login = api.accountSignInMicrosoft();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await login).toMatchObject({ type: 'microsoft', needsRelogin: false, credentialsPersisted: true });
   });
 
   it('config_set applies the patch and onboarding starts unfinished with firstRun', async () => {

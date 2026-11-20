@@ -1,5 +1,6 @@
 //! mango-cli: headless launcher front end over the Mango crates.
 
+mod account;
 mod args;
 mod commands;
 mod error;
@@ -15,8 +16,10 @@ usage:
   mango-cli profile create <name> --mc <ver> [--loader vanilla|fabric|quilt|forge|neoforge] [--loader-version <v>]
   mango-cli profile list
   mango-cli account add-offline <name>
+  mango-cli account add-microsoft     (prints a sign-in URL, paste the final redirect URL)
+  mango-cli account list
   mango-cli launch <profile-name-or-id> [--stop-when-running] [--timeout-secs N] [--dry-run]
-                   [--perf-mods] [--auto-fabric] [--quick-join host[:port]]
+                   [--perf-mods] [--auto-fabric] [--quick-join host[:port]] [--account <name|uuid>]
   mango-cli versions [--snapshots]
   mango-cli java list
 
@@ -35,7 +38,7 @@ async fn run(raw: Vec<String>) -> Res<()> {
     let paths = Paths::from_env();
     match cmd.as_str() {
         "profile" => commands::run_profile(&paths, args),
-        "account" => commands::run_account(&paths, args),
+        "account" => account::run(&paths, args).await,
         "versions" => commands::run_versions(&paths, args).await,
         "java" => commands::run_java(&paths, args).await,
         "launch" => launch::run(&paths, args).await,

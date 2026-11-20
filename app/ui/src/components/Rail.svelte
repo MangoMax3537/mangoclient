@@ -4,10 +4,11 @@
   import CompassIcon from 'phosphor-svelte/lib/CompassIcon';
   import HardDrivesIcon from 'phosphor-svelte/lib/HardDrivesIcon';
   import ChartBarIcon from 'phosphor-svelte/lib/ChartBarIcon';
+  import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
   import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import Tile from './Tile.svelte';
   import Accounts from './Accounts.svelte';
-  import { actions, app, isBusy, nav, openDiscover, openProfile, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
+  import { actions, app, isBusy, keystoreMissing, nav, openDiscover, openProfile, selectedAccount, selectedProfile, t } from '../lib/stores.svelte';
 
   const recent = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 5));
   const acc = $derived(selectedAccount());
@@ -35,8 +36,9 @@
 
   <ul class="bottom">
     <li class="acc">
-      <button type="button" aria-haspopup="dialog" aria-expanded={nav.accounts} title={t('nav.accounts')} aria-label="{t('nav.accounts')}: {acc?.name ?? t('nav.noAccount')}" onclick={(e) => { e.stopPropagation(); nav.accounts = !nav.accounts; }}>
+      <button type="button" aria-haspopup="dialog" aria-expanded={nav.accounts} title={keystoreMissing() ? t('persist.railHint') : t('nav.accounts')} aria-label="{t('nav.accounts')}: {acc?.name ?? t('nav.noAccount')}{keystoreMissing() ? `. ${t('persist.railHint')}` : ''}" onclick={(e) => { e.stopPropagation(); nav.accounts = !nav.accounts; }}>
         <Tile kind="account" id={acc?.uuid ?? ''} src={acc?.headUrl} size={36} radius={6} />
+        {#if keystoreMissing()}<span class="pdot" aria-hidden="true"><WarningIcon weight="bold" size={11} /></span>{/if}
       </button>
       {#if nav.accounts}<Accounts />{/if}
     </li>
@@ -55,6 +57,8 @@
   button.on { color: var(--mango); background: var(--ink-3); }
   button.on::before { content: ''; position: absolute; left: -14px; top: 10px; bottom: 10px; width: 3px; background: var(--mango); }
   button:disabled { color: var(--ink-4); }
+  .acc > button { position: relative; }
+  .pdot { position: absolute; right: -3px; top: -3px; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; background: var(--mango); color: var(--mango-ink); border: 2px solid var(--ink-1); box-sizing: content-box; }
   .prof { width: 44px; height: 44px; border: 2px solid transparent; }
   .prof.sel { border-color: var(--mango); }
   .prof.busy { animation: pulse 1.4s ease-in-out infinite; }

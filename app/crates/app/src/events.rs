@@ -65,6 +65,12 @@ pub struct ContentChangedEvent {
     pub profile_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountsChangedEvent {
+    pub uuid: String,
+}
+
 /// Rust -> UI events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -75,6 +81,7 @@ pub enum Event {
     ServersPinged(ServerStatus),
     UpdateStatus(UpdateStatus),
     ContentChanged(ContentChangedEvent),
+    AccountsChanged(AccountsChangedEvent),
 }
 
 impl Event {
@@ -88,6 +95,7 @@ impl Event {
             Event::ServersPinged(_) => "servers:pinged",
             Event::UpdateStatus(_) => "update:status",
             Event::ContentChanged(_) => "content:changed",
+            Event::AccountsChanged(_) => "accounts:changed",
         }
     }
 
@@ -101,6 +109,7 @@ impl Event {
             Event::ServersPinged(e) => serde_json::to_value(e),
             Event::UpdateStatus(e) => serde_json::to_value(e),
             Event::ContentChanged(e) => serde_json::to_value(e),
+            Event::AccountsChanged(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

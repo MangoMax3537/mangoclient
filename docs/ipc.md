@@ -133,6 +133,7 @@ interface UpdateStatus { state: UpdateStateName; percent?: number; version?: str
 |---|---|---|
 | `account_sign_in_microsoft` | none | `PublicAccount \| null` (`null` = user cancelled the login window; replaces the `not_implemented` stub) |
 | `account_refresh` | `{ uuid }` | `PublicAccount` (refreshes the access token in memory; persists the rotated refresh token through the Vault) |
+| `open_external` | `{ url: string }` | `void` (opens the default browser; https only, no credentials, host must be microsoft.com, xbox.com, minecraft.net or live.com or a subdomain; otherwise AppError code `external_url_forbidden`) |
 
 `game_launch` with a Microsoft account refreshes the token first. If that needs a new login it fails with `AppError { needsRelogin: true }`; the UI then offers `account_sign_in_microsoft` again.
 

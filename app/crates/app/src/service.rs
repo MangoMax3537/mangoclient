@@ -1,13 +1,15 @@
 //! The command surface of `docs/ipc.md`.
 
+use crate::accounts::Session;
 use crate::error::{AppError, Res};
 use crate::events::{Event, EventSink, LaunchStateEvent, ProgressThrottle};
-use crate::host::Host;
+use crate::host::{Host, LoginWindow};
 use crate::types::{
     installed_versions, AppState, ConfigView, Latest, LaunchState, LoaderVersion, ProfileView,
     PublicAccount, VersionEntry, VersionManifest,
 };
-use mango_core::{validate_profile_id, Account, Paths, Store};
+use mango_auth::Vault;
+use mango_core::{validate_profile_id, Paths, Store};
 use mango_minecraft::{get_version_manifest, VERSION_MANIFEST_URL};
 use mango_net::FetchOptions;
 use mango_runtime::GameInstance;
@@ -16,6 +18,7 @@ use mango_updater::{NoopInstaller, Updater, UpdaterConfig};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -56,6 +59,8 @@ pub struct ServiceOptions {
     pub icon_hosts: Vec<String>,
     /// Allow plain http for remote images (tests only).
     pub icon_allow_http: bool,
+    /// Microsoft / Xbox / Minecraft services endpoints.
+    pub auth_endpoints: mango_auth::Endpoints,
 }
 
 impl Default for ServiceOptions {
@@ -88,6 +93,7 @@ impl Default for ServiceOptions {
             watch_interval: Duration::from_secs(2),
             icon_hosts: vec!["cdn.modrinth.com".to_string()],
             icon_allow_http: false,
+            auth_endpoints: mango_auth::Endpoints::default(),
         }
     }
 }
@@ -108,6 +114,13 @@ pub(crate) struct Inner {
     pub telemetry: Mutex<Option<mango_mango::telemetry::Telemetry>>,
     /// Per profile: project id -> newer version number, from the last check.
     pub updates: Mutex<HashMap<String, HashMap<String, String>>>,
+    pub vault: Arc<Vault>,
+    pub login: Arc<dyn LoginWindow>,
+    /// Runtime account state (tokens in memory only), by uuid.
+    pub sessions: Mutex<HashMap<String, Session>>,
+    /// Serializes token refreshes so a rotated refresh token is never lost.
+    pub refresh_gate: tokio::sync::Mutex<()>,
+    pub signing_in: AtomicBool,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -167,6 +180,7 @@ impl AppService {
         let modrinth = mango_modrinth::Client::with_options(&opts.modrinth_api, opts.fetch.clone());
         let icons = Arc::new(ServerIcons::in_root(paths.root()));
         let updater = build_updater(&paths, &opts);
+        let (host_vault, host_login) = (host.vault.clone(), host.login.clone());
         let svc = AppService {
             inner: Arc::new(Inner {
                 paths,
@@ -183,8 +197,15 @@ impl AppService {
                 updater,
                 telemetry: Mutex::new(None),
                 updates: Mutex::new(HashMap::new()),
+                vault: host_vault,
+                login: host_login,
+                sessions: Mutex::new(HashMap::new()),
+                refresh_gate: tokio::sync::Mutex::new(()),
+                signing_in: AtomicBool::new(false),
             }),
         };
+        // Migrates legacy plaintext tokens into envelopes and scrubs them.
+        svc.load_accounts();
         svc.adopt_sessions();
         Ok(svc)
     }
@@ -195,17 +216,18 @@ impl AppService {
 
     pub fn app_state(&self) -> Res<AppState> {
         let inner = &self.inner;
-        let (config, profiles, accounts) = inner.with_store(|s| {
-            let now = now_ms() as i64;
+        let (config, profiles, records) = inner.with_store(|s| {
             (
                 ConfigView::from(&s.config),
                 s.profiles.iter().map(ProfileView::from).collect(),
-                s.accounts
-                    .iter()
-                    .map(|a| PublicAccount::from_account(a, now))
-                    .collect(),
+                s.accounts.clone(),
             )
         });
+        let now = now_ms() as i64;
+        let accounts = records
+            .iter()
+            .map(|a| PublicAccount::from_account(a, now, inner.ingest(a)))
+            .collect();
         Ok(AppState {
             version: inner.opts.app_version.clone(),
             config,
@@ -361,15 +383,6 @@ impl AppService {
 
     // ---- accounts ----
 
-    pub fn account_add_offline(&self, name: String) -> Res<PublicAccount> {
-        let acc = mango_auth::offline_account(&name)?;
-        // Same JSON shape on disk, so a round trip converts between the models.
-        let core: Account = serde_json::from_value(serde_json::to_value(&acc)?)?;
-        let public = PublicAccount::from_account(&core, now_ms() as i64);
-        self.inner.with_store(|s| s.upsert_account(core))?;
-        Ok(public)
-    }
-
     pub fn account_select(&self, uuid: String) -> Res<ConfigView> {
         self.inner.with_store(|s| {
             if !s.accounts.iter().any(|a| a.uuid == uuid) {
@@ -379,16 +392,6 @@ impl AppService {
                 s.set_config(&json!({"selectedAccount": uuid}))?,
             ))
         })
-    }
-
-    pub fn account_remove(&self, uuid: String) -> Res<()> {
-        self.inner
-            .with_store(|s| s.remove_account(&uuid))
-            .map_err(Into::into)
-    }
-
-    pub async fn account_sign_in_microsoft(&self) -> Res<Option<PublicAccount>> {
-        Err(AppError::not_implemented("Microsoft sign-in"))
     }
 
     // ---- versions ----

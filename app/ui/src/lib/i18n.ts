@@ -1,4 +1,5 @@
 import { de2, en2 } from './i18n2';
+import { de3, en3 } from './i18n3';
 
 export type Lang = 'de' | 'en';
 
@@ -51,6 +52,7 @@ const en = {
   'err.relogin': 'Please sign in again.',
   'time.justNow': 'just now',
   ...en2,
+  ...en3,
 } as const;
 
 export type Key = keyof typeof en;
@@ -106,6 +108,7 @@ const de: Record<Key, string> = {
   'err.relogin': 'Bitte melde dich erneut an.',
   'time.justNow': 'gerade eben',
   ...de2,
+  ...de3,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };

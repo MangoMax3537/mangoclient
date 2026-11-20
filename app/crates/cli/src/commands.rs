@@ -2,7 +2,7 @@
 
 use crate::args::Args;
 use crate::error::{fail, usage, CliError, Res};
-use mango_core::{Account, Paths, Store};
+use mango_core::{Paths, Store};
 use mango_java::{find_system_javas, list_managed_runtimes, Platform, SearchRoots};
 use mango_minecraft::{get_version_manifest, VERSION_MANIFEST_URL};
 use mango_net::FetchOptions;
@@ -66,31 +66,6 @@ pub fn run_profile(paths: &Paths, mut args: Args) -> Res<()> {
             Ok(())
         }
         _ => usage("usage: profile <create|list> ..."),
-    }
-}
-
-pub fn run_account(paths: &Paths, mut args: Args) -> Res<()> {
-    match args.positional().as_deref() {
-        Some("add-offline") => {
-            let name = args.positional();
-            args.finish()?;
-            let Some(name) = name else {
-                return usage("usage: account add-offline <name>");
-            };
-            let acc = mango_auth::offline_account(&name).map_err(fail("creating the account"))?;
-            // Same JSON shape on disk, so a round trip converts between the two models.
-            let value = serde_json::to_value(&acc).map_err(fail("encoding the account"))?;
-            let core: Account =
-                serde_json::from_value(value).map_err(fail("converting the account"))?;
-            let mut store = open_store(paths)?;
-            store
-                .upsert_account(core)
-                .map_err(fail("saving the account"))?;
-            println!("Added offline account {} ({})", acc.name, acc.uuid);
-            println!("RESULT account uuid={}", acc.uuid);
-            Ok(())
-        }
-        _ => usage("usage: account add-offline <name>"),
     }
 }
 
@@ -163,7 +138,12 @@ mod tests {
             ]),
         )
         .unwrap();
-        run_account(&paths, args(&["add-offline", "Steve_1"])).unwrap();
+        let acc = mango_auth::offline_account("Steve_1").unwrap();
+        let mut store = open_store(&paths).unwrap();
+        store
+            .upsert_account(serde_json::from_value(serde_json::to_value(&acc).unwrap()).unwrap())
+            .unwrap();
+        drop(store);
         let store = open_store(&paths).unwrap();
         let p = store
             .profiles
@@ -179,6 +159,5 @@ mod tests {
             args(&["create", "x", "--mc", "1.21", "--loader", "bogus"])
         )
         .is_err());
-        assert!(run_account(&paths, args(&["add-offline", "x"])).is_err());
     }
 }

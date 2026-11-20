@@ -6,14 +6,13 @@ use crate::events::{Event, LaunchLogEvent, LaunchProgressEvent, LogLevelName, Pr
 use crate::service::{lock, now_ms, AppService, Inner};
 use crate::types::{LaunchResult, LaunchState};
 use mango_content::{ContentError, ModrinthLookup, PerfOptions, ResolvedFile};
-use mango_core::model::AccountType;
-use mango_core::{validate_profile_id, Account, Config, Profile};
+use mango_core::{validate_profile_id, Config, Profile};
 use mango_java::{launch_executable, resolve_java, JavaInfo, Platform, ResolveOptions};
 use mango_loaders::{Loader, Loaders};
 use mango_mango::mangoconfig::{self, Bundle};
 use mango_minecraft::{
     build_launch_command, install_version, resolve_version, HostEnv, InstallOptions,
-    InstallProgress, LaunchAccount, LaunchInput, Phase, Preset,
+    InstallProgress, LaunchInput, Phase, Preset,
 };
 use mango_net::FetchOptions;
 use mango_runtime::{
@@ -103,19 +102,21 @@ impl AppService {
         };
 
         // Account first: nothing is emitted or downloaded without one.
-        let (config, account) =
-            inner.with_store(|s| (s.config.clone(), s.selected_account().cloned()));
-        let account: Account = account.ok_or_else(|| {
+        let (config, account_uuid) = inner.with_store(|s| {
+            (
+                s.config.clone(),
+                s.selected_account().map(|a| a.uuid.clone()),
+            )
+        });
+        let account_uuid = account_uuid.ok_or_else(|| {
             AppError::new("no_account", "No account selected; add an account first")
         })?;
-        if account.kind != AccountType::Offline {
-            return Err(AppError::not_implemented(
-                "Launching with a Microsoft account",
-            ));
-        }
-        let token = account.access_token.clone().unwrap_or_else(|| "0".into());
 
         state(LaunchState::Preparing);
+        // Microsoft accounts get a fresh token (and a persisted rotated
+        // refresh token) up front: a session that needs a new login fails
+        // here, before anything is downloaded.
+        let creds = self.launch_credentials(&account_uuid).await?;
         let mut profile = profile;
         let bundle_dir = inner.opts.bundle_dir.clone();
         // Vanilla switches to Fabric when MangoConfig can be injected.
@@ -263,7 +264,7 @@ impl AppService {
         };
         let java_exe = launch_executable(&java.path, Platform::current(), true);
 
-        // 4. Account (offline accounts need no refresh)
+        // 4. Account (refreshed above)
         state(LaunchState::Account);
 
         // 5. Arguments
@@ -288,13 +289,7 @@ impl AppService {
             width: config.width,
             height: config.height,
             quick_join,
-            account: LaunchAccount {
-                name: account.name.clone(),
-                uuid: account.uuid.clone(),
-                access_token: token,
-                xuid: None,
-                offline: true,
-            },
+            account: creds.to_launch_account(),
             launcher_version: inner.opts.app_version.clone(),
             env: HostEnv::current(),
         };

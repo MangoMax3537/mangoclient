@@ -232,13 +232,23 @@ mod unix {
         assert!(!store.lock().unwrap().contains(&GameEvent::Running));
     }
 
+    /// Right after fork the child's comm is still the parent's until the
+    /// script is exec'd, so the "is it java" check needs a moment.
+    fn wait_until_alive(session: &Session) {
+        let begun = std::time::Instant::now();
+        while !is_session_alive(session) {
+            assert!(begun.elapsed() < Duration::from_secs(5), "never alive");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     #[test]
     fn fallback_marks_running_then_stop() {
         let dir = tempfile::tempdir().unwrap();
         let java = script(dir.path(), "java", LOOP);
         let (cb, store) = collect();
         let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
-        assert!(is_session_alive(&g.session()));
+        wait_until_alive(&g.session());
         let begun = std::time::Instant::now();
         while !g.is_running() {
             assert!(begun.elapsed() < Duration::from_secs(5), "never running");
@@ -274,6 +284,7 @@ mod unix {
         let (cb, _s) = collect();
         let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
         let session = g.session();
+        wait_until_alive(&session);
 
         let (cb2, store2) = collect();
         let mut ad = AdoptOptions::new("pid", g.log_file().to_path_buf(), cb2);

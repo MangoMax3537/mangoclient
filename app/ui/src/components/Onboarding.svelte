@@ -3,12 +3,13 @@
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
-  import WindowsLogoIcon from 'phosphor-svelte/lib/WindowsLogoIcon';
   import Tile from './Tile.svelte';
+  import MicrosoftButton from './MicrosoftButton.svelte';
+  import PersistNotice from './PersistNotice.svelte';
   import { heroFallback } from '../lib/fallbackImage';
   import { fmtRam } from '../lib/format';
   import type { Key } from '../lib/i18n';
-  import { actions, app, errorText, getApi, t } from '../lib/stores.svelte';
+  import { actions, app, errorText, t } from '../lib/stores.svelte';
 
   const STEPS = ['welcome', 'language', 'account', 'ram', 'done'] as const;
   let step = $state(0);
@@ -31,10 +32,6 @@
     busy = true; error = '';
     try { await actions.addOffline(name); name = ''; } catch (err) { error = errorText(err); }
     busy = false;
-  }
-  async function microsoft() {
-    error = '';
-    try { await getApi().accountSignInMicrosoft(); } catch (err) { error = errorText(err); }
   }
   async function finish() {
     await actions.setConfig({ ram, firstRunDone: true });
@@ -66,7 +63,8 @@
     {:else if step === 2}
       <h1 id="ob-h" tabindex="-1">{t('onb.account.title')}</h1>
       <p class="lead">{t('onb.account.body')}</p>
-      <button class="btn ms" type="button" onclick={microsoft}><WindowsLogoIcon weight="bold" size={16} aria-hidden="true" />{t('accounts.microsoft')}</button>
+      <MicrosoftButton />
+      <PersistNotice />
       <form onsubmit={addOffline}>
         <label for="ob-name" class="eyebrow">{t('accounts.addOffline')}</label>
         <div class="row">
@@ -128,7 +126,6 @@
   form { display: grid; gap: 6px; }
   .row { display: flex; gap: 8px; }
   .row .field { flex: 1; }
-  .ms { justify-content: center; }
   .accs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .accs li { display: flex; align-items: center; gap: 10px; }
   .ram { display: flex; align-items: center; gap: 16px; }

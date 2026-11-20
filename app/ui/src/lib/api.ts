@@ -5,7 +5,7 @@ import type {
   ContentItem, ContentType, LogEntry, ProjectDetail, ProjectVersion, Screenshot, SearchParams, SearchResult, ServerEntry,
   ServerStatus, StatsSummary, StorageKey, StorageUsage, UpdateInfo, UpdateStatus,
 } from './types';
-import { createMockApi } from './mockApi';
+import { createMockApi, mockOptionsFromSearch } from './mockApi';
 
 export type Unlisten = () => void;
 
@@ -21,13 +21,17 @@ export interface Api {
   accountAddOffline(args: { name: string }): Promise<PublicAccount>;
   accountSelect(args: { uuid: string }): Promise<Config>;
   accountRemove(args: { uuid: string }): Promise<void>;
+  /** `null` = the user closed the login window (cancelled, not an error). */
   accountSignInMicrosoft(): Promise<PublicAccount | null>;
+  accountRefresh(args: { uuid: string }): Promise<PublicAccount>;
   versionsManifest(args?: { force?: boolean }): Promise<VersionManifest>;
   loaderVersions(args: { loader: Loader; mcVersion: string }): Promise<LoaderVersion[]>;
   gameLaunch(args: { profileId: string; quickJoin?: string }): Promise<{ pid: number; versionId: string }>;
   gameStop(args: { profileId: string }): Promise<boolean>;
   gameRunning(): Promise<string[]>;
   openFolder(args: { target: 'root' | 'logs' | string }): Promise<string>;
+  /** Opens an https URL in the system browser. The UI pre-checks `isAllowedExternalUrl`; Rust must re-validate (not part of Part 3, see report). */
+  openExternal(args: { url: string }): Promise<void>;
   /* Part 2 */
   contentList(args: { profileId: string }): Promise<ContentItem[]>;
   contentToggle(args: { profileId: string; projectId: string; enabled: boolean }): Promise<{ items: ContentItem[]; affected: string[] }>;
@@ -69,12 +73,14 @@ export const tauriApi: Api = {
   accountSelect: (a) => invoke('account_select', a),
   accountRemove: (a) => invoke('account_remove', a),
   accountSignInMicrosoft: () => invoke('account_sign_in_microsoft'),
+  accountRefresh: (a) => invoke('account_refresh', a),
   versionsManifest: (a) => invoke('versions_manifest', a ?? {}),
   loaderVersions: (a) => invoke('loader_versions', a),
   gameLaunch: (a) => invoke('game_launch', a),
   gameStop: (a) => invoke('game_stop', a),
   gameRunning: () => invoke('game_running'),
   openFolder: (a) => invoke('open_folder', a),
+  openExternal: (a) => invoke('open_external', a),
   contentList: (a) => invoke('content_list', a),
   contentToggle: (a) => invoke('content_toggle', a),
   contentUninstall: (a) => invoke('content_uninstall', a),
@@ -104,8 +110,7 @@ export const tauriApi: Api = {
 };
 
 export { createMockApi };
-const firstRun = typeof location !== 'undefined' && new URLSearchParams(location.search).has('onboarding');
-export const mockApi: Api = createMockApi({ firstRun });
+export const mockApi: Api = createMockApi(mockOptionsFromSearch(typeof location !== 'undefined' ? location.search : ''));
 
 export function inTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

@@ -68,10 +68,25 @@ pub struct PublicAccount {
     pub has_cape: bool,
     /// `mangoimg://head/<uuid>`.
     pub head_url: String,
+    /// False = memory-only session (keystore unavailable): the login will not
+    /// survive a restart.
+    pub credentials_persisted: bool,
+    /// Keystore locked or envelope undecryptable.
+    pub credentials_locked: bool,
+    /// No usable refresh token: sign in again.
+    pub needs_relogin: bool,
+}
+
+/// Credential state of one account (never the secrets themselves).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CredState {
+    pub persisted: bool,
+    pub locked: bool,
+    pub needs_relogin: bool,
 }
 
 impl PublicAccount {
-    pub fn from_account(a: &Account, now_ms: i64) -> Self {
+    pub fn from_account(a: &Account, now_ms: i64, creds: CredState) -> Self {
         let expired = match (a.kind, a.expires_at) {
             (AccountType::Offline, _) | (_, None) | (_, Some(0)) => false,
             (_, Some(e)) => e < now_ms,
@@ -88,6 +103,9 @@ impl PublicAccount {
             expired,
             has_cape,
             head_url: crate::image_protocol::head_url(&a.uuid),
+            credentials_persisted: creds.persisted,
+            credentials_locked: creds.locked,
+            needs_relogin: creds.needs_relogin,
         }
     }
 }

@@ -100,15 +100,15 @@ async fn wait_for(mut f: impl FnMut() -> bool) {
 // ---------- mock http ----------
 
 #[derive(Debug, Clone)]
-struct Req {
-    method: String,
-    path: String,
-    body: Vec<u8>,
+pub(crate) struct Req {
+    pub(crate) method: String,
+    pub(crate) path: String,
+    pub(crate) body: Vec<u8>,
 }
 
-type Handler = Arc<dyn Fn(&Req) -> (u16, Vec<u8>) + Send + Sync>;
+pub(crate) type Handler = Arc<dyn Fn(&Req) -> (u16, Vec<u8>) + Send + Sync>;
 
-async fn serve(make: impl FnOnce(&str) -> Handler) -> (String, Arc<Mutex<Vec<Req>>>) {
+pub(crate) async fn serve(make: impl FnOnce(&str) -> Handler) -> (String, Arc<Mutex<Vec<Req>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let handler = make(&base);
@@ -168,7 +168,7 @@ async fn serve(make: impl FnOnce(&str) -> Handler) -> (String, Arc<Mutex<Vec<Req
     (base, seen)
 }
 
-fn json_ok(v: Value) -> (u16, Vec<u8>) {
+pub(crate) fn json_ok(v: Value) -> (u16, Vec<u8>) {
     (200, serde_json::to_vec(&v).unwrap())
 }
 
@@ -1452,6 +1452,7 @@ async fn screenshots_list_and_actions() {
     let host = Host {
         opener: rec.clone(),
         clipboard: rec.clone(),
+        ..Host::system(false)
     };
     let f = fx_host(Some(host), |_| {});
     assert!(f
@@ -1547,6 +1548,7 @@ async fn copy_failures_surface_as_errors_and_default_host_has_no_clipboard() {
         Some(Host {
             opener: rec.clone(),
             clipboard: rec,
+            ..Host::system(false)
         }),
         |_| {},
     );

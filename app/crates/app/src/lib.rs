@@ -3,6 +3,7 @@
 //! `AppService` implements every command of `docs/ipc.md` as a plain async
 //! method; `src-tauri` only forwards to it. Events leave through [`EventSink`].
 
+mod accounts;
 mod background;
 mod content;
 mod error;
@@ -21,13 +22,20 @@ mod types;
 mod tests;
 #[cfg(test)]
 mod tests_p2;
+#[cfg(test)]
+mod tests_p3;
 
+pub use accounts::LaunchCredentials;
 pub use error::{AppError, Res};
 pub use events::{
-    ContentChangedEvent, Event, EventSink, InstallProgressEvent, LaunchLogEvent,
-    LaunchProgressEvent, LaunchStateEvent, LogLevelName, ProgressPhase,
+    AccountsChangedEvent, ContentChangedEvent, Event, EventSink, InstallProgressEvent,
+    LaunchLogEvent, LaunchProgressEvent, LaunchStateEvent, LogLevelName, ProgressPhase,
 };
-pub use host::{ClipboardImage, Host, NoClipboard, OpenFolder, SystemOpener};
+pub use host::{
+    is_login_redirect, login_navigation_allowed, CannedLoginWindow, ClipboardImage, ExternalOpener,
+    Host, LoginOutcome, LoginWindow, NoClipboard, NoLoginWindow, OpenFolder, SystemExternal,
+    SystemOpener,
+};
 pub use models::{
     ContentItem, ContentType, LogEntry, LogKind, LogText, LogUpload, ProjectDetail, ProjectHit,
     ProjectVersion, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,

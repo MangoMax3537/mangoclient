@@ -185,13 +185,13 @@ fn accounts_offline_select_remove_and_no_secrets() {
 }
 
 #[tokio::test]
-async fn microsoft_sign_in_is_not_implemented() {
+async fn microsoft_sign_in_without_a_window_fails_with_a_stable_code() {
     let (_t, svc, _) = setup();
     let e = svc.account_sign_in_microsoft().await.unwrap_err();
-    assert_eq!(e.code, "not_implemented");
+    assert_eq!(e.code, "auth.login_failed");
     assert_eq!(
         serde_json::to_value(&e).unwrap(),
-        json!({"code": "not_implemented", "message": e.message, "needsRelogin": false})
+        json!({"code": "auth.login_failed", "message": e.message, "needsRelogin": false})
     );
 }
 
@@ -203,7 +203,7 @@ fn needs_relogin_flag_follows_the_auth_code() {
 }
 
 #[tokio::test]
-async fn launch_refuses_unknown_profile_missing_account_and_microsoft() {
+async fn launch_refuses_unknown_profile_missing_account_and_unusable_microsoft() {
     let (_t, svc, sink) = setup();
     let p = new_profile(&svc, "L");
     assert_eq!(
@@ -243,7 +243,7 @@ async fn launch_refuses_unknown_profile_missing_account_and_microsoft() {
         .unwrap();
     assert_eq!(
         svc.game_launch(p.id, None).await.unwrap_err().code,
-        "not_implemented"
+        "auth.needs_relogin"
     );
 }
 

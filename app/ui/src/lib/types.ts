@@ -14,6 +14,12 @@ export interface PublicAccount {
   uuid: string; name: string; type: 'microsoft' | 'offline'; expiresAt: number | null; expired: boolean; hasCape: boolean;
   /** `mangoimg://head/<uuid>`: cached Mojang skin head, Steve/Alex for offline. */
   headUrl: string;
+  /** false = memory-only session because no OS keystore is available (login is lost on restart). */
+  credentialsPersisted: boolean;
+  /** Keystore locked or envelope undecryptable; needs unlock or a new login. */
+  credentialsLocked: boolean;
+  /** No usable refresh token: the user must sign in again. */
+  needsRelogin: boolean;
 }
 export interface Config {
   language: 'de' | 'en'; ram: number; javaPath: string; javaArgs: string; fullscreen: boolean; width: number; height: number;
@@ -92,4 +98,5 @@ export interface ApiEvents {
   'servers:pinged': ServerStatus;
   'update:status': UpdateStatus;
   'content:changed': { profileId: string };
+  'accounts:changed': { uuid: string };
 }

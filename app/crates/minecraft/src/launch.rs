@@ -67,13 +67,26 @@ impl Preset {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LaunchAccount {
     pub name: String,
     pub uuid: String,
     pub access_token: String,
     pub xuid: Option<String>,
     pub offline: bool,
+}
+
+// Never print the access token.
+impl std::fmt::Debug for LaunchAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LaunchAccount")
+            .field("name", &self.name)
+            .field("uuid", &self.uuid)
+            .field("access_token", &"<redacted>")
+            .field("xuid", &self.xuid)
+            .field("offline", &self.offline)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -120,13 +133,29 @@ impl LaunchInput {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct LaunchCommand {
     pub program: PathBuf,
+    /// Contains the access token for online accounts: never log it.
     pub args: Vec<String>,
     /// Variables to add to the inherited environment.
     pub env: Vec<(String, String)>,
     pub cwd: PathBuf,
+}
+
+// Arguments carry the access token, so Debug shows only their count.
+impl std::fmt::Debug for LaunchCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LaunchCommand")
+            .field("program", &self.program)
+            .field(
+                "args",
+                &format_args!("<{} args, redacted>", self.args.len()),
+            )
+            .field("env", &self.env.iter().map(|(k, _)| k).collect::<Vec<_>>())
+            .field("cwd", &self.cwd)
+            .finish()
+    }
 }
 
 /// Replace `${key}`; unknown keys are left untouched.
@@ -590,5 +619,23 @@ mod tests {
         let m = a.iter().position(|x| x == "M").unwrap();
         assert!(a[m + 2].contains("virtual") && a[m + 2].ends_with("legacy"));
         assert_eq!(a[m + 4], ";");
+    }
+    #[test]
+    fn debug_output_never_contains_the_access_token() {
+        let acc = LaunchAccount {
+            name: "Steve".into(),
+            uuid: "00000000000000000000000000000001".into(),
+            access_token: "SUPER-SECRET-TOKEN".into(),
+            xuid: None,
+            offline: false,
+        };
+        assert!(!format!("{acc:?}").contains("SUPER-SECRET-TOKEN"));
+        let cmd = LaunchCommand {
+            program: "java".into(),
+            args: vec!["--accessToken".into(), "SUPER-SECRET-TOKEN".into()],
+            env: vec![("INST_NAME".into(), "x".into())],
+            cwd: ".".into(),
+        };
+        assert!(!format!("{cmd:?}").contains("SUPER-SECRET-TOKEN"));
     }
 }

@@ -55,7 +55,6 @@ from_coded!(
     mango_minecraft::MinecraftError,
     mango_loaders::LoaderError,
     mango_content::ContentError,
-    mango_auth::AuthError,
     mango_runtime::RuntimeError,
     mango_net::NetError,
     mango_mango::Error,
@@ -63,6 +62,29 @@ from_coded!(
     mango_servers::ServersError,
     mango_updater::UpdateError,
 );
+
+impl From<mango_auth::AuthError> for AppError {
+    fn from(e: mango_auth::AuthError) -> Self {
+        use mango_auth::AuthError as A;
+        use mango_net::NetError as N;
+        let offline = match &e {
+            A::Timeout | A::Net(N::Timeout { .. }) => true,
+            A::Request(r) | A::Net(N::Request { source: r, .. }) => {
+                r.is_connect() || r.is_timeout()
+            }
+            _ => false,
+        };
+        if offline {
+            return AppError::new(
+                "auth.offline",
+                "Could not reach Microsoft; check the internet connection",
+            );
+        }
+        let mut err = AppError::new(e.code(), e.to_string());
+        err.needs_relogin = e.needs_relogin();
+        err
+    }
+}
 
 impl From<std::io::Error> for AppError {
     fn from(e: std::io::Error) -> Self {

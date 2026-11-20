@@ -12,8 +12,9 @@
   import Onboarding from './components/Onboarding.svelte';
   import Toasts from './components/Toasts.svelte';
   import UpdatePill from './components/UpdatePill.svelte';
+  import ReloginDialog from './components/ReloginDialog.svelte';
   import UpdateOverlay from './components/UpdateOverlay.svelte';
-  import { actions, app, errorText, init, nav, t, updates } from './lib/stores.svelte';
+  import { actions, app, auth, errorText, init, nav, t, updates } from './lib/stores.svelte';
   import { inTauri } from './lib/api';
 
   onMount(() => { init().then(() => { if (updates.status.state === 'idle') actions.updateCheck(); }); });
@@ -52,6 +53,7 @@
   {#if nav.newProfile}<NewProfile />{/if}
   {#if updates.overlay}<UpdateOverlay />{/if}
   {#if app.ready && app.config && !app.config.firstRunDone}<Onboarding />{/if}
+  {#if auth.relogin}<ReloginDialog />{/if}
   <Toasts />
 </div>
 

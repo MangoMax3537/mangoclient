@@ -4,15 +4,14 @@ use crate::args::Args;
 use crate::commands::open_store;
 use crate::error::{fail, usage, CliError, Res};
 use mango_content::{ContentError, ModrinthLookup, PerfOptions, ResolvedFile};
-use mango_core::model::{AccountType, Loader as CoreLoader};
-use mango_core::{Account, Config, Paths, Profile, Store};
+use mango_core::model::Loader as CoreLoader;
+use mango_core::{Config, Paths, Profile, Store};
 use mango_java::{launch_executable, resolve_java, JavaInfo, Platform, ResolveOptions};
 use mango_loaders::{Loader, Loaders};
 use mango_mango::mangoconfig::{self, Bundle};
 use mango_minecraft::{
     build_launch_command, install_version, resolve_version, HostEnv, InstallOptions,
-    InstallProgress, LaunchAccount, LaunchCommand, LaunchInput, Phase, Preset,
-    VERSION_MANIFEST_URL,
+    InstallProgress, LaunchCommand, LaunchInput, Phase, Preset, VERSION_MANIFEST_URL,
 };
 use mango_net::FetchOptions;
 use mango_runtime::{
@@ -34,6 +33,8 @@ struct Opts {
     perf_mods: bool,
     auto_fabric: bool,
     quick_join: Option<String>,
+    /// Account name or uuid (default: the selected one).
+    account: Option<String>,
 }
 
 fn parse(mut args: Args) -> Res<Opts> {
@@ -43,6 +44,7 @@ fn parse(mut args: Args) -> Res<Opts> {
     let auto_fabric = args.flag("--auto-fabric");
     let timeout = args.number("--timeout-secs")?.map(Duration::from_secs);
     let quick_join = args.value("--quick-join")?;
+    let account = args.value("--account")?;
     let target = args.positional();
     args.finish()?;
     let Some(target) = target else {
@@ -56,6 +58,7 @@ fn parse(mut args: Args) -> Res<Opts> {
         perf_mods,
         auto_fabric,
         quick_join,
+        account,
     })
 }
 
@@ -259,26 +262,19 @@ async fn resolve_java_for(
 
 pub async fn run(paths: &Paths, args: Args) -> Res<()> {
     let opts = parse(args)?;
+    // Account first: refreshing a Microsoft token rewrites accounts.json, so
+    // this must finish before the store below is opened (it would otherwise
+    // write its stale copy back over the rotated refresh token).
+    stage("preparing");
+    let creds = crate::account::launch_credentials(paths, opts.account.as_deref()).await?;
     let mut store = open_store(paths)?;
     for w in &store.warnings {
         eprintln!("warning: {w}");
     }
     let mut profile = find_profile(&store, &opts.target)?.clone();
     let config = store.config.clone();
-
-    // Account: offline only until the UI can drive a Microsoft login.
-    stage("preparing");
-    let account: Account = store.selected_account().cloned().ok_or_else(|| {
-        CliError::Failure("no account; run `account add-offline <name>` first".into())
-    })?;
-    if account.kind != AccountType::Offline {
-        return Err(CliError::Failure(
-            "the selected account is a Microsoft account; the CLI supports offline accounts only (select one with `account add-offline`)".into(),
-        ));
-    }
-    let token = account.access_token.clone().unwrap_or_else(|| "0".into());
     let redact = Redactor {
-        token: token.clone(),
+        token: creds.access_token().to_string(),
     };
 
     // Reject when a session is still alive.
@@ -433,7 +429,7 @@ pub async fn run(paths: &Paths, args: Args) -> Res<()> {
     let platform = Platform::current();
     let java_exe = launch_executable(&java.path, platform, true);
 
-    // 4. Account (offline accounts need no refresh)
+    // 4. Account (refreshed above)
     stage("account");
 
     // 5. Arguments
@@ -458,13 +454,7 @@ pub async fn run(paths: &Paths, args: Args) -> Res<()> {
         width: config.width,
         height: config.height,
         quick_join: opts.quick_join.clone(),
-        account: LaunchAccount {
-            name: account.name.clone(),
-            uuid: account.uuid.clone(),
-            access_token: token,
-            xuid: None,
-            offline: true,
-        },
+        account: creds.to_launch_account(),
         launcher_version: env!("CARGO_PKG_VERSION").to_string(),
         env: HostEnv::current(),
     };

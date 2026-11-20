@@ -12,6 +12,34 @@ export interface MockOptions {
   timeScale?: number;
   /** Start with config.firstRunDone=false so the onboarding shows. */
   firstRun?: boolean;
+  /** What `accountSignInMicrosoft` does: succeed (default), resolve null (cancelled) or fail with a login error variant. */
+  login?: 'success' | 'cancel' | { error: string };
+  /** Simulate a system without keystore: Microsoft accounts are memory-only. */
+  noKeystore?: boolean;
+  /** The seeded Microsoft account has no usable refresh token (launch then fails with needsRelogin). */
+  needsRelogin?: boolean;
+  /** The seeded Microsoft account has a locked credential store. */
+  locked?: boolean;
+}
+
+/** Error code per `?mockLoginError=<variant>` (codes from app/crates/auth/src/error.rs). */
+export const MOCK_LOGIN_ERRORS: Record<string, string> = {
+  no_xbox_profile: 'auth.xbox.no_profile', country: 'auth.xbox.country', adult_verification: 'auth.xbox.adult_verification',
+  child_account: 'auth.xbox.child_account', not_owned: 'auth.not_owned', no_profile: 'auth.no_profile',
+  offline: 'net.request', generic: 'auth.login_failed',
+};
+
+/** Dev query params of the browser mock: ?onboarding ?mockLogin=cancel ?mockLoginError=<variant> ?mockNoKeystore ?mockRelogin ?mockLocked */
+export function mockOptionsFromSearch(search: string): MockOptions {
+  const q = new URLSearchParams(search);
+  const err = q.get('mockLoginError');
+  return {
+    firstRun: q.has('onboarding'),
+    login: err ? { error: err } : q.get('mockLogin') === 'cancel' ? 'cancel' : 'success',
+    noKeystore: q.has('mockNoKeystore'),
+    needsRelogin: q.has('mockRelogin'),
+    locked: q.has('mockLocked'),
+  };
 }
 
 const DAY = 86400000;
@@ -33,9 +61,12 @@ function seedProfiles(now: number): ProfileView[] {
   ];
 }
 
-const seedAccounts = (now: number): PublicAccount[] => [
-  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', expiresAt: now + 20 * 3600000, expired: false, hasCape: true, headUrl: fallbackImage('account', 'b0b7') },
-  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', '5d2e') },
+const seedAccounts = (now: number, o: MockOptions): PublicAccount[] => [
+  { uuid: 'b0b7c2d4-7a41-4c3e-9f5a-12de5a3c9e01', name: 'MangoMax', type: 'microsoft', hasCape: true, headUrl: fallbackImage('account', 'b0b7'),
+    expiresAt: o.needsRelogin ? now - 3600000 : now + 20 * 3600000, expired: !!o.needsRelogin, needsRelogin: !!o.needsRelogin,
+    credentialsPersisted: !o.noKeystore, credentialsLocked: !!o.locked },
+  { uuid: '5d2e8f19-0c36-3a7b-b4d1-9e7f6a2c1b88', name: 'Gast_Steve', type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', '5d2e'),
+    credentialsPersisted: true, credentialsLocked: false, needsRelogin: false },
 ];
 
 function makeManifest(): VersionManifest {
@@ -73,14 +104,14 @@ export function createMockApi(opts: MockOptions = {}): Api {
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
   };
   let profiles = seedProfiles(now);
-  let accounts = seedAccounts(now);
+  let accounts = seedAccounts(now, opts);
   config.selectedProfile = profiles[0].id;
   config.selectedAccount = accounts[0].uuid;
   const running = new Set<string>();
   const timers = new Map<string, ReturnType<typeof setTimeout>[]>();
   const listeners: { [K in keyof ApiEvents]: Set<(p: ApiEvents[K]) => void> } = {
     'launch:state': new Set(), 'launch:progress': new Set(), 'launch:log': new Set(), 'install:progress': new Set(),
-    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(),
+    'servers:pinged': new Set(), 'update:status': new Set(), 'content:changed': new Set(), 'accounts:changed': new Set(),
   };
   const emit = <K extends keyof ApiEvents>(name: K, payload: ApiEvents[K]) => {
     for (const cb of listeners[name] as Set<(p: ApiEvents[K]) => void>) cb(payload);
@@ -135,7 +166,8 @@ export function createMockApi(opts: MockOptions = {}): Api {
     },
     async accountAddOffline({ name }) {
       if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) throw { code: 'invalid_name', message: 'invalid name', needsRelogin: false };
-      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', name) };
+      const a: PublicAccount = { uuid: uuid(), name, type: 'offline', expiresAt: null, expired: false, hasCape: false, headUrl: fallbackImage('account', name),
+        credentialsPersisted: true, credentialsLocked: false, needsRelogin: false };
       accounts = [...accounts, a];
       if (!config.selectedAccount) config.selectedAccount = a.uuid;
       return { ...a };
@@ -145,12 +177,48 @@ export function createMockApi(opts: MockOptions = {}): Api {
       accounts = accounts.filter((a) => a.uuid !== id);
       if (config.selectedAccount === id) config.selectedAccount = accounts[0]?.uuid ?? null;
     },
-    async accountSignInMicrosoft() { throw { code: 'not_implemented', message: 'not implemented', needsRelogin: false }; },
+    async accountSignInMicrosoft() {
+      const mode = opts.login ?? 'success';
+      await new Promise((r) => setTimeout(r, 1500 * scale));
+      if (mode === 'cancel') return null;
+      if (typeof mode === 'object') {
+        throw { code: MOCK_LOGIN_ERRORS[mode.error] ?? mode.error, message: `mock login error: ${mode.error}`, needsRelogin: false };
+      }
+      // Signing in again revives the stale seeded account, otherwise a new fake account appears.
+      const stale = accounts.find((a) => a.type === 'microsoft' && (a.needsRelogin || a.expired));
+      const base = stale ?? {
+        uuid: '7c1d4e90-3b52-4a8f-a6e7-2d9b0c5f8a14', name: 'CreeperKing', type: 'microsoft' as const, hasCape: false,
+        headUrl: fallbackImage('account', '7c1d'), credentialsLocked: false,
+      };
+      const a: PublicAccount = {
+        ...base, expiresAt: Date.now() + 24 * 3600000, expired: false, needsRelogin: false, credentialsLocked: false,
+        credentialsPersisted: !opts.noKeystore,
+      };
+      accounts = accounts.some((x) => x.uuid === a.uuid) ? accounts.map((x) => (x.uuid === a.uuid ? a : x)) : [...accounts, a];
+      emit('accounts:changed', { uuid: a.uuid });
+      return { ...a };
+    },
+    async accountRefresh({ uuid: id }) {
+      const a = accounts.find((x) => x.uuid === id);
+      if (!a || a.type !== 'microsoft') throw { code: 'auth.invalid_account', message: 'no such account', needsRelogin: false };
+      await new Promise((r) => setTimeout(r, 600 * scale));
+      if (a.needsRelogin) throw { code: 'auth.needs_relogin', message: 'session expired, sign in again', needsRelogin: true };
+      Object.assign(a, { expiresAt: Date.now() + 24 * 3600000, expired: false, credentialsLocked: false });
+      emit('accounts:changed', { uuid: id });
+      return { ...a };
+    },
     async versionsManifest() { return makeManifest(); },
     async loaderVersions({ loader }) { return loader === 'vanilla' ? [] : structuredClone(LOADER_VERSIONS[loader]); },
     async gameLaunch({ profileId }) {
       const p = find(profileId);
       if (running.has(profileId) || timers.has(profileId)) throw { code: 'already_running', message: 'already running', needsRelogin: false };
+      const acc = accounts.find((a) => a.uuid === config.selectedAccount);
+      if (acc?.type === 'microsoft' && (acc.needsRelogin || acc.expired)) {
+        setState(profileId, 'preparing');
+        await new Promise((r) => setTimeout(r, 500 * scale));
+        setState(profileId, 'stopped');
+        throw { code: 'auth.needs_relogin', message: 'session expired, sign in again', needsRelogin: true };
+      }
       const list: ReturnType<typeof setTimeout>[] = [];
       timers.set(profileId, list);
       const at = (ms: number, fn: () => void) => list.push(setTimeout(fn, ms * scale));
@@ -189,6 +257,9 @@ export function createMockApi(opts: MockOptions = {}): Api {
     },
     async gameRunning() { return [...running]; },
     async openFolder({ target }) { return `~/.mangoclient/${target}`; },
+    async openExternal({ url }) {
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+    },
     async listen<K extends keyof ApiEvents>(name: K, cb: (p: ApiEvents[K]) => void): Promise<Unlisten> {
       const set = listeners[name] as Set<(p: ApiEvents[K]) => void>;
       set.add(cb);
