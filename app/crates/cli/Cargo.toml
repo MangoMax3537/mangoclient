@@ -1,0 +1,31 @@
+[package]
+name = "mango-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mango-cli"
+path = "src/main.rs"
+
+[dependencies]
+mango-core = { path = "../core" }
+mango-net = { path = "../net" }
+mango-auth = { path = "../auth" }
+mango-java = { path = "../java" }
+mango-minecraft = { path = "../minecraft" }
+mango-loaders = { path = "../loaders" }
+mango-modrinth = { path = "../modrinth" }
+mango-content = { path = "../content" }
+mango-mango = { path = "../mango" }
+mango-runtime = { path = "../runtime" }
+mango-servers = { path = "../servers" }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

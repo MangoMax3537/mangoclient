@@ -1,0 +1,23 @@
+[package]
+name = "mango-modrinth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mango-net = { path = "../net" }
+mango-core = { path = "../core" }
+mango-archive = { path = "../archive" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[lints]
+workspace = true

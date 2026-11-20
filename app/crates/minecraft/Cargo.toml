@@ -1,0 +1,22 @@
+[package]
+name = "mango-minecraft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mango-net = { path = "../net" }
+mango-core = { path = "../core" }
+mango-archive = { path = "../archive" }
+mango-java = { path = "../java" }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+regex.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

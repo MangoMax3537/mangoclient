@@ -1,0 +1,29 @@
+[package]
+name = "mango-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["keyring"]
+# OS keychain backend. Without it only the 0600 file fallback is available.
+keyring = ["dep:keyring"]
+
+[dependencies]
+mango-net = { path = "../net" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+md-5 = "0.10"
+base64 = "0.22"
+url = "2"
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "async-secret-service", "tokio", "crypto-rust"], optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

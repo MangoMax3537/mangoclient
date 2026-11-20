@@ -1,0 +1,25 @@
+[package]
+name = "mango-content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mango-net = { path = "../net" }
+mango-core = { path = "../core" }
+mango-archive = { path = "../archive" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+regex.workspace = true
+zip.workspace = true
+sha1.workspace = true
+hex.workspace = true
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

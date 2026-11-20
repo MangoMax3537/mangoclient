@@ -1,0 +1,18 @@
+[package]
+name = "mango-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mango-core = { path = "../core" }
+mango-minecraft = { path = "../minecraft" }
+thiserror.workspace = true
+regex.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
