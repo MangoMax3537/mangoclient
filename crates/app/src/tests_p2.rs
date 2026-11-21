@@ -373,7 +373,9 @@ async fn performance_jars_with_manifest_list_and_count_consistently() {
     for _ in 0..2 {
         let items = f.svc.content_list(f.pid.clone()).await.unwrap();
         assert_eq!(items.len(), 3);
-        assert!(items.iter().all(|i| i.kind == ContentType::Mod && i.enabled && !i.filename.starts_with('.')));
+        assert!(items
+            .iter()
+            .all(|i| i.kind == ContentType::Mod && i.enabled && !i.filename.starts_with('.')));
         assert_eq!(f.svc.app_state().unwrap().profiles[0].mod_count, 3);
     }
 }

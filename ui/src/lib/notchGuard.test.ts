@@ -18,6 +18,15 @@ interface Rule { sel: string; body: string }
 const rules = (src: string): Rule[] => [...src.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
 
 describe('notched elements', () => {
+  it('.frame never clips a slanted edge twice: straight edges in ::after, diagonals as gradient stripes in ::before', () => {
+    const css = readFileSync(join(root, 'app.css'), 'utf8');
+    const after = css.match(/\n\.frame::after\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(after).toMatch(/evenodd/);
+    expect(after).not.toMatch(/var\(--n\)/); // no diagonal in the ring path: the element's own notch clip is the only slanted clip
+    const before = css.match(/\n\.frame::before\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(before).toMatch(/linear-gradient\(to top right/);
+    expect(before).toMatch(/linear-gradient\(to bottom left/);
+  });
   it('app.css defines the shared .frame helper next to .notch and .nb', () => {
     const css = readFileSync(join(root, 'app.css'), 'utf8');
     expect(css).toMatch(/\.frame::after\s*\{[^}]*evenodd/);

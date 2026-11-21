@@ -103,7 +103,7 @@
         {@const st = servers.status[s.id]}
         {@const icon = st?.iconUrl ?? s.iconUrl}
         {@const f = serverFacts(st, t)}
-        <li class="row nb" style:--n="12px" class:off={st && !st.online} use:contextmenu={() => serverMenu(s, { join: requestJoin, ping: pingOne, canJoin: app.accounts.length > 0, manage })}>
+        <li class="row nb" style:--n="12px" class:off={st && !st.online} use:contextmenu={() => serverMenu(s, { join: (x) => requestJoin(x, { chooser: true }), ping: pingOne, canJoin: app.accounts.length > 0, manage })}>
           <!-- icon: the stored favicon at once, the one a ping returns as soon as it arrives; the fallback only when there is no icon at all -->
           {#if !icon && !st && !pingLate}
             <span class="slot">{#if pingGate.show}<Skeleton variant="box" w={56} h={56} radius={6} />{/if}</span>
@@ -133,7 +133,7 @@
               <button class="ib hov" type="button" aria-label={t('servers.remove')} use:tip={{ text: t('servers.remove'), side: 'top' }} onclick={() => (removing = s)}><TrashIcon weight="bold" size={16} aria-hidden="true" /></button>
             {/if}
           </div>
-          <button class="btn accent join" type="button" disabled={!app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : ''} onclick={() => requestJoin(s)}>
+          <button class="btn accent join" type="button" disabled={!app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : ''} onclick={() => requestJoin(s, { chooser: true })}>
             <PlayIcon weight="bold" size={14} aria-hidden="true" />{t('servers.join')}
           </button>
         </li>
@@ -156,16 +156,20 @@
   .search { position: relative; flex: 1; min-width: 220px; display: block; }
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
-  .sort { display: grid; gap: 2px; font-size: 12px; }
+  .sort { display: grid; gap: 4px; font-size: 12px; line-height: 1.3; min-width: 12rem; }
+  .sort .field { width: 100%; font-size: var(--fs-md); line-height: normal; text-overflow: ellipsis; }
   .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(150px, auto) auto auto; gap: 16px; align-items: center; padding: 12px 14px; }
+  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) max-content auto auto; gap: 16px; align-items: center; padding: 12px 14px; }
   .row.off { opacity: 0.72; }
   .info { min-width: 0; display: grid; gap: 2px; }
   .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .nm { font: 700 17px/1.25 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 1px 7px; background: rgba(255, 173, 50, 0.14); color: var(--mango); white-space: nowrap; }
   .addr { font-size: 12.5px; color: var(--paper-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stats { font-size: 12.5px; color: var(--paper-dim); min-width: 0; }
+  /* players and ping are never squeezed into each other: the cell is as wide as its facts, nothing is clipped or overlapped */
+  .stats { font-size: 12.5px; color: var(--paper-dim); min-width: 0; padding-inline: 2px; }
+  .stats :global(.il) { overflow: visible; }
+  .stats :global(.it) { flex: none; }
   .acts { display: flex; align-items: center; gap: 2px; }
   .ib, .star { width: 32px; height: 32px; display: grid; place-items: center; color: var(--paper-mute); }
   .ib:hover { color: var(--paper); background: var(--ink-3); }

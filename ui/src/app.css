@@ -135,13 +135,21 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
    the same polygon inset by --bw, so there is no open corner. Rule of the codebase: a notched box with any border or selection frame uses .frame
    (or .nb, which draws its 1px border the same way); a bare `border:` on a clipped element is a bug (see notchGuard.test.ts). */
 .frame { position: relative; --bw: 1px; }
+/* WebKitGTK showed the old single clip-path ring (outer polygon minus inner polygon, on an element that is clipped by the same polygon) with broken
+   diagonals: the same slanted edge was antialiased twice, at fractional scales and on Wayland the two passes disagree and leave gaps. Now no slanted
+   edge is ever clipped twice: ::after is the four straight edges only (box minus an inset rectangle, no diagonal in its path), ::before draws the two
+   diagonals as soft-edged gradient stripes (smooth at any scale) that overlap the straight edges; the element's own notch clip trims the outer edge once. */
+.frame::before, .frame::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .frame::after {
-  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: var(--frame, transparent);
-  --k: calc(var(--bw) * 0.8); /* inner diagonal sits ~1.25px inside the outer one: a true 1px diagonal renders thin or dotted, this keeps it as solid as the straight edges */
-  clip-path: polygon(evenodd,
-    0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)), 0 0,
-    var(--bw) var(--bw), calc(100% - var(--n) - var(--k)) var(--bw), calc(100% - var(--bw)) calc(var(--n) + var(--k)), calc(100% - var(--bw)) calc(100% - var(--bw)),
-    calc(var(--n) + var(--k)) calc(100% - var(--bw)), var(--bw) calc(100% - var(--n) - var(--k)));
+  background: var(--frame, transparent);
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, var(--bw) var(--bw), var(--bw) calc(100% - var(--bw)), calc(100% - var(--bw)) calc(100% - var(--bw)), calc(100% - var(--bw)) var(--bw), var(--bw) var(--bw));
+}
+.frame::before {
+  --t: calc(var(--bw) * 1.15); /* stripe thickness measured across the diagonal: a hair over 1px so it stays as solid as the straight edges */
+  --stops: transparent calc(50% - var(--t) - 0.5px), var(--frame, transparent) calc(50% - var(--t) + 0.5px), var(--frame, transparent) calc(50% + 2px), transparent calc(50% + 2.5px);
+  background:
+    linear-gradient(to top right, var(--stops)) right top / var(--n) var(--n) no-repeat,
+    linear-gradient(to bottom left, var(--stops)) left bottom / var(--n) var(--n) no-repeat;
 }
 /* Notched box with a hard 1px border: the border is the element's own background (--line), a ::before inset by 1px paints the fill with a slightly smaller notch,
    so the diagonal cuts are outlined too. Set --n (notch) and --fill per element; children render above the fill. */

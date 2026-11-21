@@ -3,8 +3,7 @@
   // Nothing inside is clipped: the card keeps real padding at the bottom and every line ends in an ellipsis instead of being cut by the notch.
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import type { Snippet } from 'svelte';
-  import { tip } from '../lib/tooltip';
-
+  
   interface Props {
     title: string;
     art: Snippet;
@@ -17,12 +16,12 @@
     /** Spread onto the main button (click / dblclick / keydown handlers). */
     handlers?: Record<string, unknown>;
     onclick?: () => void;
-    /** The hover Play button in the corner. */
-    go?: { label: string; disabled: boolean; onclick: () => void } | null;
+    /** A small Play badge in the top-right corner: a pure visual cue (the whole card is the button). Servers only; instance cards never show it. */
+    playBadge?: boolean;
     n?: number;
     ariaLabel?: string;
   }
-  let { title, art, lines, selected = false, live = false, dimmed = false, pressed, handlers = {}, onclick, go = null, n = 14, ariaLabel }: Props = $props();
+  let { title, art, lines, selected = false, live = false, dimmed = false, pressed, handlers = {}, onclick, playBadge = false, n = 14, ariaLabel }: Props = $props();
 </script>
 
 <div class="card notch frame" class:sel={selected} class:live class:dimmed style:--n="{n}px" data-media-card>
@@ -31,11 +30,7 @@
     <span class="nm">{title}</span>
     {#if lines}<span class="lines">{@render lines()}</span>{/if}
   </button>
-  {#if go}
-    <button class="go notch" style:--n="8px" type="button" disabled={go.disabled} use:tip={{ text: go.label, side: 'top' }} aria-label={go.label} onclick={go.onclick}>
-      <PlayIcon weight="bold" size={16} aria-hidden="true" />
-    </button>
-  {/if}
+  {#if playBadge}<span class="go notch" style:--n="8px" aria-hidden="true"><PlayIcon weight="bold" size={16} /></span>{/if}
 </div>
 
 <style>
@@ -45,12 +40,11 @@
   .card.dimmed .art { opacity: 0.55; }
   .open { display: grid; width: 100%; text-align: left; gap: 2px; padding-bottom: 18px; }
   .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
-  .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }
-  .nm { font: 700 var(--fs-lg)/1.25 var(--font-display); padding: 0 16px 0 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .art { display: block; position: relative; overflow: hidden; aspect-ratio: 16 / 10; margin-bottom: 6px; }
+  /* line-height >= 1.3 with real padding above and below: `overflow: hidden` (needed for the ellipsis) must never touch the glyphs (the cap tops were cut) */
+  .nm { position: relative; z-index: 1; font: 700 var(--fs-lg)/1.35 var(--font-display); padding: 4px 16px 3px 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lines { display: grid; gap: 1px; padding: 0 16px 0 14px; min-width: 0; font: var(--fs-sm)/1.4 var(--font-mono); color: var(--paper-dim); }
   .card.live .nm::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 8px; background: var(--leaf); animation: pulse 1.6s ease-in-out infinite; }
-  .go { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); opacity: 0; transform: translateY(-4px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); z-index: 2; }
-  .card:hover .go, .go:focus-visible, .card:focus-within .go { opacity: 1; transform: none; }
-  .go:disabled { display: none; }
+  .go { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); pointer-events: none; z-index: 2; }
   @keyframes pulse { 50% { opacity: 0.4; } }
 </style>

@@ -44,3 +44,16 @@ describe('Library cards use one-click open (Home cards keep select / double-clic
     expect(home).not.toMatch(/go=\{\{/); // instance cards have no play badge
   });
 });
+
+describe('play badge and join routing', () => {
+  it('only server cards carry the badge; the Server tab always opens the chooser', async () => {
+    const { readFileSync } = await import('node:fs');
+    const rd = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    expect(rd('components/QuickJoin.svelte')).toContain('<MediaCard title={s.name} playBadge');
+    expect(rd('components/Home.svelte')).not.toContain('playBadge');
+    const sv = rd('components/Servers.svelte');
+    expect(sv).not.toMatch(/requestJoin\((s|x)\)/);
+    expect(sv.match(/chooser: true/g)?.length).toBe(2);
+    expect(rd('lib/stores.svelte.ts')).toMatch(/if \(opts\.chooser\) \{ servers\.join = s; return; \}/);
+  });
+});

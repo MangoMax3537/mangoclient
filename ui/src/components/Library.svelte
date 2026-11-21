@@ -215,9 +215,9 @@
   .info { background: var(--ink-2); }
   .card.sel { --frame: var(--accent-fill); }
   .card:hover .info b { color: var(--mango); }
-  .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
+  .cover { position: relative; display: block; overflow: hidden; aspect-ratio: 16 / 10; }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 18px 20px 14px; min-width: 0; }
-  .info b { font: 700 var(--fs-xl)/1.15 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
+  .info b { font: 700 var(--fs-xl)/1.3 var(--font-display); padding-block: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
   .sub { display: block; line-height: 1.4; padding-block: 1px; font-size: var(--fs-sm); color: var(--paper-dim); min-width: 0; }
   .dim { color: var(--paper-mute); }
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 64px 76px 124px 120px; gap: var(--s-3); align-items: center; width: 100%; padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); }

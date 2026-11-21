@@ -35,7 +35,7 @@
         {@const st = servers.status[s.id]}
         {@const f = serverFacts(st, t)}
         <li use:contextmenu={() => serverMenu(s, { join: requestJoin, ping: () => actions.pingServers(), canJoin: app.accounts.length > 0 })}>
-          <MediaCard title={s.name} dimmed={!!st && !st.online} onclick={() => requestJoin(s)} ariaLabel="{t('servers.join')}: {s.name}">
+          <MediaCard title={s.name} playBadge dimmed={!!st && !st.online} onclick={() => requestJoin(s)} ariaLabel="{t('servers.join')}: {s.name}">
             {#snippet art()}
               {#if !(st?.iconUrl ?? s.iconUrl) && !st}<Skeleton variant="box" w="100%" h="100%" radius={0} />{:else}<span class="fav"><Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} size={96} radius={0} /></span>{/if}
             {/snippet}

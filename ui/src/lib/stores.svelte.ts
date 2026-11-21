@@ -278,8 +278,10 @@ export function errorText(e: unknown): string {
  * Join a server. The selected instance starts straight away when the server's version range says it fits; otherwise (does not fit, version
  * unknown, instance already running) the "choose an instance" dialog opens. Without an account nothing can start.
  */
-export function requestJoin(s: ServerEntry): void {
+/** `chooser: true` (the Server tab) always opens the instance chooser; Home quick join starts directly only when the selected instance fits. */
+export function requestJoin(s: ServerEntry, opts: { chooser?: boolean } = {}): void {
   if (!app.accounts.length) { toast(translate(lang(), 'play.noAccount'), 'error'); return; }
+  if (opts.chooser) { servers.join = s; return; }
   const plan = joinPlan(app.profiles, servers.status[s.id], selectedProfile()?.id ?? null, isBusy);
   if (plan.kind === 'direct') void launchJoin(plan.profileId, s);
   else servers.join = s;
