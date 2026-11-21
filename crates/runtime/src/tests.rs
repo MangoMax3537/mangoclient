@@ -252,7 +252,14 @@ mod unix {
         let ev = store.lock().unwrap().clone();
         let run_at = ev.iter().position(|e| *e == GameEvent::Running).unwrap();
         let last = ev.last().unwrap();
-        assert!(matches!(last, GameEvent::Exited(_)));
+        assert!(matches!(last, GameEvent::Exited(_)), "events: {ev:?}");
+        assert_eq!(
+            ev.iter()
+                .filter(|e| matches!(e, GameEvent::Exited(_)))
+                .count(),
+            1,
+            "exactly one exit: {ev:?}"
+        );
         assert!(run_at < ev.len() - 1);
         let l = lines(&store);
         assert!(l[0].0.ends_with("[main/INFO]: Setting user: Steve"));

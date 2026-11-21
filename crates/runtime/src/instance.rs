@@ -108,6 +108,9 @@ struct Inner {
     flushed: AtomicBool,
     exit: Mutex<Option<ExitInfo>>,
     exit_cv: Condvar,
+    /// Serialises "running" against "exited", so `Running` can never be emitted after `Exited` (the running fallback
+    /// thread and the exit path race otherwise, and a late `Running` would show a finished game as still running).
+    transition: Mutex<()>,
     on_event: EventCb,
     parser: Mutex<LogParser>,
     follower: Mutex<Option<LogFollower>>,
@@ -134,6 +137,10 @@ impl Inner {
     }
 
     fn mark_running(&self) {
+        let _t = self.transition.lock();
+        if self.has_exited() {
+            return;
+        }
         if !self.running.swap(true, Ordering::SeqCst) {
             self.emit(GameEvent::Running);
         }
@@ -207,7 +214,12 @@ impl Inner {
             state,
             played_ms,
         };
+        let _t = self.transition.lock();
         if let Ok(mut slot) = self.exit.lock() {
+            // the waiter and the watcher can both get here: only the first one announces the exit
+            if slot.is_some() {
+                return;
+            }
             *slot = Some(info.clone());
         }
         self.exit_cv.notify_all();
@@ -334,6 +346,7 @@ impl GameInstance {
             stop_requested: AtomicBool::new(false),
             flushed: AtomicBool::new(false),
             exit: Mutex::new(None),
+            transition: Mutex::new(()),
             exit_cv: Condvar::new(),
             on_event: opts.on_event,
             parser: Mutex::new(LogParser::new()),
@@ -383,6 +396,7 @@ impl GameInstance {
             stop_requested: AtomicBool::new(false),
             flushed: AtomicBool::new(false),
             exit: Mutex::new(None),
+            transition: Mutex::new(()),
             exit_cv: Condvar::new(),
             on_event: opts.on_event,
             parser: Mutex::new(LogParser::new()),
@@ -473,6 +487,14 @@ impl GameInstance {
 
     /// Block until the game has exited (or the timeout passes).
     pub fn wait_exit(&self, timeout: Option<Duration>) -> Option<ExitInfo> {
+        let info = self.wait_exit_slot(timeout)?;
+        // The exit path holds `transition` from recording the exit until `Exited` is emitted: waiting for it here means
+        // a caller never sees the exit before the event went out.
+        drop(self.inner.transition.lock());
+        Some(info)
+    }
+
+    fn wait_exit_slot(&self, timeout: Option<Duration>) -> Option<ExitInfo> {
         let guard = self.inner.exit.lock().ok()?;
         match timeout {
             Some(t) => {
