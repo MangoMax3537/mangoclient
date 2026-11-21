@@ -352,6 +352,11 @@ pub async fn install_version(
         }
     })
     .await?;
+    // 26.x launches with -Djava.library.path=${natives_directory}/java and
+    // friends; a missing directory is the "<not a directory>" in crash reports.
+    for sub in ["java", "jna", "lwjgl", "netty"] {
+        tokio::fs::create_dir_all(natives_dir.join(sub)).await?;
+    }
 
     // log4j config
     let mut logging_arg = None;
@@ -388,7 +393,11 @@ pub async fn install_version(
 
     Ok(InstallResult {
         client_jar,
-        classpath: collected.classpath.into_iter().map(|l| l.path).collect(),
+        classpath: collected
+            .runtime_classpath()
+            .into_iter()
+            .map(|l| l.path.clone())
+            .collect(),
         natives_dir,
         is_legacy_assets: assets_index_id == "legacy" || assets_index_id == "pre-1.6",
         assets_index_id,

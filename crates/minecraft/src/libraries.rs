@@ -24,6 +24,21 @@ pub struct Collected {
     pub natives: Vec<LibraryFile>,
 }
 
+impl Collected {
+    /// Jars for `-cp`. Modern natives (`lib:natives-linux` as its own library)
+    /// must be on the classpath too: since 26.x LWJGL finds `liblwjgl.so` via
+    /// the classpath and extracts it to `-Dorg.lwjgl.system.SharedLibraryExtractPath`,
+    /// while `java.library.path` points at an (empty) subdirectory.
+    pub fn runtime_classpath(&self) -> Vec<&LibraryFile> {
+        let mut seen: HashSet<&Path> = HashSet::new();
+        self.classpath
+            .iter()
+            .chain(self.natives.iter().filter(|n| n.name.contains(":natives-")))
+            .filter(|f| seen.insert(f.path.as_path()))
+            .collect()
+    }
+}
+
 /// `group:artifact:version[:classifier][@ext]` -> `group/path/artifact/version/file.ext`
 /// (always `/`-separated). `None` when the coordinates are incomplete.
 pub fn maven_to_path(name: &str, extra_ext: Option<&str>) -> Option<String> {
@@ -401,5 +416,72 @@ mod tests {
             c.classpath[0].url,
             "https://maven.example/repo/c/d/2/d-2.jar"
         );
+    }
+
+    fn fixture_26_3() -> Value {
+        serde_json::from_str(include_str!("../testdata/26.3-trimmed.json")).unwrap()
+    }
+
+    fn cp_names(c: &Collected) -> Vec<String> {
+        c.runtime_classpath()
+            .iter()
+            .map(|f| f.name.clone())
+            .collect()
+    }
+
+    #[test]
+    fn v26_natives_are_on_the_classpath_per_platform() {
+        let v = fixture_26_3();
+        let root = Path::new("/r");
+        for (os, arch, want) in [
+            (
+                HostOs::Linux,
+                HostArch::X64,
+                "org.lwjgl:lwjgl:3.4.3:natives-linux",
+            ),
+            (
+                HostOs::Windows,
+                HostArch::X64,
+                "org.lwjgl:lwjgl:3.4.3:natives-windows",
+            ),
+            (
+                HostOs::Windows,
+                HostArch::Arm64,
+                "org.lwjgl:lwjgl:3.4.3:natives-windows-arm64",
+            ),
+            (
+                HostOs::Osx,
+                HostArch::X64,
+                "org.lwjgl:lwjgl:3.4.3:natives-macos",
+            ),
+            (
+                HostOs::Osx,
+                HostArch::Arm64,
+                "org.lwjgl:lwjgl:3.4.3:natives-macos-arm64",
+            ),
+        ] {
+            let c = collect_libraries(&v, root, &env(os, arch));
+            let cp = cp_names(&c);
+            assert!(cp.contains(&want.to_string()), "{os:?}/{arch:?}: {cp:?}");
+            assert!(cp.contains(&"org.lwjgl:lwjgl:3.4.3".to_string()));
+            // exactly one lwjgl natives jar for this host
+            let core: Vec<_> = cp
+                .iter()
+                .filter(|n| n.starts_with("org.lwjgl:lwjgl:3.4.3:natives"))
+                .collect();
+            assert_eq!(core.len(), 1, "{os:?}/{arch:?}: {core:?}");
+        }
+    }
+
+    #[test]
+    fn legacy_natives_stay_off_the_classpath() {
+        let v = json!({"libraries": [{
+            "name": "org.lwjgl.lwjgl:lwjgl-platform:2.9.4",
+            "natives": {"linux": "natives-linux"},
+            "downloads": {"classifiers": {"natives-linux": {"path": "a/n.jar", "url": "http://x", "sha1": "a", "size": 1}}}
+        }]});
+        let c = collect_libraries(&v, Path::new("/r"), &env(HostOs::Linux, HostArch::X64));
+        assert_eq!(c.natives.len(), 1);
+        assert!(c.runtime_classpath().is_empty());
     }
 }

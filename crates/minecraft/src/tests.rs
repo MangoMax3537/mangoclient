@@ -269,7 +269,10 @@ async fn installs_vanilla_end_to_end() {
     let r = install_version(&paths, "1.21", &opts).await.unwrap();
     assert_eq!(r.version["id"], fx.version["id"]);
     assert_eq!(std::fs::read(&r.client_jar).unwrap(), b"client-jar-bytes");
-    assert_eq!(r.classpath.len(), 2);
+    // a:b, the (failed) missing lib, and the modern natives jar (26.x finds natives via the classpath)
+    assert_eq!(r.classpath.len(), 3);
+    assert!(r.classpath.iter().any(|p| p.ends_with("org/lwjgl/n.jar")));
+    assert!(r.natives_dir.join("java").is_dir());
     assert!(paths.versions().join("1.21/1.21.json").exists());
 
     // natives: flat, so/dll/dylib only, no META-INF, excludes honoured
@@ -278,6 +281,7 @@ async fn installs_vanilla_end_to_end() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
+    names.retain(|n| !matches!(n.as_str(), "java" | "jna" | "lwjgl" | "netty"));
     assert_eq!(names, [".mangoclient-stamp", "libbar.so", "libfoo.so"]);
     assert_eq!(
         srv.hit_count("/lib/w.jar"),

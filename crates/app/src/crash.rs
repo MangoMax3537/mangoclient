@@ -138,6 +138,11 @@ const RULES: &[Rule] = &[
         run: rule_java_version,
     },
     Rule {
+        code: "lwjgl_natives",
+        title: "The game's graphics libraries are missing",
+        run: rule_lwjgl_natives,
+    },
+    Rule {
         code: "jvm_heap_reserve",
         title: "The game could not reserve its memory",
         run: rule_heap_reserve,
@@ -1302,6 +1307,21 @@ fn rule_corrupt_world(f: &Facts) -> Option<Finding> {
     )
 }
 
+fn rule_lwjgl_natives(f: &Facts) -> Option<Finding> {
+    let re = re!(r"UnsatisfiedLinkError: Failed to locate library: (?:lib)?lwjgl")?;
+    let i = f.lines.iter().position(|l| re.is_match(l))?;
+    finding(
+        i,
+        Confidence::High,
+        "The LWJGL native libraries are missing, so the game cannot start its graphics and input layer",
+        vec![
+            s("Repair or reinstall the game files of this instance's Minecraft version, then start again"),
+            s("Delete the instance's natives folder in the launcher data directory so it is extracted again"),
+        ],
+        Vec::new(),
+    )
+}
+
 fn rule_disk_full(f: &Facts) -> Option<Finding> {
     let (i, _) = f.find_any(&[
         "No space left on device",
@@ -1825,6 +1845,21 @@ mod tests {
         .is_some());
         // The memory rule is for a running game, not for this.
         assert!(run("out_of_memory", log).is_none());
+    }
+
+    #[test]
+    fn lwjgl_natives_missing() {
+        let log = "java.lang.UnsatisfiedLinkError: Failed to locate library: liblwjgl.so\n\
+            \tat org.lwjgl.system.Library.loadSystem(Library.java:200)";
+        let c = run("lwjgl_natives", log).unwrap();
+        assert_eq!(c.confidence, Confidence::High);
+        assert!(run(
+            "lwjgl_natives",
+            "Caused by: java.lang.UnsatisfiedLinkError: Unable to load library 'flite'"
+        )
+        .is_none());
+        let a = analyze(&Facts::new(log, &base(&[])));
+        assert_eq!(a.causes[0].code, "lwjgl_natives");
     }
 
     #[test]
