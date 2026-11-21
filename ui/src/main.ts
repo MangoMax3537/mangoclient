@@ -1,12 +1,16 @@
 import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { installInputModality } from './lib/inputModality';
 
 // Optional theme override (data-theme); without it the OS preference decides.
 try {
   const th = localStorage.getItem('mango-theme');
   if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
 } catch { /* storage unavailable */ }
+
+// focus rings only while the keyboard is really used (never after a mouse click)
+installInputModality();
 
 mount(App, { target: document.getElementById('app')! });
 

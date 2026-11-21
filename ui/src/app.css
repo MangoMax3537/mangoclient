@@ -110,6 +110,8 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
 .display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; line-height: 0.95; }
 
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* After a mouse / touch press no focus ring is drawn anywhere; it comes back with the next navigation key (lib/inputModality.ts). */
+:root[data-modality='pointer'] :focus-visible, :root[data-modality='pointer'] :focus-visible + .track { outline: none !important; }
 
 /* Always-dark scope (hero stage, consoles on art): re-declares the dark tokens whatever the theme. */
 .on-stage {

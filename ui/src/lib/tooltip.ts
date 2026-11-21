@@ -1,3 +1,4 @@
+import { modality } from './inputModality';
 // Shared tooltip as a Svelte action: `use:tip={'Label'}` or `use:tip={{ text, side: 'right' | 'top' }}`.
 // One fixed element for the whole app so it is never clipped by overflow or clip-path. It is a visual
 // duplicate of the control's accessible name (aria-label), so it is aria-hidden. Esc dismisses it.
@@ -49,7 +50,7 @@ export function tip(node: HTMLElement, opts: Opts) {
   const enter = on(350), focus = on(0);
   node.addEventListener('mouseenter', enter);
   node.addEventListener('mouseleave', hide);
-  node.addEventListener('focus', () => { if (node.matches(':focus-visible')) focus(); });
+  node.addEventListener('focus', () => { if (node.matches(':focus-visible') && modality() === 'keyboard') focus(); });
   node.addEventListener('blur', hide);
   node.addEventListener('click', hide);
   return {
