@@ -43,13 +43,11 @@ export const fmtDateTime = (ts: number, lang: Lang): string =>
 /** Strips Minecraft section-sign colour codes from a MOTD. */
 export const stripMotd = (s: string): string => s.replace(/§[0-9a-fk-or]/gi, '').trim();
 
-/** Short day + month for "last played": de `16.11.`, en `Nov 16`; the year is added only when it is not the current one (`16.11.2025`, `Nov 16, 2025`). */
+/** Short day + month for "last played": de `16.11` (no trailing dot), en `Nov 16`; a date in another year shows only the year (`2025`). */
 export function fmtShortDate(ts: number, lang: Lang, now = Date.now()): string {
   const d = new Date(ts);
-  const withYear = d.getFullYear() !== new Date(now).getFullYear();
-  if (lang === 'de') {
-    const base = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-    return withYear ? `${base}${d.getFullYear()}` : base;
-  }
-  return new Intl.DateTimeFormat('en', withYear ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }).format(d);
+  // an earlier (or later) year: just the year, no day and month
+  if (d.getFullYear() !== new Date(now).getFullYear()) return String(d.getFullYear());
+  if (lang === 'de') return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(d);
 }
