@@ -27,13 +27,11 @@
   import EmptyState from './EmptyState.svelte';
   import LoadError from './LoadError.svelte';
   import CapeThumb from './CapeThumb.svelte';
-  import Img from './Img.svelte';
   import Tile from './Tile.svelte';
   import Skeleton from './skeleton/Skeleton.svelte';
   import SkeletonRegion from './skeleton/SkeletonRegion.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { toAppError } from '../lib/api';
-  import { brandIcon } from '../lib/fallbackImage';
   import { cachedLibrary, cachedSkin, rememberLibrary, rememberSkin } from '../lib/skinCache';
   import { createCapeFlow } from '../lib/capeFlow';
   import { contextmenu } from '../lib/contextMenu.svelte';
@@ -191,10 +189,7 @@
   {:else}
     <div class="layout">
       <div class="stagecol" use:contextmenu={() => skinStageMenu(() => { actionError = ''; dialog = 'save'; }, editable)}>
-        <section class="stage on-stage nb" style:--n="18px" aria-label={t('skins.viewer')}>
-          <span class="wm px" aria-hidden="true"><Img src={brandIcon(512)} fallback={brandIcon(512)} fit="contain" pixel fbPad="0" /></span>
-          <span class="glow" aria-hidden="true"></span>
-          <span class="floor" aria-hidden="true"></span>
+        <section class="stage" aria-label={t('skins.viewer')}>
           {#if info.phase === 'error' && !data}
             <div class="serr"><LoadError compact error={info.error} onretry={() => info.retry()} /></div>
           {:else if data}
@@ -335,12 +330,8 @@
   .kind { font-size: var(--fs-xs); color: var(--paper-mute); }
   .layout { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: var(--s-5); align-items: start; }
   .stagecol { position: sticky; top: 0; display: grid; gap: 10px; min-width: 0; align-content: start; }
-  /* the box holds only the model: a faint MangoClient watermark, a soft light behind the head and a floor ellipse under the feet, all CSS */
-  .stage { --fill: radial-gradient(70% 55% at 50% 34%, color-mix(in srgb, var(--accent-fill) 13%, var(--hero-bg)), var(--hero-bg) 72%); height: min(560px, calc(100vh - 250px)); min-height: 340px; }
-  .wm { position: absolute; inset: 14% 8% 22%; opacity: 0.07; pointer-events: none; filter: grayscale(0.4); }
-  .glow { position: absolute; left: 50%; top: 4%; width: 78%; aspect-ratio: 1; transform: translateX(-50%); background: radial-gradient(closest-side, color-mix(in srgb, var(--accent-fill) 22%, transparent), transparent); opacity: 0.55; pointer-events: none; }
-  .floor { position: absolute; left: 50%; bottom: 7%; width: 66%; height: 9%; transform: translateX(-50%); pointer-events: none;
-    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28) 55%, transparent 100%), radial-gradient(closest-side, color-mix(in srgb, var(--accent-fill) 20%, transparent) 58%, transparent 62%); }
+  /* no panel, border or fill: the model stands free on the page background, centred in its column */
+  .stage { position: relative; height: min(560px, calc(100vh - 250px)); min-height: 340px; }
   .stage :global(.viewer) { position: absolute; inset: 0; z-index: 1; }
   .sbox { position: absolute; left: 50%; top: 8%; bottom: 14%; width: min(40%, 150px); transform: translateX(-50%); z-index: 1; }
   .serr { position: relative; z-index: 1; padding: 20px; }

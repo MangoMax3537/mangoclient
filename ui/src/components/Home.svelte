@@ -104,7 +104,7 @@
         <ul class="strip">
           {#each others as o (o.id)}
             {@const ob = isBusy(o.id)}
-            <li class="card notch" class:sel={o.id === p.id} class:live={ob} style:--n="14px" use:contextmenu={() => instanceMenu(o)}>
+            <li class="card notch frame" class:sel={o.id === p.id} class:live={ob} style:--n="14px" use:contextmenu={() => instanceMenu(o)}>
               <button class="open" type="button" aria-pressed={o.id === p.id} {...cardHandlers(o.id, ops)}>
                 <span class="art"><InstanceIcon profile={o} fill radius={0} /></span>
                 <span class="nm">{o.name}</span>
@@ -182,7 +182,7 @@
   .strip { list-style: none; margin: 0 -32px 0 -4px; padding: 4px 32px 8px 4px; display: flex; gap: var(--s-3); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
   .card { position: relative; flex: none; width: 212px; scroll-snap-align: start; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
-  .card.sel::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--accent-fill); pointer-events: none; z-index: 1; }
+  .card.sel { --frame: var(--accent-fill); }
   .open { display: grid; width: 100%; text-align: left; gap: 2px; padding-bottom: 12px; }
   .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
   .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }

@@ -169,7 +169,7 @@
       <ul class="list">
         {#each hits as h (h.projectId)}
           {@const st = stateOf(h)}
-          <li class="row">
+          <li class="row nb">
             <Tile kind="mod" id={h.projectId} src={h.iconUrl} size={56} notch={9} />
             <div class="main">
               <div class="l1"><button class="ttl" type="button" onclick={() => (drawer = h)}>{h.title}</button><span class="by">{t('discover.by', { author: h.author })}</span></div>
@@ -217,9 +217,10 @@
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
   .f { display: grid; gap: 2px; font-size: var(--fs-xs); }
-  .list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
-  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 132px; gap: 16px; align-items: center; padding: 12px 8px; border-bottom: 1px solid var(--line-soft); transition: background var(--dur) var(--ease); }
-  .row:hover { background: var(--ink-1); }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 132px; gap: 16px; align-items: center; padding: 12px 14px; --n: var(--notch-s); --fill: var(--ink-1); transition: background var(--dur) var(--ease); }
+  .row:hover, .row:focus-within { --fill: var(--ink-2); }
+  .row:hover { background: var(--line-strong, var(--line)); }
   .main { min-width: 0; display: grid; gap: 3px; }
   .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .ttl { font: 700 var(--fs-lg) var(--font-display); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

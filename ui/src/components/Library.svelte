@@ -146,7 +146,7 @@
 
 {#snippet card(p: ProfileView)}
   <li class="cell" use:contextmenu={() => instanceMenu(p)}>
-    <button class="card notch" class:sel={p.id === selId} style:--n="16px" type="button" aria-pressed={p.id === selId} {...hand(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
+    <button class="card notch frame" class:sel={p.id === selId} style:--n="16px" type="button" aria-pressed={p.id === selId} {...hand(p.id)} style:--tint={p.color ?? 'var(--accent-fill)'}>
       <span class="cover"><InstanceIcon profile={p} fill radius={0} /></span>
       <span class="info">
         <b>{p.name}</b>
@@ -212,7 +212,7 @@
   /* the info panel is always the neutral surface (never the tile tint); selection is a 1px accent frame drawn over the card */
   .card { position: relative; }
   .info { background: var(--ink-2); }
-  .card.sel::after { content: ''; position: absolute; inset: 0; border: 1px solid var(--accent-fill); pointer-events: none; }
+  .card.sel { --frame: var(--accent-fill); }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 14px 14px; min-width: 0; }

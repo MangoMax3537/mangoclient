@@ -78,8 +78,9 @@ describe('neutral panels, no white rings, no rail rings', () => {
     const lib = src('../components/Library.svelte');
     expect(lib).not.toMatch(/\.info \{[^}]*tint/); expect(lib).not.toMatch(/\.card\.sel \.info/); expect(lib).not.toMatch(/color-mix\(in srgb, var\(--accent-fill\)/);
     expect(lib).toMatch(/\.info \{ background: var\(--ink-2\); \}/);
-    expect(lib).toMatch(/\.card\.sel::after \{[^}]*border: 1px solid var\(--accent-fill\)/);
-    expect(src('../components/Home.svelte')).toMatch(/\.card\.sel::after \{[^}]*border: 1px solid var\(--accent-fill\)/);
+    // drawn by the shared .frame ring (follows the notched corners), see notchGuard.test.ts
+    expect(lib).toMatch(/\.card\.sel \{ --frame: var\(--accent-fill\); \}/);
+    expect(src('../components/Home.svelte')).toMatch(/\.card\.sel \{ --frame: var\(--accent-fill\); \}/);
   });
   it('dialogs and popovers have no UA border in the text colour', () => {
     expect(src('../app.css')).toMatch(/dialog, \[popover\] \{ border: 0; outline: 0; \}/);

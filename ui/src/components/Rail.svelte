@@ -73,7 +73,7 @@
       <button type="button" class="avatar" aria-haspopup="dialog" aria-expanded={nav.accounts} use:tip={`${acc?.name ?? t('nav.noAccount')}${credText ? ` · ${credText}` : ''}`}
         aria-label="{t('nav.accounts')}: {acc?.name ?? t('nav.noAccount')}{credText ? `. ${credText}` : ''}{keystoreMissing() ? `. ${t('persist.railHint')}` : ''}"
         onclick={(e) => { e.stopPropagation(); nav.accounts = !nav.accounts; }}>
-        <span class="ring notch" style:--n="9px">{#if app.ready}<Tile kind="account" id={acc?.uuid ?? ''} src={acc?.headUrl} size={40} notch={7} />{:else if gate.show}<Skeleton variant="box" w={40} h={40} notch={7} />{:else}<span class="ph"></span>{/if}</span>
+        <span class="ring">{#if app.ready}<Tile kind="account" id={acc?.uuid ?? ''} src={acc?.headUrl} size={40} />{:else if gate.show}<Skeleton variant="box" w={40} h={40} />{:else}<span class="ph"></span>{/if}</span>
         {#if cred}<span class="sq cred" class:ok={cred === 'ok'} class:warn={cred === 'warn'} class:bad={cred === 'login'} aria-hidden="true"></span>{/if}
       </button>
       {#if nav.accounts}<Accounts />{/if}
