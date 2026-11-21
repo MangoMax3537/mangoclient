@@ -67,9 +67,9 @@ describe('background everywhere', () => {
     expect(src('../App.svelte')).toMatch(/<AppBackground /);
     for (const f of ['Home', 'Library', 'Servers', 'Skins', 'Stats', 'Settings', 'Discover']) expect(src(`../components/${f}.svelte`), f).not.toMatch(/AppBackground|PanoramaBackground|BgLayer/);
   });
-  it('the Settings toggle exists with search aliases', () => {
-    expect(src('../components/Settings.svelte')).toMatch(/setBackgroundEverywhere/);
-    expect(entriesFor('app').find((e) => e.id === 'bgAll')?.aliases).toContain('everywhere');
+  it('the old "background in all areas" switch is gone: the background is always on', () => {
+    expect(src('../components/Settings.svelte')).not.toMatch(/setBackgroundEverywhere/);
+    expect(entriesFor('app').find((e) => e.id === 'bgAll')).toBeUndefined();
   });
 });
 

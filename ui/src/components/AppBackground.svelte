@@ -11,6 +11,7 @@
   import { reducedMotion } from '../lib/motion';
   import { wallpapers, DEFAULT_SCRIM } from '../lib/wallpapers';
   import { FULL_BLUR, FULL_DIM, flatten } from '../lib/bgMode';
+  import { artUrl, floorWallpaper, readLastWallpaper, rememberWallpaper } from '../lib/bgFloor';
   import { loadPanorama, panoramaPool, panoramas, ui } from '../lib/stores.svelte';
   import type { ProfileBackground } from '../lib/types';
 
@@ -20,7 +21,20 @@
 
   const isAuto = $derived(background.kind === 'auto');
   $effect(() => { if (profileId && (isAuto || background.kind === 'panorama')) void loadPanorama(profileId); });
-  const pool = $derived(buildPool(wallpapers, panoramaPool.sets, versionWallpaper(wallpapers, mcVersion, profileId)));
+  // slides that failed to load or decode this session: skipped from now on, the current slide stays
+  let bad = $state<string[]>([]);
+  const isBad = (r: ResolvedBackground | null): boolean => { const u = r && artUrl(r); return !!u && bad.includes(u); };
+  const pool = $derived(buildPool(wallpapers, panoramaPool.sets, versionWallpaper(wallpapers, mcVersion, profileId)).filter((p) => !isBad(resolvePoolItem(p))));
+  // THE floor: a bundled wallpaper under everything, the last one shown (else a fixed generic one). Drawn at once, never faded, never removed.
+  const floor = floorWallpaper(wallpapers, readLastWallpaper());
+  const floorRes: ResolvedBackground | null = floor ? { kind: 'image', url: floor.url, scrim: floor.scrim, source: 'wallpaper' } : null;
+  /** Only real images and panoramas become slides; plain / watermark results leave the floor showing. */
+  const real = (r: ResolvedBackground | null): ResolvedBackground | null => (r && (r.kind === 'image' || r.kind === 'panorama') ? r : null);
+  function remember(r: ResolvedBackground): void {
+    if (r.kind !== 'image') return;
+    const w = wallpapers.find((x) => x.url === r.url);
+    if (w) rememberWallpaper(w.id);
+  }
   const calm = reducedMotion();
   const cycling = $derived(cycle && isAuto && ui.cycleBackgrounds && !!profileId && pool.length > 1);
   // dev-only: why the cycle is off (console, never UI)
@@ -48,8 +62,10 @@
   const first = $derived(resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers, pool }));
   /** `first` is applied while nothing has been swapped in yet (a changed setting or a late panorama updates it in place). */
   $effect(() => {
-    const f = first;
+    const f0 = real(first);
     untrack(() => {
+      // a slide that failed before is not tried again: the next good pool member (or the floor) takes its place
+      const f = isBad(f0) ? (pool.length ? real(resolvePoolItem(pool[0])) : null) : f0;
       // while `auto` the engine is one continuous show: switching view / instance never swaps the slide in place (only the first fill)
       if (slots[base].res === null || (slots[base].key === 'first' && !(isAuto && settingKey === 'auto|'))) {
         slots[base] = { res: f, key: 'first', shown: true };
@@ -66,7 +82,7 @@
       if (settingKey && k !== settingKey && slots[base].key !== 'first') {
         const other: 0 | 1 = base === 0 ? 1 : 0;
         slots[other] = { res: null, key: '', shown: false }; incoming = null; fading = false; clearTimeout(fadeTimer);
-        slots[base] = { res: first, key: 'first', shown: true };
+        slots[base] = { res: real(first), key: 'first', shown: true };
         timer?.done();
       }
       settingKey = k;
@@ -77,7 +93,7 @@
   /** The pool key of what a resolved background shows, so the shuffle never starts with the same one. */
   const keyOf = (r: ResolvedBackground): string | null => {
     if (r.kind === 'image') { const m = pool.find((p) => p.kind === 'wallpaper' && p.url === r.url); return m ? poolKey(m) : null; }
-    return r.kind === 'panorama' ? `p:${r.set.mcVersion}` : r.kind === 'watermark' ? 'brand' : null;
+    return r.kind === 'panorama' ? `p:${r.set.mcVersion}` : null;
   };
   function advance(): void {
     const cur = slots[base].res;
@@ -85,18 +101,25 @@
     const next: PoolItem | null = order.next();
     if (!next || incoming !== null) { timer?.done(); return; }
     const other: 0 | 1 = base === 0 ? 1 : 0;
-    slots[other] = { res: resolvePoolItem(next), key: poolKey(next), shown: false };
+    const nres = real(resolvePoolItem(next));
+    if (!nres) { timer?.done(); return; }
+    slots[other] = { res: nres, key: poolKey(next), shown: false };
     incoming = other;
     // watchdog: an image that never loads must not stall the cycle for good
     clearTimeout(watchdog);
-    watchdog = setTimeout(() => {
-      if (incoming === null || fading) return;
-      slots[incoming] = { res: null, key: '', shown: false }; incoming = null;
-      timer?.done();
-    }, 20_000);
+    watchdog = setTimeout(() => { if (incoming !== null && !fading) failed(incoming); }, 20_000);
+  }
+  /** A layer could not load or decode: keep what is on screen, drop the layer, never try that image again this session. */
+  function failed(i: 0 | 1): void {
+    const u = slots[i].res && artUrl(slots[i].res as ResolvedBackground);
+    if (u && !bad.includes(u)) bad = [...bad, u];
+    slots[i] = { res: null, key: '', shown: false };
+    if (incoming === i) { incoming = null; fading = false; clearTimeout(watchdog); clearTimeout(fadeTimer); timer?.done(); }
   }
   /** The incoming layer has loaded and decoded: fade it in, then drop the old one. */
   function ready(i: 0 | 1): void {
+    const cur = slots[i].res;
+    if (cur) remember(cur);
     if (incoming !== i || slots[i].shown || fading) return;
     fading = true;
     clearTimeout(watchdog);
@@ -141,15 +164,17 @@
   });
   const full = $derived(mode === 'full');
   const shown = (r: ResolvedBackground): ResolvedBackground => (full ? flatten(r) : r);
+  const floorLook = $derived(full ? { dim: FULL_DIM, blur: FULL_BLUR } : { dim: floor?.scrim ?? 0.6, blur: 0 });
   const look = (r: ResolvedBackground) => (full ? { dim: FULL_DIM, blur: FULL_BLUR } : backgroundStyle(background, r));
 </script>
 
 <div class="stack" class:full class:calm aria-hidden="true" data-bg-engine data-slide={slots[base].key}>
+  {#if floorRes}<div class="floor" data-bg-floor><BgLayer res={floorRes} look={floorLook} {tint} {full} angle={0} instant /></div>{/if}
   {#each slots as s, i (i)}
     {#if s.res}
       {@const r = shown(s.res)}
       <div class="slot" class:in={incoming === i} class:shown={s.shown}>
-        <BgLayer res={r} look={look(r)} {tint} {full} angle={panoramaAngle(profileId)} paused={false} onready={() => ready(i as 0 | 1)} />
+        <BgLayer res={r} look={look(r)} {tint} {full} bare angle={panoramaAngle(profileId)} paused={false} onready={() => ready(i as 0 | 1)} onfail={() => failed(i as 0 | 1)} />
       </div>
     {/if}
   {/each}
@@ -159,7 +184,7 @@
   /* its own stacking context: the crossfading layer (z-index 2) can never climb over the content above the engine */
   .stack { position: absolute; inset: 0; overflow: hidden; background: var(--hero-bg); isolation: isolate; z-index: 0; pointer-events: none; }
   .stack.full { background: var(--ink-0); }
-  .slot { position: absolute; inset: 0; }
+  .floor, .slot { position: absolute; inset: 0; }
   .slot.in { z-index: 2; opacity: 0; transition: opacity 1.8s ease-in-out; }
   .slot.in.shown { opacity: 1; }
   /* reduced motion: the swap is instant, the cycle itself keeps running */

@@ -59,7 +59,6 @@
   $effect(() => { if (ui.confirmDelete && !delP) ui.confirmDelete = null; });
   const bgProfile = $derived(engineProfile(nav.view, nav.profileId, app.profiles, selectedProfile()));
   const bgMode = $derived(nav.view === 'home' && bgProfile ? 'hero' : 'full');
-  const bgOn = $derived(app.ready && (nav.view === 'home' ? !!bgProfile || ui.backgroundEverywhere : ui.backgroundEverywhere));
   $effect(() => { document.documentElement.lang = app.config?.language ?? 'de'; });
 </script>
 
@@ -70,9 +69,8 @@
   <div class="body">
     <Rail />
     <main>
-      {#if bgOn}
-        <AppBackground profileId={bgProfile?.id ?? ''} mcVersion={bgProfile?.mcVersion ?? ''} background={bgProfile?.background ?? { kind: 'auto' }} tint={bgProfile?.color ?? null} mode={bgMode} />
-      {/if}
+      <!-- always mounted, in every state (booting, no instance, onboarding, error): the bundled wallpaper is its floor -->
+      <AppBackground profileId={bgProfile?.id ?? ''} mcVersion={bgProfile?.mcVersion ?? ''} background={bgProfile?.background ?? { kind: 'auto' }} tint={bgProfile?.color ?? null} mode={bgMode} />
       {#if !app.ready}
         {#if boot.show}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/if}
       {:else}

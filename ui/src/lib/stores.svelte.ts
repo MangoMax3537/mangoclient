@@ -140,17 +140,9 @@ export const ui = $state({
   confirmDelete: null as string | null,
   /** UI preference (localStorage): Home crossfades through the background pool while the instance background is `auto`. */
   cycleBackgrounds: true,
-  /** UI preference (localStorage): the background is also drawn, dimmed and blurred, behind every view (not only the Home hero). */
-  backgroundEverywhere: true,
 });
 const CYCLE_KEY = 'mango-cycle-bg';
 try { ui.cycleBackgrounds = globalThis.localStorage?.getItem(CYCLE_KEY) !== '0'; } catch { /* storage may be unavailable */ }
-const BG_ALL_KEY = 'mango-bg-all';
-try { ui.backgroundEverywhere = globalThis.localStorage?.getItem(BG_ALL_KEY) !== '0'; } catch { /* storage may be unavailable */ }
-export function setBackgroundEverywhere(on: boolean): void {
-  ui.backgroundEverywhere = on;
-  try { globalThis.localStorage?.setItem(BG_ALL_KEY, on ? '1' : '0'); } catch { /* ignore */ }
-}
 export function setCycleBackgrounds(on: boolean): void {
   ui.cycleBackgrounds = on;
   try { globalThis.localStorage?.setItem(CYCLE_KEY, on ? '1' : '0'); } catch { /* ignore */ }

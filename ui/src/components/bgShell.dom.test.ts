@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   history.replaceState(null, '', '/');
   resetStores();
-  ui.cycleBackgrounds = true; ui.backgroundEverywhere = true;
+  ui.cycleBackgrounds = true;
   made.n = 0;
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });

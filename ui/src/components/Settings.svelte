@@ -24,7 +24,7 @@
   import { SHORTCUT_GROUPS, capText } from '../lib/keybinds';
   import { jumpTo } from '../lib/settingsJump';
   import { parseWindowSize } from '../lib/windowSize';
-  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setBackgroundEverywhere, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
+  import { actions, anyGameActive, app, applyTheme, errorText, getApi, lang, nav, platform, setCycleBackgrounds, t, theme, toast, ui, updates, type ThemeMode } from '../lib/stores.svelte';
   import type { StorageKey, StorageUsage } from '../lib/types';
 
   const cfg = $derived(app.config);
@@ -107,11 +107,6 @@
           {#if show('theme')}
             <SettingRow id="theme" label={t('settings.theme')} hint={t('settings.theme.hint')}>
               <Seg options={themeOpts} value={theme.mode} label={t('settings.theme')} idPrefix="theme" onchange={(v) => applyTheme(v as ThemeMode)} />
-            </SettingRow>
-          {/if}
-          {#if show('bgAll')}
-            <SettingRow id="bgAll" asLabel label={t('settings.bgAll')} hint={t('settings.bgAllHint')}>
-              <Toggle checked={ui.backgroundEverywhere} onchange={(on) => setBackgroundEverywhere(on)} />
             </SettingRow>
           {/if}
           {#if show('cycleBg')}
