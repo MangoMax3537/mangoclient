@@ -14,7 +14,7 @@ export const en13 = {
   'keys.stopTitle': 'Stop {name}?', 'keys.stopBody': 'The game closes and unsaved progress in it is lost.',
 
   /* settings: home background */
-  'settings.cycleBg': 'Change the Home background', 'settings.cycleBgHint': 'With the automatic background, Home fades to a new wallpaper, panorama or the Mango Client surface every 30 to 60 seconds. Off when your system prefers reduced motion.',
+  'settings.cycleBg': 'Change the Home background', 'settings.cycleBgHint': 'With the automatic background, Home fades to a new wallpaper, panorama or the Mango Client surface every 30 seconds. Off when your system prefers reduced motion.',
 
   /* instance: Java and window */
   'psettings.java': 'Java', 'psettings.java.hint': 'Which Java runs this instance. Automatic picks a suitable one and installs it when needed.',
@@ -74,7 +74,7 @@ export const de13: Record<keyof typeof en13, string> = {
   'keys.note': 'Kürzel ohne Zusatztaste greifen nicht, während du in ein Textfeld tippst.',
   'keys.stopTitle': '{name} stoppen?', 'keys.stopBody': 'Das Spiel wird beendet, nicht gespeicherter Fortschritt darin geht verloren.',
 
-  'settings.cycleBg': 'Hintergrund auf Home wechseln', 'settings.cycleBgHint': 'Beim automatischen Hintergrund blendet Home alle 30 bis 60 Sekunden zu einem neuen Wallpaper, Panorama oder der Mango-Client-Fläche über. Aus, wenn dein System reduzierte Bewegung wünscht.',
+  'settings.cycleBg': 'Hintergrund auf Home wechseln', 'settings.cycleBgHint': 'Beim automatischen Hintergrund blendet Home alle 30 Sekunden zu einem neuen Wallpaper, Panorama oder der Mango-Client-Fläche über. Aus, wenn dein System reduzierte Bewegung wünscht.',
 
   'psettings.java': 'Java', 'psettings.java.hint': 'Welches Java diese Instanz startet. Automatisch wählt ein passendes und installiert es bei Bedarf.',
   'psettings.java.needs': 'Minecraft {mc} braucht Java {major}.', 'psettings.java.auto': 'Automatisch', 'psettings.java.custom': 'Eigener Pfad...',

@@ -2,12 +2,12 @@
   // THE background engine, mounted once in the app shell behind every view. Two stacked layers: the next image is loaded AND decoded before it
   // fades in (opacity only, ~1.8 s), then the old layer is dropped so its images leave memory. mode 'hero' (Home) draws the full-strength hero
   // look (the Home hero is transparent over it); mode 'full' (every other view) draws a still image under a strong uniform scrim and blur.
-  // With `auto` (and `cycle`) it crossfades through the pool (generic wallpapers + panoramas + brand surface) every 30..60 s in shuffled order.
-  // The timer pauses while the document is hidden or the window unfocused; reduced motion = no cycling.
+  // With `auto` (and `cycle`) it crossfades through the pool (generic wallpapers + panoramas + brand surface) every 30 s in shuffled order.
+  // The timer pauses while the document is hidden or the window was blurred. Reduced motion does NOT stop the cycle (WebKitGTK reports it whenever the desktop has animations off): the swap is just instant. Only the Settings toggle turns cycling off.
   import { onMount, untrack } from 'svelte';
   import BgLayer from './BgLayer.svelte';
   import { backgroundStyle, panoramaAngle, resolveBackground, resolvePoolItem, type ResolvedBackground } from '../lib/instanceIcon';
-  import { CycleScheduler, FADE_MS, Order, buildPool, poolKey, type PoolItem } from '../lib/bgCycle';
+  import { CycleScheduler, FADE_MS, Order, buildPool, poolKey, versionWallpaper, type PoolItem } from '../lib/bgCycle';
   import { reducedMotion } from '../lib/motion';
   import { wallpapers, DEFAULT_SCRIM } from '../lib/wallpapers';
   import { FULL_BLUR, FULL_DIM, flatten } from '../lib/bgMode';
@@ -20,11 +20,13 @@
 
   const isAuto = $derived(background.kind === 'auto');
   $effect(() => { if (profileId && (isAuto || background.kind === 'panorama')) void loadPanorama(profileId); });
-  const pool = $derived(buildPool(wallpapers, panoramaPool.sets));
+  const pool = $derived(buildPool(wallpapers, panoramaPool.sets, versionWallpaper(wallpapers, mcVersion, profileId)));
   const calm = reducedMotion();
-  const cycling = $derived(cycle && isAuto && ui.cycleBackgrounds && !calm && pool.length > 1);
+  const cycling = $derived(cycle && isAuto && ui.cycleBackgrounds && !!profileId && pool.length > 1);
+  // dev-only: why the cycle is off (console, never UI)
+  $effect(() => { if (import.meta.env.DEV && !cycling) console.debug('[bg] cycling off:', { cycle, isAuto, setting: ui.cycleBackgrounds, profileId, pool: pool.length }); });
 
-  /** `?mockCycleMs=3000` (dev) shortens the 30..60 s interval. */
+  /** `?mockCycleMs=3000` (dev) shortens the 30 s interval. */
   const fixedMs = (() => { try { const n = Number(new URLSearchParams(location.search).get('mockCycleMs')); return Number.isFinite(n) && n > 0 ? n : null; } catch { return null; } })();
 
   interface Slot { res: ResolvedBackground | null; key: string; shown: boolean }
@@ -34,10 +36,13 @@
   let fading = false;
 
   const order = new Order();
-  let timer: CycleScheduler | null = null;
+  // reactive on purpose: the start/stop effect below must re-run once the scheduler exists, whatever the effect order
+  let timer = $state.raw<CycleScheduler | null>(null);
+  let blurred = false;
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
-  const isPaused = (): boolean => document.hidden || !document.hasFocus();
+  // document.hasFocus() is unreliable in WebKitGTK/Wayland (false while focused), so only real blur events count
+  const isPaused = (): boolean => document.hidden || blurred;
 
   // what the instance itself shows (same resolution as its own hero)
   const first = $derived(resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers, pool }));
@@ -104,22 +109,25 @@
         base = i; incoming = null; fading = false;
         slots[old] = { res: null, key: '', shown: false };
         timer?.done();
-      }, FADE_MS + 60);
+      }, calm ? 60 : FADE_MS + 60);
     };
     requestAnimationFrame(() => requestAnimationFrame(go));
     setTimeout(go, 250);
   }
 
   onMount(() => {
-    timer = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>), fixedMs }, advance);
-    const pause = () => timer?.setPaused(isPaused());
+    const sched = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>), fixedMs }, advance);
+    timer = sched;
+    const pause = () => sched.setPaused(isPaused());
+    const onBlur = () => { blurred = true; pause(); };
+    const onFocus = () => { blurred = false; pause(); };
     document.addEventListener('visibilitychange', pause);
-    window.addEventListener('blur', pause); window.addEventListener('focus', pause);
+    window.addEventListener('blur', onBlur); window.addEventListener('focus', onFocus);
     pause();
     return () => {
       document.removeEventListener('visibilitychange', pause);
-      window.removeEventListener('blur', pause); window.removeEventListener('focus', pause);
-      timer?.stop(); clearTimeout(fadeTimer); clearTimeout(watchdog);
+      window.removeEventListener('blur', onBlur); window.removeEventListener('focus', onFocus);
+      sched.stop(); clearTimeout(fadeTimer); clearTimeout(watchdog);
     };
   });
   // start / stop with the preference and the pool
@@ -134,7 +142,7 @@
   const look = (r: ResolvedBackground) => (full ? { dim: FULL_DIM, blur: FULL_BLUR } : backgroundStyle(background, r));
 </script>
 
-<div class="stack" class:full aria-hidden="true" data-bg-engine>
+<div class="stack" class:full class:calm aria-hidden="true" data-bg-engine>
   {#each slots as s, i (i)}
     {#if s.res}
       {@const r = shown(s.res)}
@@ -152,4 +160,6 @@
   .slot { position: absolute; inset: 0; }
   .slot.in { z-index: 2; opacity: 0; transition: opacity 1.8s ease-in-out; }
   .slot.in.shown { opacity: 1; }
+  /* reduced motion: the swap is instant, the cycle itself keeps running */
+  .stack.calm .slot.in { transition: none; }
 </style>

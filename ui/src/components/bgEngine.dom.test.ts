@@ -17,6 +17,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   history.replaceState(null, '', '/?mockCycleMs=1500');
   resetStores();
+  ui.cycleBackgrounds = true;
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
@@ -67,6 +68,36 @@ describe('background engine', () => {
     const first = JSON.stringify(srcs(target));
     await vi.advanceTimersByTimeAsync(20_000);
     expect(JSON.stringify(srcs(target))).toBe(first);
+    unmount(app);
+  });
+
+  it('keeps cycling under reduced motion (instant swap, only the Settings toggle turns it off)', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {} }));
+    await init(createMockApi());
+    const target = document.createElement('div'); document.body.append(target);
+    const app = mount(Harness, { target });
+    flushSync();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(target.querySelector('[data-bg-engine].calm')).toBeTruthy();
+    let swaps = 0, last = JSON.stringify(srcs(target));
+    for (let i = 0; i < 30 && swaps < 3; i++) {
+      await vi.advanceTimersByTimeAsync(500);
+      const cur = JSON.stringify(srcs(target));
+      if (cur !== last) { last = cur; swaps++; }
+    }
+    expect(swaps).toBeGreaterThanOrEqual(3);
+    unmount(app);
+  });
+
+  it('starts once the profile appears later (the scheduler is not armed before)', async () => {
+    await init(createMockApi());
+    const target = document.createElement('div'); document.body.append(target);
+    const app = mount(Harness, { target });
+    flushSync();
+    await vi.advanceTimersByTimeAsync(5_000);
+    const a = JSON.stringify(srcs(target));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(JSON.stringify(srcs(target))).not.toBe(a);
     unmount(app);
   });
 });

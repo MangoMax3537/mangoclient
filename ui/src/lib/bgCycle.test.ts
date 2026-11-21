@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CYCLE_MAX_MS, CYCLE_MIN_MS, CycleScheduler, Order, buildPool, nextDelay, poolKey, resolveAuto, shuffle, versionWallpaper } from './bgCycle';
+import { CYCLE_MS, CycleScheduler, Order, buildPool, nextDelay, poolKey, resolveAuto, shuffle, versionWallpaper } from './bgCycle';
 import { buildWallpapers } from './wallpapers';
 import type { PanoramaSet } from './types';
 
@@ -58,10 +58,23 @@ describe('Order (shuffle without repeats)', () => {
   it('shuffle keeps all items', () => { expect(shuffle([1, 2, 3, 4, 5]).sort()).toEqual([1, 2, 3, 4, 5]); });
 });
 
+describe('pool with only a version wallpaper', () => {
+  const own = { id: 'v', url: 'u', scrim: 0.4, generic: false, versions: ['1.21'] } as unknown as Parameters<typeof buildPool>[0][number];
+  it('has at least 2 entries: the version wallpaper and the brand surface', () => {
+    const pool = buildPool([], [], own);
+    expect(pool.length).toBeGreaterThanOrEqual(2);
+    expect(pool.map(poolKey)).toEqual(['w:v', 'brand']);
+  });
+  it('does not list the same wallpaper twice when it is also generic', () => {
+    const g = { ...own, generic: true } as typeof own;
+    expect(buildPool([g], [], g).map(poolKey)).toEqual(['w:v', 'brand']);
+  });
+});
+
 describe('delay', () => {
-  it('is in 30..60 s', () => {
-    expect(nextDelay(() => 0)).toBe(CYCLE_MIN_MS); expect(nextDelay(() => 1)).toBe(CYCLE_MAX_MS); expect(nextDelay(() => 0.5)).toBe(45000);
-    for (let i = 0; i < 100; i++) { const d = nextDelay(); expect(d).toBeGreaterThanOrEqual(30000); expect(d).toBeLessThanOrEqual(60000); }
+  it('is a fixed 30 s', () => {
+    expect(CYCLE_MS).toBe(30000);
+    for (let i = 0; i < 20; i++) expect(nextDelay()).toBe(30000);
   });
 });
 
@@ -71,23 +84,22 @@ describe('CycleScheduler (fake timers)', () => {
     const s = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>), ...o }, next);
     return { s, next };
   };
-  it('fires after the random interval, then waits for done() before arming the next', () => {
+  it('fires after the interval, then waits for done() before arming the next', () => {
     vi.useFakeTimers();
     const { s, next } = make({ rand: () => 0 });
     s.start(); s.setPaused(false);
-    vi.advanceTimersByTime(CYCLE_MIN_MS - 1); expect(next).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(CYCLE_MS - 1); expect(next).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1); expect(next).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(10 * CYCLE_MAX_MS); expect(next).toHaveBeenCalledTimes(1); // still decoding / fading
-    s.done(); vi.advanceTimersByTime(CYCLE_MIN_MS); expect(next).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(10 * CYCLE_MS); expect(next).toHaveBeenCalledTimes(1); // still decoding / fading
+    s.done(); vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
-  it('uses a new random delay per cycle within 30..60 s', () => {
+  it('uses the same 30 s delay every cycle', () => {
     vi.useFakeTimers();
-    const seq = [0, 1]; let i = 0;
-    const { s, next } = make({ rand: () => seq[i++ % 2] });
+    const { s, next } = make();
     s.start(); s.setPaused(false);
     vi.advanceTimersByTime(30000); expect(next).toHaveBeenCalledTimes(1);
-    s.done(); vi.advanceTimersByTime(59999); expect(next).toHaveBeenCalledTimes(1);
+    s.done(); vi.advanceTimersByTime(29999); expect(next).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1); expect(next).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
@@ -97,16 +109,16 @@ describe('CycleScheduler (fake timers)', () => {
     s.start(); s.setPaused(false);
     vi.advanceTimersByTime(20000);
     s.setPaused(true); expect(s.armed).toBe(false);
-    vi.advanceTimersByTime(5 * CYCLE_MAX_MS); expect(next).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5 * CYCLE_MS); expect(next).not.toHaveBeenCalled();
     s.setPaused(false); expect(s.armed).toBe(true);
-    vi.advanceTimersByTime(CYCLE_MIN_MS); expect(next).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
   it('does not run before start, and stop cancels', () => {
     vi.useFakeTimers();
     const { s, next } = make({ rand: () => 0 });
-    s.setPaused(false); vi.advanceTimersByTime(CYCLE_MAX_MS * 2); expect(next).not.toHaveBeenCalled();
-    s.start(); s.stop(); vi.advanceTimersByTime(CYCLE_MAX_MS * 2); expect(next).not.toHaveBeenCalled();
+    s.setPaused(false); vi.advanceTimersByTime(CYCLE_MS * 2); expect(next).not.toHaveBeenCalled();
+    s.start(); s.stop(); vi.advanceTimersByTime(CYCLE_MS * 2); expect(next).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
   it('fixedMs (dev flag) overrides the interval', () => {
@@ -129,4 +141,17 @@ describe('built-in Mango Client wallpaper', () => {
     expect(choiceFromBackground({ kind: 'wallpaper', id: MANGO_CLIENT_ID }, [])).toMatchObject({ kind: 'wallpaper', id: 'mango-client' });
   });
   it('it is one member of the auto / Home pool', () => { expect(buildPool([], []).map(poolKey)).toContain('brand'); });
+});
+
+describe('CycleScheduler restart', () => {
+  it('re-arms after stop() mid-swap (a stale waiting flag must not block it) and when started late', () => {
+    vi.useFakeTimers();
+    const next = vi.fn();
+    const s = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) }, next);
+    s.setPaused(false);
+    vi.advanceTimersByTime(CYCLE_MS * 3); expect(next).not.toHaveBeenCalled(); // not started yet (no profile)
+    s.start(); vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(1); // now waiting for done()
+    s.stop(); s.start(); vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });
