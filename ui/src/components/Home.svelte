@@ -17,7 +17,7 @@
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
   import { fmtDuration } from '../lib/format';
-  import { heroFacts, playedFact, versionLoaderFacts } from '../lib/infoLine';
+  import { heroFacts, playedShortFact, versionLoaderFacts } from '../lib/infoLine';
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
   import { cardHandlers } from '../lib/instanceCard';
@@ -112,7 +112,7 @@
                 {#snippet art()}<InstanceIcon profile={o} fill radius={0} />{/snippet}
                 {#snippet lines()}
                   <InfoLine facts={versionLoaderFacts(o, t)} />
-                  <InfoLine facts={[playedFact(o, lang(), t, Date.now(), true)]} />
+                  <InfoLine facts={[playedShortFact(o, lang(), t)]} />
                 {/snippet}
               </MediaCard>
             </li>

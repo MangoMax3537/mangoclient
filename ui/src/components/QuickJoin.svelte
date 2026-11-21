@@ -37,7 +37,7 @@
         <li use:contextmenu={() => serverMenu(s, { join: requestJoin, ping: () => actions.pingServers(), canJoin: app.accounts.length > 0 })}>
           <MediaCard title={s.name} dimmed={!!st && !st.online} onclick={() => requestJoin(s)} ariaLabel="{t('servers.join')}: {s.name}">
             {#snippet art()}
-              {#if !(st?.iconUrl ?? s.iconUrl) && !st}<Skeleton variant="box" w="100%" h="100%" radius={0} />{:else}<Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} fill radius={0} />{/if}
+              {#if !(st?.iconUrl ?? s.iconUrl) && !st}<Skeleton variant="box" w="100%" h="100%" radius={0} />{:else}<span class="fav"><Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} size={96} radius={0} /></span>{/if}
             {/snippet}
             {#snippet lines()}
               <InfoLine facts={f.version} />
@@ -55,4 +55,7 @@
   .qj { min-width: 0; }
   header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-3); }
   h2 { font-size: var(--fs-xl); }
+  /* a favicon is a small square: shown whole and pixel-sharp on a neutral surface, never cropped into the 16:10 area */
+  .fav { display: grid; place-items: center; width: 100%; height: 100%; background: var(--ink-3); }
+  .fav :global(img) { image-rendering: pixelated; }
 </style>

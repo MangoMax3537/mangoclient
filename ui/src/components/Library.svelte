@@ -14,7 +14,7 @@
   import FoldersIcon from 'phosphor-svelte/lib/FoldersIcon';
   import { tip } from '../lib/tooltip';
   import { fmtDuration, fmtShortDate } from '../lib/format';
-  import { playedFact, versionLoaderFacts } from '../lib/infoLine';
+  import { playedShortFact, versionLoaderFacts } from '../lib/infoLine';
   import InfoLine from './InfoLine.svelte';
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
   import { writeLibraryLayout } from '../lib/layoutHint';
@@ -152,7 +152,7 @@
       <span class="info">
         <b>{p.name}</b>
         <span class="mono sub"><InfoLine facts={versionLoaderFacts(p, t)} /></span>
-        <span class="mono sub"><InfoLine facts={[playedFact(p, lang(), t, Date.now(), true)]} /></span>
+        <span class="mono sub"><InfoLine facts={[playedShortFact(p, lang(), t)]} /></span>
         {@render tagChips(p, 3)}
       </span>
     </button>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heroFacts, lastPlayedText, versionLoaderFacts } from './infoLine';
+import { heroFacts, lastPlayedText, playedShortFact, versionLoaderFacts } from './infoLine';
 import { fmtShortDate } from './format';
 import { translate } from './i18n';
 const tde = ((k: string, v?: never) => translate('de', k as never, v)) as never;
@@ -24,5 +24,8 @@ describe('info facts', () => {
     expect(lastPlayedText({ ...p, lastPlayed: null }, 'en', ten)).toBe('Never played');
     expect(versionLoaderFacts({ ...p, loader: 'vanilla' }, ten).map((f) => f.text)).toEqual(['1.21.11', 'Vanilla']);
     for (const f of heroFacts(p, 'en', ten, now)) expect(f.text).not.toContain(' / ');
+    // cards: the date only, the icon (with its label) says what it is
+    expect(playedShortFact(p, 'de', tde, now)).toEqual({ kind: 'played', text: '16.11.', dim: true });
+    expect(playedShortFact({ ...p, lastPlayed: null }, 'en', ten, now).text).toBe('Never played');
   });
 });

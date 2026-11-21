@@ -15,6 +15,8 @@ export const loaderFact = (p: P, t: T): Fact => ({ kind: 'loader', text: loaderN
 export const lastPlayedText = (p: P, lang: Lang, t: T, now = Date.now()): string =>
   p.lastPlayed ? t('info.lastPlayed', { date: fmtShortDate(p.lastPlayed, lang, now) }) : t('info.never');
 export const playedFact = (p: P, lang: Lang, t: T, now = Date.now(), dim = false): Fact => ({ kind: 'played', text: lastPlayedText(p, lang, t, now), dim });
+/** Card form: just the date (the clock icon and its label say "last played"), so the line fits a 212 px card. */
+export const playedShortFact = (p: P, lang: Lang, t: T, now = Date.now()): Fact => ({ kind: 'played', text: p.lastPlayed ? fmtShortDate(p.lastPlayed, lang, now) : t('info.never'), dim: true });
 
 /** Version and loader (card line one). */
 export const versionLoaderFacts = (p: P, t: T): Fact[] => [versionFact(p), loaderFact(p, t)];
