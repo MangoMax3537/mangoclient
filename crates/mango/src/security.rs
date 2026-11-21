@@ -192,7 +192,9 @@ mod tests {
             format!("file:///{base}/index.html#x"),
             format!("file:///{base}/other.html"),
             "https://app/ui/index.html".to_string(),
-            format!("file://host/{base}/index.html"),
+            // a real host is refused (on Windows `file://host/C:/...` is not one: the URL standard drops a host before a
+            // drive letter, so it parses to exactly `file:///C:/...`, the same local file)
+            "file://host/app/ui/index.html".to_string(),
             "garbage".to_string(),
         ] {
             assert!(!is_exact_renderer_url(&bad, f), "{bad}");
