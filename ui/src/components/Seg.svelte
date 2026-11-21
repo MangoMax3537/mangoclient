@@ -1,6 +1,7 @@
 <script lang="ts">
-  interface Opt { value: string; label: string; count?: number; /** Not selectable: stays visible, dark, with this text as tooltip and accessible description. */ disabledReason?: string }
+  interface Opt { value: string; label: string; count?: number; /** Phosphor icon shown before the label (bold, 15px). */ icon?: Component<any>; /** Not selectable: stays visible, dark, with this text as tooltip and accessible description. */ disabledReason?: string }
   interface Props { options: Opt[]; value: string; label: string; onchange: (v: string) => void; role?: 'radiogroup' | 'tablist'; idPrefix?: string; /** Fill the full width: every option the same share, label centered. */ fill?: boolean }
+  import type { Component } from 'svelte';
   import { tip } from '../lib/tooltip';
   let { options, value, label, onchange, role = 'radiogroup', idPrefix = 'seg', fill = false }: Props = $props();
 
@@ -24,7 +25,7 @@
       id="{idPrefix}-{o.value}" type="button" class:on class:off={!!o.disabledReason} tabindex={on ? 0 : -1} aria-disabled={o.disabledReason ? 'true' : undefined} use:tip={o.disabledReason ? { text: o.disabledReason, side: 'top' } : null}
       role={role === 'tablist' ? 'tab' : 'radio'} aria-selected={role === 'tablist' ? on : undefined} aria-checked={role === 'radiogroup' ? on : undefined}
       onclick={() => { if (!o.disabledReason) onchange(o.value); }} onkeydown={(e) => key(e, i)}
-    >{o.label}{#if o.disabledReason}<span class="sr-only">: {o.disabledReason}</span>{/if}{#if o.count !== undefined}<span class="c mono">{o.count}</span>{/if}</button>
+    >{#if o.icon}<o.icon weight="bold" size={15} aria-hidden="true" />{/if}{o.label}{#if o.disabledReason}<span class="sr-only">: {o.disabledReason}</span>{/if}{#if o.count !== undefined}<span class="c mono">{o.count}</span>{/if}</button>
   {/each}
 </div>
 </div>

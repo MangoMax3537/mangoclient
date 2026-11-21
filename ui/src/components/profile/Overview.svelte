@@ -3,6 +3,11 @@
   import PuzzlePieceIcon from 'phosphor-svelte/lib/PuzzlePieceIcon';
   import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
   import ScrollIcon from 'phosphor-svelte/lib/ScrollIcon';
+  import TimerIcon from 'phosphor-svelte/lib/TimerIcon';
+  import CalendarPlusIcon from 'phosphor-svelte/lib/CalendarPlusIcon';
+  import ClockIcon from 'phosphor-svelte/lib/ClockIcon';
+  import CoffeeIcon from 'phosphor-svelte/lib/CoffeeIcon';
+  import MemoryIcon from 'phosphor-svelte/lib/MemoryIcon';
   import ImagesIcon from 'phosphor-svelte/lib/ImagesIcon';
   import Img from '../Img.svelte';
   import LoadError from '../LoadError.svelte';
@@ -53,12 +58,12 @@
 
 <div class="ov">
   <dl class="tiles nb" style:--n="16px" style:--fill="var(--ink-1)">
-    <div><dt>{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
-    <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
-    <div><dt>{t('home.lastPlayed')}</dt><dd class="mono">{profile.lastPlayed ? fmtRelative(profile.lastPlayed, lang()) : t('home.never')}</dd></div>
-    <div><dt>{t('home.mods')}</dt><dd class="mono">{modCount}</dd></div>
-    <div><dt>{t('chip.java')}</dt><dd class="mono">{t('chip.auto')}</dd></div>
-    <div><dt>{t('chip.ram')}</dt><dd class="mono">{profile.effectiveRamMb ? fmtRam(profile.effectiveRamMb) : t('chip.default')}</dd></div>
+    <div><dt><TimerIcon weight="bold" size={14} aria-hidden="true" />{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
+    <div><dt><CalendarPlusIcon weight="bold" size={14} aria-hidden="true" />{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
+    <div><dt><ClockIcon weight="bold" size={14} aria-hidden="true" />{t('home.lastPlayed')}</dt><dd class="mono">{profile.lastPlayed ? fmtRelative(profile.lastPlayed, lang()) : t('home.never')}</dd></div>
+    <div><dt><PuzzlePieceIcon weight="bold" size={14} aria-hidden="true" />{t('home.mods')}</dt><dd class="mono">{modCount}</dd></div>
+    <div><dt><CoffeeIcon weight="bold" size={14} aria-hidden="true" />{t('chip.java')}</dt><dd class="mono">{t('chip.auto')}</dd></div>
+    <div><dt><MemoryIcon weight="bold" size={14} aria-hidden="true" />{t('chip.ram')}</dt><dd class="mono">{profile.effectiveRamMb ? fmtRam(profile.effectiveRamMb) : t('chip.default')}</dd></div>
   </dl>
 
   {#if showShots}
@@ -109,7 +114,8 @@
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; padding: 1px; overflow: hidden; }
   .tiles > div { padding: 12px 16px; border-right: 1px solid var(--line-soft); background: var(--ink-1); }
   .tiles > div:last-child { border-right: 0; }
-  dt { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
+  dt { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
+  dt :global(svg) { flex: none; margin-top: 1px; }
   dd { margin: 4px 0 0; }
   .big { font-size: 22px; color: var(--mango); }
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; min-height: 36px; }

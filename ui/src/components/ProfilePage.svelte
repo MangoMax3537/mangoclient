@@ -2,6 +2,15 @@
   import ArrowLeftIcon from 'phosphor-svelte/lib/ArrowLeftIcon';
   import PlayButton from './PlayButton.svelte';
   import Seg from './Seg.svelte';
+  import SquaresFourIcon from 'phosphor-svelte/lib/SquaresFourIcon';
+  import PuzzlePieceIcon from 'phosphor-svelte/lib/PuzzlePieceIcon';
+  import SunHorizonIcon from 'phosphor-svelte/lib/SunHorizonIcon';
+  import PaletteIcon from 'phosphor-svelte/lib/PaletteIcon';
+  import FileCodeIcon from 'phosphor-svelte/lib/FileCodeIcon';
+  import ImagesIcon from 'phosphor-svelte/lib/ImagesIcon';
+  import ArchiveIcon from 'phosphor-svelte/lib/ArchiveIcon';
+  import ScrollIcon from 'phosphor-svelte/lib/ScrollIcon';
+  import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import Overview from './profile/Overview.svelte';
   import Lazy from './Lazy.svelte';
   import { skeletons, tabs } from '../lib/lazy';
@@ -52,9 +61,13 @@
   });
   const tabList = $derived(p ? profileTabs(p.loader, counts) : []);
   const tab = $derived(effectiveTab(nav.profileTab, tabList, items !== null));
+  const TAB_ICON: Record<ProfileTab, typeof GearIcon> = {
+    overview: SquaresFourIcon, mods: PuzzlePieceIcon, shaders: SunHorizonIcon, resourcepacks: PaletteIcon, datapacks: FileCodeIcon,
+    media: ImagesIcon, backups: ArchiveIcon, logs: ScrollIcon, settings: GearIcon,
+  };
   const opts = $derived(tabList.map((k) => {
     const ty = isContentTab(k) ? CONTENT_TAB_TYPE[k] : null;
-    return { value: k, label: t(`profile.tab.${k}` as Key), ...(ty && items && counts[ty] > 0 ? { count: counts[ty] } : {}) };
+    return { value: k, label: t(`profile.tab.${k}` as Key), icon: TAB_ICON[k], ...(ty && items && counts[ty] > 0 ? { count: counts[ty] } : {}) };
   }));
 
   /* inline rename of the title: double click, F2 or the menu; Enter saves, Esc cancels, the problem shows under the field */

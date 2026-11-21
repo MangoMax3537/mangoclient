@@ -122,6 +122,19 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
   color: var(--paper); color-scheme: dark;
 }
 
+/* Surfaces over the window background: inside a view (Home, Library, instance page, ...) the grey surfaces are translucent, like the
+   instance header, so the wallpaper shows through stats, tabs, buttons, cards and fields. The --pane-* / --solid-* values are computed on
+   :root from the active theme's tokens, so one definition serves both themes. Dialogs, menus, listboxes and tooltips stay solid. */
+:root {
+  --solid-1: var(--ink-1); --solid-2: var(--ink-2); --solid-3: var(--ink-3); --solid-4: var(--ink-4);
+  --pane-1: color-mix(in srgb, var(--ink-1) 55%, transparent); --pane-2: color-mix(in srgb, var(--ink-2) 58%, transparent);
+  --pane-3: color-mix(in srgb, var(--ink-3) 68%, transparent); --pane-4: color-mix(in srgb, var(--ink-4) 78%, transparent);
+}
+main > .view { --ink-1: var(--pane-1); --ink-2: var(--pane-2); --ink-3: var(--pane-3); --ink-4: var(--pane-4); }
+main > .view :is(dialog, [popover], [role='menu'], [role='listbox'], [role='tooltip'], [role='dialog']) {
+  --ink-1: var(--solid-1); --ink-2: var(--solid-2); --ink-3: var(--solid-3); --ink-4: var(--solid-4);
+}
+
 /* ---- signature shapes -------------------------------------------------------------------- */
 /* Notched corner: top-right and bottom-left are cut. Size via --n. clip-path hides outlines,
    so focus is drawn inside. */
