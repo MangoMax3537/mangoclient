@@ -50,7 +50,7 @@ export const en2 = {
   'servers.join': 'Join', 'servers.quickJoin': 'Quick join', 'servers.partner': 'Partner', 'servers.starred': 'Starred', 'servers.offline': 'Offline', 'servers.pinging': 'Checking...',
 
   'stats.range': 'Time range', 'stats.days': '{n} days', 'stats.total': 'Playtime', 'stats.sessions': 'Sessions', 'stats.longest': 'Longest session', 'stats.avg': 'Daily average',
-  'stats.activeDays': 'Days played', 'stats.daily': 'Playtime per day', 'stats.perProfile': 'By profile', 'stats.sessionsN': '{n} sessions',
+  'stats.activeDays': 'Days played', 'stats.daily': 'Playtime per day', 'stats.perProfile': 'By profile', 'stats.sessionsN.one': '{n} session', 'stats.sessionsN.other': '{n} sessions',
   'stats.chartLabel': 'Daily playtime over the last {days} days, {total} in total',
 
   'storage.title': 'Storage', 'storage.total': '{size} in total', 'storage.clear': 'Clear', 'storage.cleared': '{name} cleared.', 'storage.confirmTitle': 'Clear {name}?',
@@ -128,7 +128,7 @@ export const de2: Record<keyof typeof en2, string> = {
   'servers.join': 'Beitreten', 'servers.quickJoin': 'Schnellbeitritt', 'servers.partner': 'Partner', 'servers.starred': 'Favorit', 'servers.offline': 'Offline', 'servers.pinging': 'Wird geprüft...',
 
   'stats.range': 'Zeitraum', 'stats.days': '{n} Tage', 'stats.total': 'Spielzeit', 'stats.sessions': 'Sitzungen', 'stats.longest': 'Längste Sitzung', 'stats.avg': 'Tagesschnitt',
-  'stats.activeDays': 'Gespielte Tage', 'stats.daily': 'Spielzeit pro Tag', 'stats.perProfile': 'Nach Profil', 'stats.sessionsN': '{n} Sitzungen',
+  'stats.activeDays': 'Gespielte Tage', 'stats.daily': 'Spielzeit pro Tag', 'stats.perProfile': 'Nach Profil', 'stats.sessionsN.one': '{n} Sitzung', 'stats.sessionsN.other': '{n} Sitzungen',
   'stats.chartLabel': 'Tägliche Spielzeit der letzten {days} Tage, insgesamt {total}',
 
   'storage.title': 'Speicher', 'storage.total': 'Insgesamt {size}', 'storage.clear': 'Leeren', 'storage.cleared': '{name} geleert.', 'storage.confirmTitle': '{name} leeren?',

@@ -62,4 +62,10 @@ describe('i18n', () => {
     expect(plural('de', 'library.count', 1)).toBe('1 Profil');
     expect(plural('de', 'library.count', 0)).toBe('0 Profile');
   });
+  it('session counts are singular for one (Statistics: "1 Sitzung", not "1 Sitzungen")', () => {
+    expect(plural('de', 'stats.sessionsN', 1)).toBe('1 Sitzung');
+    expect(plural('de', 'stats.sessionsN', 3)).toBe('3 Sitzungen');
+    expect(plural('en', 'stats.sessionsN', 1)).toBe('1 session');
+    expect(plural('en', 'stats.sessionsN', 0)).toBe('0 sessions');
+  });
 });

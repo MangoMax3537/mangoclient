@@ -1,5 +1,10 @@
 <script lang="ts">
   import InstanceIcon from './InstanceIcon.svelte';
+  import TimerIcon from 'phosphor-svelte/lib/TimerIcon';
+  import GameControllerIcon from 'phosphor-svelte/lib/GameControllerIcon';
+  import TrophyIcon from 'phosphor-svelte/lib/TrophyIcon';
+  import ChartLineIcon from 'phosphor-svelte/lib/ChartLineIcon';
+  import CalendarCheckIcon from 'phosphor-svelte/lib/CalendarCheckIcon';
   import Seg from './Seg.svelte';
   import Skeleton from './skeleton/Skeleton.svelte';
   import StatTileSkeleton from './skeleton/StatTileSkeleton.svelte';
@@ -8,7 +13,7 @@
   import EmptyState from './EmptyState.svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { fmtDuration } from '../lib/format';
-  import { app, errorText, getApi, lang, nav, t, toast } from '../lib/stores.svelte';
+  import { app, errorText, getApi, lang, nav, t, toast, tp } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
 
   const RANGES = ['14', '30', '90'];
@@ -49,11 +54,11 @@
   {:else}
   {#if data}
     <dl class="tiles nb" style:--n="16px" style:--fill="var(--ink-1)">
-      <div><dt>{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
-      <div><dt>{t('stats.sessions')}</dt><dd class="mono">{data.sessions}</dd></div>
-      <div><dt>{t('stats.longest')}</dt><dd class="mono">{fmtDuration(data.longestMs)}</dd></div>
-      <div><dt>{t('stats.avg')}</dt><dd class="mono">{fmtDuration(avg)}</dd></div>
-      <div><dt>{t('stats.activeDays')}</dt><dd class="mono">{`${activeDays} / ${data.days.length}`}</dd></div>
+      <div><dt><TimerIcon weight="bold" size={14} aria-hidden="true" />{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
+      <div><dt><GameControllerIcon weight="bold" size={14} aria-hidden="true" />{t('stats.sessions')}</dt><dd class="mono">{data.sessions}</dd></div>
+      <div><dt><TrophyIcon weight="bold" size={14} aria-hidden="true" />{t('stats.longest')}</dt><dd class="mono">{fmtDuration(data.longestMs)}</dd></div>
+      <div><dt><ChartLineIcon weight="bold" size={14} aria-hidden="true" />{t('stats.avg')}</dt><dd class="mono">{fmtDuration(avg)}</dd></div>
+      <div><dt><CalendarCheckIcon weight="bold" size={14} aria-hidden="true" />{t('stats.activeDays')}</dt><dd class="mono">{`${activeDays} / ${data.days.length}`}</dd></div>
     </dl>
   {:else if load.phase === 'error'}
     <LoadError error={load.error} onretry={() => load.retry()} />
@@ -97,7 +102,7 @@
           {@const prof = app.profiles.find((x) => x.id === p.profileId)}
           <li>
             <InstanceIcon profile={prof} id={p.profileId} size={36} radius={6} />
-            <div class="nm"><b>{p.name}</b><span class="hint mono">{t('stats.sessionsN', { n: p.sessions })}</span></div>
+            <div class="nm"><b>{p.name}</b><span class="hint mono">{tp('stats.sessionsN', p.sessions)}</span></div>
             <div class="meter step-end" role="presentation"><span style:transform="scaleX({top && top.ms ? p.ms / top.ms : 0})"></span></div>
             <span class="mono val">{fmtDuration(p.ms)}</span>
             <span class="mono pct">{data.totalMs ? Math.round((p.ms / data.totalMs) * 100) : 0}%</span>
@@ -114,9 +119,10 @@
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: var(--fs-3xl); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; padding: 1px; overflow: hidden; }
-  .tiles > div { padding: 12px 16px; background: var(--ink-1); border-right: 1px solid var(--line-soft); }
+  .tiles > div { padding: 12px 16px; border-right: 1px solid var(--line-soft); }
   .tiles > div:last-child { border-right: 0; }
-  dt { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
+  dt { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
+  dt :global(svg) { flex: none; margin-top: 1px; }
   dd { margin: 4px 0 0; font-size: 18px; }
   .big { color: var(--mango); font-size: 22px; }
   h2 { margin-bottom: 8px; }
