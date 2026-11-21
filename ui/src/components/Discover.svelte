@@ -20,6 +20,8 @@
   import { dialogs } from '../lib/lazy';
   import { fmtCompact } from '../lib/format';
   import type { Key } from '../lib/i18n';
+  import InfoLine from './InfoLine.svelte';
+  import { versionLoaderFacts } from '../lib/infoLine';
   import { app, errorText, getApi, installs, lang, nav, openProfile, startInstall, t, tp, tabForType, type FlowProject } from '../lib/stores.svelte';
   import type { ContentItem, Loader, ProjectHit, ProjectType, SearchSort, VersionManifest } from '../lib/types';
 
@@ -124,7 +126,7 @@
     <div class="scope">
       <InstanceIcon profile={scope} size={40} notch={7} />
       <div class="who"><span class="eyebrow">{t('discover.installingTo')}</span><b>{scope.name}</b>
-        <span class="mono hint">{scope.mcVersion} / {scope.loader === 'vanilla' ? t('profile.vanilla') : scope.loader}</span></div>
+        <span class="mono hint"><InfoLine facts={versionLoaderFacts(scope, t)} /></span></div>
       <button class="btn ghost small" type="button" onclick={() => openProfile(scope.id, tabForType(type))}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('discover.backToProfile')}</button>
       <button class="btn small" type="button" onclick={() => (nav.discoverProfile = null)}><XIcon weight="bold" size={14} aria-hidden="true" />{t('discover.allInstances')}</button>
     </div>
@@ -218,9 +220,8 @@
   .search .field { width: 100%; padding-left: 36px; }
   .f { display: grid; gap: 2px; font-size: var(--fs-xs); }
   .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 132px; gap: 16px; align-items: center; padding: 12px 14px; --n: var(--notch-s); --fill: var(--ink-1); transition: background var(--dur) var(--ease); }
-  .row:hover, .row:focus-within { --fill: var(--ink-2); }
-  .row:hover { --line: var(--line-strong, var(--line)); }
+  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 132px; gap: 16px; align-items: center; padding: 12px 14px; --n: var(--notch-s); --fill: var(--ink-1); }
+  /* the row box stays as it is on hover (only the install button reacts) */
   .main { min-width: 0; display: grid; gap: 3px; }
   .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .ttl { font: 700 var(--fs-lg) var(--font-display); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

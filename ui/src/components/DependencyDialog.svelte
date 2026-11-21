@@ -12,6 +12,8 @@
   import { createLoadState } from '../lib/loadState.svelte';
   import { fileCount, includeFor, planBytes, planGroups, type RunStep } from '../lib/install';
   import { fmtBytes } from '../lib/format';
+  import InfoLine from './InfoLine.svelte';
+  import { versionLoaderFacts } from '../lib/infoLine';
   import { app, errorText, getApi, lang, t, tp, type FlowProject } from '../lib/stores.svelte';
   import type { InstallPlan, InstallPlanItem } from '../lib/types';
 
@@ -87,10 +89,10 @@
       <section class="inst" aria-labelledby="dp-{pid}">
         {#if profileIds.length > 1}
           <h3 id="dp-{pid}" class="who"><InstanceIcon profile={prof(pid)} id={pid} size={24} notch={5} />{name(pid)}
-            <span class="mono hint">{prof(pid)?.mcVersion} / {prof(pid)?.loader}</span></h3>
+            {#if prof(pid)}<span class="mono hint"><InfoLine facts={versionLoaderFacts(prof(pid)!, t)} /></span>{/if}</h3>
         {:else}
           <h3 id="dp-{pid}" class="sr-only">{name(pid)}</h3>
-          <p class="to hint">{t('flow.dep.into')} <b>{name(pid)}</b> <span class="mono">({prof(pid)?.mcVersion} / {prof(pid)?.loader})</span></p>
+          <p class="to hint">{t('flow.dep.into')} <b>{name(pid)}</b>{#if prof(pid)}<span class="mono"><InfoLine facts={versionLoaderFacts(prof(pid)!, t)} /></span>{/if}</p>
         {/if}
 
         {#if g.requested}
@@ -162,7 +164,7 @@
   .inst + .inst { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
   .who { display: flex; align-items: center; gap: 8px; font-size: var(--fs-lg); margin-bottom: 8px; }
   .who .hint { margin-left: auto; }
-  .to { margin: 0 0 8px; }
+  .to { margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
   .eyebrow { margin: 14px 0 4px; }
   .deps { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 34px; gap: 12px; align-items: center; padding: 8px 12px; }

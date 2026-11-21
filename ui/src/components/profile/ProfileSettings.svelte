@@ -23,6 +23,7 @@
   import type { Key } from '../../lib/i18n';
   import { fmtDuration, fmtRelative } from '../../lib/format';
   import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
+  import { versionFact } from '../../lib/infoLine';
   import { actions, app, errorText, getApi, isBusy, lang, openBackgroundPicker, openIconPicker, t, toast } from '../../lib/stores.svelte';
   import { toAppError } from '../../lib/api';
   import { WINDOW_PRESETS, checkInstanceSize, javaLabel, missingMajor, normalizeJavaPath, requiredJavaMajor, windowPatch } from '../../lib/javaHint';
@@ -215,7 +216,7 @@
     {#if sec('game')}
       <SettingSection id="p-game" title={t('settings.group.game')}>
         {#if show('version')}
-          <SettingRow id="version" label={t('psettings.version')} hint={`${profile.mcVersion} · ${profile.loader === 'vanilla' ? t('profile.vanilla') : `${profile.loader} ${profile.loaderVersion ?? ''}`.trim()}`}>
+          <SettingRow id="version" label={t('psettings.version')} hintFacts={[versionFact(profile), { kind: 'loader', text: profile.loader === 'vanilla' ? t('profile.vanilla') : `${profile.loader} ${profile.loaderVersion ?? ''}`.trim() }]}>
             <button class="btn" type="button" disabled={locked} onclick={() => (changing = true)}><SwapIcon weight="bold" size={16} aria-hidden="true" />{t('psettings.change')}</button>
           </SettingRow>
         {/if}
