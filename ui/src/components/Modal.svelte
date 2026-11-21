@@ -70,7 +70,9 @@
   h2 { font-size: var(--fs-xl); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { display: flex; align-items: center; gap: 4px; }
   .x { width: 34px; padding: 0; justify-content: center; }
-  .body { padding: 16px 20px; overflow: auto; min-height: 0; flex: 1; user-select: text; }
+  /* flex-basis auto (the content's height), shrinking to the dialog's max-height: a 0% basis collapsed the body to a sliver in
+     WebKitGTK, which resolves it against the dialog's indefinite height (icon picker showed only header and footer) */
+  .body { padding: 16px 20px; overflow: auto; min-height: 0; flex: 1 1 auto; user-select: text; }
   footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-soft); flex: none; }
   @keyframes fade { from { opacity: 0; } }
   @keyframes pop { from { opacity: 0; transform: translateY(8px); } }
