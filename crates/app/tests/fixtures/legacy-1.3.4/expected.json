@@ -1,0 +1,12 @@
+{
+  "generatedBy": "MangoClient 1.3.4 (master) store.js/serverlist.js/stats.js/telemetry.js via tools/make-legacy-fixture.js",
+  "installId": "50430947-ebd0-4a9c-b553-4af267631cae",
+  "selectedProfile": "f9c57d55-2669-40c5-9570-59147a336560",
+  "profiles": {
+    "default": "b13fcae2-56bc-4750-b2f8-655b5d405dc1",
+    "vanilla": "81135282-76b3-452b-bc87-923c0e596bf3",
+    "neoforge": "f9c57d55-2669-40c5-9570-59147a336560",
+    "quilt": "ec72f6d2-09f1-43a3-a724-d684efd0105a"
+  },
+  "offlineUuid": "abdb7b1663d23789806221f7ff3ce7c9"
+}

@@ -1,0 +1,22 @@
+{
+  "language": "en",
+  "theme": "mango",
+  "ram": 6144,
+  "javaPath": "",
+  "javaArgs": "-XX:+UseG1GC",
+  "fullscreen": true,
+  "width": 1600,
+  "height": 900,
+  "keepLauncherOpen": false,
+  "hideOnLaunch": false,
+  "showSnapshots": true,
+  "mangoConfig": true,
+  "performanceMods": false,
+  "sidebarOpen": true,
+  "concurrentDownloads": 8,
+  "performancePreset": "quality",
+  "selectedProfile": "f9c57d55-2669-40c5-9570-59147a336560",
+  "selectedAccount": "abdb7b1663d23789806221f7ff3ce7c9",
+  "firstRunDone": true,
+  "telemetry": false
+}

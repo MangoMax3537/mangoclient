@@ -1,0 +1,144 @@
+{
+  "accounts": [
+    {
+      "type": "offline",
+      "uuid": "abdb7b1663d23789806221f7ff3ce7c9",
+      "name": "Steve_Old",
+      "expiresAt": null,
+      "skins": [],
+      "capes": []
+    }
+  ],
+  "profiles": [
+    {
+      "id": "b13fcae2-56bc-4750-b2f8-655b5d405dc1",
+      "name": "MangoClient 1.21.11",
+      "mcVersion": "1.21.11",
+      "loader": "fabric",
+      "loaderVersion": "",
+      "color": null,
+      "cover": false,
+      "ram": null,
+      "javaArgs": "",
+      "mods": [
+        {
+          "projectId": "AANobbMI",
+          "slug": "sodium",
+          "title": "Sodium",
+          "versionId": "v6b1Ttop",
+          "versionNumber": "mc1.21.11-0.6.13-fabric",
+          "filename": "sodium-fabric-0.6.13+mc1.21.11.jar",
+          "file": "{{ROOT}}/instances/b13fcae2-56bc-4750-b2f8-655b5d405dc1/mods/sodium-fabric-0.6.13+mc1.21.11.jar",
+          "type": "mod",
+          "enabled": true,
+          "installedAt": 1788264000000,
+          "gameVersions": [
+            "1.21.11"
+          ],
+          "loaders": [
+            "fabric"
+          ],
+          "requiredDependencies": []
+        },
+        {
+          "projectId": "gvQqBUqZ",
+          "slug": "lithium",
+          "title": "Lithium",
+          "versionId": "qvNsoO3l",
+          "versionNumber": "mc1.21.11-0.15.0-fabric",
+          "filename": "lithium-fabric-0.15.0+mc1.21.11.jar",
+          "file": "{{ROOT}}/instances/b13fcae2-56bc-4750-b2f8-655b5d405dc1/mods/lithium-fabric-0.15.0+mc1.21.11.jar.disabled",
+          "type": "mod",
+          "enabled": false,
+          "installedAt": 1788350400000,
+          "gameVersions": [
+            "1.21.11"
+          ],
+          "loaders": [
+            "fabric"
+          ]
+        },
+        {
+          "projectId": "HVnmMxH1",
+          "slug": "complementary-reimagined",
+          "title": "Complementary Shaders - Reimagined",
+          "versionId": "r5.4",
+          "versionNumber": "r5.4",
+          "filename": "ComplementaryReimagined_r5.4.zip",
+          "file": "{{ROOT}}/instances/b13fcae2-56bc-4750-b2f8-655b5d405dc1/shaderpacks/ComplementaryReimagined_r5.4.zip",
+          "type": "shader",
+          "enabled": true,
+          "installedAt": 1789128000000
+        },
+        {
+          "projectId": "YAGZ1cCU",
+          "slug": "fresh-animations",
+          "title": "Fresh Animations",
+          "versionId": "v1.9.2",
+          "versionNumber": "1.9.2",
+          "filename": "FreshAnimations_v1.9.2.zip",
+          "file": "{{ROOT}}/instances/b13fcae2-56bc-4750-b2f8-655b5d405dc1/resourcepacks/FreshAnimations_v1.9.2.zip",
+          "type": "resourcepack",
+          "enabled": true,
+          "installedAt": 1789992000000
+        }
+      ],
+      "mangoConfig": null,
+      "session": null,
+      "lastPlayed": 1790683200000,
+      "playTimeMs": 183600000,
+      "created": 1795266156805
+    },
+    {
+      "id": "81135282-76b3-452b-bc87-923c0e596bf3",
+      "name": "Vanilla Survival",
+      "mcVersion": "1.20.1",
+      "loader": "vanilla",
+      "loaderVersion": "",
+      "color": "#86b86b",
+      "cover": true,
+      "ram": 4096,
+      "javaArgs": "",
+      "mods": [],
+      "mangoConfig": null,
+      "session": null,
+      "lastPlayed": 1756296000000,
+      "playTimeMs": 3600000,
+      "created": 1795266156805
+    },
+    {
+      "id": "f9c57d55-2669-40c5-9570-59147a336560",
+      "name": "Create Ä Ü 🚀",
+      "mcVersion": "1.21.1",
+      "loader": "neoforge",
+      "loaderVersion": "21.1.77",
+      "color": null,
+      "cover": false,
+      "ram": null,
+      "javaArgs": "",
+      "mods": [],
+      "mangoConfig": false,
+      "session": null,
+      "lastPlayed": null,
+      "playTimeMs": 0,
+      "created": 1795266156805
+    },
+    {
+      "id": "ec72f6d2-09f1-43a3-a724-d684efd0105a",
+      "name": "Quilt Shaders",
+      "mcVersion": "1.20.4",
+      "loader": "quilt",
+      "loaderVersion": "0.26.0",
+      "color": null,
+      "cover": false,
+      "ram": null,
+      "javaArgs": "-Dfoo=bar",
+      "mods": [],
+      "mangoConfig": null,
+      "session": null,
+      "lastPlayed": null,
+      "playTimeMs": 0,
+      "created": 1795266156805
+    }
+  ]
+}

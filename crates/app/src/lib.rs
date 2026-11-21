@@ -43,6 +43,8 @@ mod worlds;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_legacy;
+#[cfg(test)]
 mod tests_p10;
 #[cfg(test)]
 mod tests_p11;

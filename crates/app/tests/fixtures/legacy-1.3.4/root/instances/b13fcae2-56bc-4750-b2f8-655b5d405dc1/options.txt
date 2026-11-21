@@ -1,0 +1,4 @@
+version:4189
+fov:0.25
+lang:de_de
+key_key.sprint:key.keyboard.left.control

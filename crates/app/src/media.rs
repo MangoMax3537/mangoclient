@@ -470,7 +470,7 @@ async fn upload_to_mclogs(opts: &crate::service::ServiceOptions, body: &str) -> 
     })
 }
 
-fn read_journal(file: &Path) -> Vec<mango_mango::stats::SessionEntry> {
+pub(crate) fn read_journal(file: &Path) -> Vec<mango_mango::stats::SessionEntry> {
     let Ok(bytes) = std::fs::read(file) else {
         return Vec::new();
     };
