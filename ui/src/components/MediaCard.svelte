@@ -25,7 +25,7 @@
 </script>
 
 <div class="card notch frame" class:sel={selected} class:live class:dimmed style:--n="{n}px" data-media-card>
-  <button class="open" type="button" aria-pressed={pressed} aria-label={ariaLabel} {...handlers} {onclick}>
+  <button class="open" type="button" aria-pressed={pressed} aria-label={ariaLabel} {onclick} {...handlers}>
     <span class="art">{@render art()}</span>
     <span class="nm">{title}</span>
     {#if lines}<span class="lines">{@render lines()}</span>{/if}
