@@ -1,7 +1,8 @@
 <script lang="ts">
   // Upload a skin file to the account (`skin_upload`) or add it to the library (`skin_library_add`). The file comes from the native dialog
-  // (`pick_image_file`); the model (classic / slim) is chosen here. Where the browser gives a blob URL the chosen file is previewed before
-  // anything is applied; in the packaged app the webview cannot read the picked path, so the file name stands in for the preview.
+  // (`pick_image_file`); the model (classic / slim) is chosen here. The chosen file is previewed before anything is applied: the browser gives a
+  // blob URL, the packaged app asks the backend (`skin_preview`) for a validated data: URL, because its CSP allows neither blob: of a file path
+  // nor fetch. If that fails the file name stands in for the preview.
   import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
   import Modal from './Modal.svelte';
   import Seg from './Seg.svelte';
@@ -33,7 +34,13 @@
     error = '';
     try {
       const p = await pickImage(t('skins.pick.title'));
-      if (p) { picked = p; if (!name) name = nameFromFile(p.name); }
+      if (p) {
+        picked = p; if (!name) name = nameFromFile(p.name);
+        if (!p.preview) {
+          const path = p.path;
+          getApi().skinPreview({ filePath: path }).then((u) => { if (picked?.path === path) picked = { ...picked, preview: u }; }, () => {});
+        }
+      }
     } catch (e) { error = errorText(e); }
   }
   async function apply() {

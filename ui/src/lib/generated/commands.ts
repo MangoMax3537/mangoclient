@@ -75,6 +75,7 @@ import type { SkinLibraryAddArgs } from "./SkinLibraryAddArgs";
 import type { SkinLibraryApplyArgs } from "./SkinLibraryApplyArgs";
 import type { SkinLibraryRenameArgs } from "./SkinLibraryRenameArgs";
 import type { SkinLibrarySaveCurrentArgs } from "./SkinLibrarySaveCurrentArgs";
+import type { SkinPreviewArgs } from "./SkinPreviewArgs";
 import type { SkinSetCapeArgs } from "./SkinSetCapeArgs";
 import type { SkinUploadArgs } from "./SkinUploadArgs";
 import type { SkinUseUsernameArgs } from "./SkinUseUsernameArgs";
@@ -147,6 +148,7 @@ export type CommandMap = {
   "profile_background_set_kind": { args: ProfileBackgroundKindArgs; result: ProfileView };
   "profile_icon_use_modpack_logo": { args: IdArgs; result: ProfileView };
   "profile_background_clear": { args: ProfileBackgroundClearArgs; result: ProfileView };
+  "skin_preview": { args: SkinPreviewArgs; result: string };
   "pick_image_file": { args: PickArgs; result: string | null };
   "pick_import_file": { args: PickArgs; result: string | null };
   "pick_folder": { args: PickArgs; result: string | null };

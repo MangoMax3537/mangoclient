@@ -217,6 +217,10 @@ args! {
         file_path: String,
         variant: crate::skins::SkinVariantName,
     }
+    SkinPreviewArgs {
+        /// A path from `pick_image_file`; returns a `data:image/png` URL of the validated skin.
+        file_path: String,
+    }
     SkinUseUsernameArgs {
         uuid: String,
         /// The player whose public skin is copied (3..16 of `A-Za-z0-9_`).
@@ -381,6 +385,7 @@ table! {
         |s, a| s.profile_icon_use_modpack_logo(a.id).await;
     "profile_background_clear": ProfileBackgroundClearArgs => ProfileView =
         |s, a| s.profile_background_clear(a.id, a.none.unwrap_or(false));
+    "skin_preview": SkinPreviewArgs => String = |s, a| s.skin_preview(a.file_path).await;
     "pick_image_file": PickArgs => Option<String> = |s, a| s.pick_image_file(a.title).await;
     "pick_import_file": PickArgs => Option<String> = |s, a| s.pick_import_file(a.title).await;
     "pick_folder": PickArgs => Option<String> = |s, a| s.pick_folder(a.title).await;

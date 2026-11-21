@@ -634,6 +634,11 @@ async fn skin_get(svc: Svc<'_>, uuid: String) -> Res<SkinInfo> {
 }
 
 #[tauri::command]
+async fn skin_preview(svc: Svc<'_>, file_path: String) -> Res<String> {
+    svc.skin_preview(file_path).await
+}
+
+#[tauri::command]
 async fn skin_upload(
     svc: Svc<'_>,
     uuid: String,
@@ -1174,6 +1179,7 @@ pub fn run() {
             update_check,
             update_install,
             skin_get,
+            skin_preview,
             skin_upload,
             skin_use_username,
             skin_set_cape,

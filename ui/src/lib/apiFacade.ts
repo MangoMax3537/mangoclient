@@ -89,6 +89,7 @@ export const COMMANDS = {
   crashAnalyze: 'crash_analyze',
   diagnosticsExport: 'diagnostics_export',
   skinGet: 'skin_get',
+  skinPreview: 'skin_preview',
   skinUpload: 'skin_upload',
   skinUseUsername: 'skin_use_username',
   skinSetCape: 'skin_set_cape',

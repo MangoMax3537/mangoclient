@@ -200,6 +200,7 @@ pub fn generate(dir: &Path) -> Result<(), String> {
         LogFileArgs,
         StatsSummaryArgs,
         StorageClearArgs,
+        SkinPreviewArgs,
         SkinUploadArgs,
         SkinUseUsernameArgs,
         SkinSetCapeArgs,

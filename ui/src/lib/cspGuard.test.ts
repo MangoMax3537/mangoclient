@@ -27,6 +27,16 @@ describe('packaged CSP', () => {
   });
 });
 
+describe('skin upload preview', () => {
+  it('goes through the backend as a data: URL (img-src data:), never blob:/fetch of a picked path', () => {
+    expect(dir('img-src')).toContain('data:');
+    const dlg = read('../components/SkinUploadDialog.svelte');
+    expect(dlg).toMatch(/skinPreview\(/);
+    expect(dlg).not.toMatch(/createObjectURL|fetch\(|readFile/);
+    expect(read('./apiFacade.ts')).toContain("skinPreview: 'skin_preview'");
+  });
+});
+
 /** Modules that load backgrounds, wallpapers, icons, panorama faces, skin and cape textures. */
 const IMAGE_MODULES = [
   '../components/BgLayer.svelte', '../components/AppBackground.svelte', '../components/PanoramaBackground.svelte',

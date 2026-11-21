@@ -97,7 +97,7 @@ export interface SkinsMockCtx {
   noCapes?: boolean;
 }
 
-export type SkinsApi = Pick<Api, 'skinGet' | 'skinUpload' | 'skinUseUsername' | 'skinSetCape' | 'skinLibraryList' | 'skinLibraryAdd' | 'skinLibrarySaveCurrent' | 'skinLibraryRemove' | 'skinLibraryRename' | 'skinLibraryApply'>;
+export type SkinsApi = Pick<Api, 'skinGet' | 'skinPreview' | 'skinUpload' | 'skinUseUsername' | 'skinSetCape' | 'skinLibraryList' | 'skinLibraryAdd' | 'skinLibrarySaveCurrent' | 'skinLibraryRemove' | 'skinLibraryRename' | 'skinLibraryApply'>;
 
 const NAME = /^[A-Za-z0-9_]{3,16}$/;
 const CAPE_NAMES = ['Migrator', 'Vanilla', 'Mojang Office', 'Cherry Blossom'];
@@ -156,6 +156,7 @@ export function createSkinsMock(ctx: SkinsMockCtx): { api: SkinsApi; init: () =>
 
   const api: SkinsApi = {
     async skinGet({ uuid }) { await delay(); return info(account(uuid)); },
+    async skinPreview({ filePath }) { await delay(); pathOk(filePath); return filePath; },
     async skinUpload({ uuid, filePath, variant }) {
       const a = editable(uuid); await delay(); pathOk(filePath);
       Object.assign(state(a), { skinUrl: filePath, slim: variant === 'slim' });

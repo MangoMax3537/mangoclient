@@ -103,6 +103,24 @@ impl PathGrants {
         });
     }
 
+    /// Whether `raw` is currently granted for `kind`, without using the grant up (read-only previews). Always `Ok` when not strict.
+    pub fn peek(&self, kind: GrantKind, raw: &str) -> Res<()> {
+        if !self.strict {
+            return Ok(());
+        }
+        let path = normalize(Path::new(raw));
+        let now = Instant::now();
+        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        if entries
+            .iter()
+            .any(|g| g.kind == kind && g.path == path && g.expires > now && g.uses_left > 0)
+        {
+            Ok(())
+        } else {
+            Err(not_granted())
+        }
+    }
+
     /// Use one grant of `kind` for `raw`. Always `Ok` when not strict.
     pub fn consume(&self, kind: GrantKind, raw: &str) -> Res<()> {
         self.consume_at(kind, raw, Instant::now())
@@ -157,6 +175,26 @@ mod tests {
 
     fn grants(strict: bool) -> PathGrants {
         PathGrants::new(strict, Duration::from_secs(600))
+    }
+
+    #[test]
+    fn peek_does_not_use_up_a_grant_and_needs_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("skin.png");
+        let g = grants(true);
+        let raw = f.to_str().unwrap();
+        assert_eq!(
+            g.peek(GrantKind::Image, raw).unwrap_err().code,
+            "path.not_granted"
+        );
+        g.grant(GrantKind::Image, &f);
+        for _ in 0..5 {
+            assert!(g.peek(GrantKind::Image, raw).is_ok());
+        }
+        assert!(g.consume(GrantKind::Image, raw).is_ok());
+        assert!(g.consume(GrantKind::Image, raw).is_ok());
+        assert!(g.peek(GrantKind::Image, raw).is_err());
+        assert!(grants(false).peek(GrantKind::Image, raw).is_ok());
     }
 
     #[test]

@@ -375,3 +375,47 @@ fn rebased_records_cannot_leave_the_instance() {
     assert_eq!(out[1].file, None);
     assert_eq!(out[2].file, None);
 }
+
+#[tokio::test]
+async fn skin_preview_needs_a_grant_keeps_it_and_returns_a_data_url() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skin = tmp.path().join("skin.png");
+    let img = image::RgbaImage::from_pixel(64, 64, image::Rgba([9, 9, 9, 255]));
+    std::fs::write(&skin, crate::icon_images::encode_png(&img).unwrap()).unwrap();
+    let raw = skin.display().to_string();
+
+    let f = fx_with(
+        true,
+        DEFAULT_GRANT_TTL,
+        CannedFileDialog::new(Some(skin.clone()), None),
+    );
+    let e = f.svc.skin_preview(raw.clone()).await.unwrap_err();
+    assert_eq!(e.code, "path.not_granted", "no preview without the picker");
+    f.svc.pick_image_file(None).await.unwrap().unwrap();
+    for _ in 0..5 {
+        let url = f.svc.skin_preview(raw.clone()).await.unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+    }
+    // A preview never uses up the grant the upload still needs.
+    assert!(f
+        .svc
+        .checked_in_path(&raw, crate::path_grants::GrantKind::Image)
+        .is_ok());
+
+    // Not a skin (wrong size): rejected like the upload would.
+    let small = png(tmp.path(), "small.png");
+    let f = fx_with(
+        true,
+        DEFAULT_GRANT_TTL,
+        CannedFileDialog::new(Some(small.clone()), None),
+    );
+    f.svc.pick_image_file(None).await.unwrap().unwrap();
+    assert_eq!(
+        f.svc
+            .skin_preview(small.display().to_string())
+            .await
+            .unwrap_err()
+            .code,
+        "skin.invalid_png"
+    );
+}

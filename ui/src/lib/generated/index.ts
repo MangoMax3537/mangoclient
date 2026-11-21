@@ -126,6 +126,7 @@ export type { SkinLibraryAddArgs } from "./SkinLibraryAddArgs";
 export type { SkinLibraryApplyArgs } from "./SkinLibraryApplyArgs";
 export type { SkinLibraryRenameArgs } from "./SkinLibraryRenameArgs";
 export type { SkinLibrarySaveCurrentArgs } from "./SkinLibrarySaveCurrentArgs";
+export type { SkinPreviewArgs } from "./SkinPreviewArgs";
 export type { SkinSetCapeArgs } from "./SkinSetCapeArgs";
 export type { SkinSourceName } from "./SkinSourceName";
 export type { SkinUpdatedEvent } from "./SkinUpdatedEvent";

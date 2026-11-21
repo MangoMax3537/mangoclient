@@ -803,6 +803,20 @@ impl AppService {
         r
     }
 
+    /// A `data:image/png` URL of a skin PNG chosen with `pick_image_file`, for the upload dialog's preview. The packaged CSP allows
+    /// `img-src data:` only (no blob:/fetch of file paths), so the validated bytes are handed to the page. Does not use up the grant.
+    pub async fn skin_preview(&self, file_path: String) -> Res<String> {
+        use base64::Engine as _;
+        crate::path_grants::reject_special_path(&file_path)?;
+        self.inner.grants.peek(GrantKind::Image, &file_path)?;
+        let path = PathBuf::from(file_path);
+        let bytes = tokio::task::spawn_blocking(move || read_skin_file(&path)).await??;
+        Ok(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ))
+    }
+
     /// Upload a PNG chosen with `pick_image_file` as the account's skin.
     pub async fn skin_upload(
         &self,
