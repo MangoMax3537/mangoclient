@@ -278,6 +278,15 @@ jobs:
       - name: No update key
         if: env.HAS_UPDATE_KEY != 'true'
         run: echo "::warning::UPDATE_PRIVATE_KEY is not set, so latest.json was NOT produced and in-app updates will not work for this release."
+      # Everything the release needs (bundles, SHA256SUMS.txt, signed latest.json) is kept with the run, so a failing
+      # release step (missing token rights, rulesets) never loses a finished, signed build.
+      - name: Keep the release files with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files-${{ env.RELEASE_TAG }}
+          path: collected/*
+          if-no-files-found: error
+          retention-days: 30
       - name: Create or update the DRAFT release and upload
         env:
           GH_TOKEN: ${{ github.token }}
@@ -289,3 +298,16 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" --repo "$REPO" --clobber collected/*
           echo "Draft ready. Review it, then publish manually." >> "$GITHUB_STEP_SUMMARY"
+      - name: How to publish by hand
+        if: failure()
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "### The draft release could not be created"
+            echo "The signed files are kept as the artifact \`release-files-${RELEASE_TAG}\` of this run. With push rights:"
+            echo '```'
+            echo "gh run download ${GITHUB_RUN_ID} --repo ${REPO} --name release-files-${RELEASE_TAG} --dir release-files"
+            echo "gh release create ${RELEASE_TAG} --repo ${REPO} --draft --title \"MangoClient ${RELEASE_TAG}\" --generate-notes --verify-tag release-files/*"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
