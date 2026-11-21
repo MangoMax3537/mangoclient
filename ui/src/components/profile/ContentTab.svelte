@@ -131,7 +131,7 @@
       <button class="btn" type="button" onclick={() => (query = '')}>{t('library.clearSearch')}</button>
     </EmptyState>
   {:else}
-    <div class="list">
+    <div class="list" style:--rows={shown.length}>
       <VirtualList separators items={shown} rowHeight={62} key={(i) => i.projectId} label={t(`content.type.${type}` as Key)}>
         {#snippet row(it)}
           {@const inst = installs[it.projectId]}
@@ -191,7 +191,10 @@
   .search .field { width: 100%; padding-left: 36px; }
   .note { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; background: rgba(255, 173, 50, 0.08); border: 1px solid rgba(255, 173, 50, 0.3); color: var(--mango); }
   .note span { flex: 1; color: var(--paper); }
-  .list { flex: 1 1 0; min-height: 200px; display: flex; flex-direction: column; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
+  /* exactly as tall as its rows (a short list ends right after its last row); a long list stops at the window height and scrolls inside
+     (virtualised), the page itself scrolls for the rest */
+  .list { flex: 1 1 0; display: flex; flex-direction: column; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
+  .list[style*='--rows'] { flex: none; height: calc(var(--rows) * 62px + 2px); max-height: max(320px, calc(100vh - 300px)); }
   .item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 44px 36px; gap: 12px; align-items: center; height: 100%; padding: 0 10px 0 12px; }
   .item:hover { background: var(--ink-2); }
   .item.off .nm, .item.off .ver { opacity: 0.5; }

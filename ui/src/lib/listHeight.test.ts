@@ -11,11 +11,14 @@ describe('content list can never collapse to nothing', () => {
     expect(css).not.toMatch(/contain:\s*strict/);
     expect(css).toMatch(/flex:\s*1 1 0/);
   });
-  it('ContentTab has a floor height and does not depend on height: 100%', () => {
+  it('ContentTab has a floor height, a list as tall as its rows, and does not depend on height: 100%', () => {
     const css = src('profile/ContentTab.svelte');
     expect(css).toMatch(/\.ct \{[^}]*min-height: 320px/);
     expect(css).not.toMatch(/\.ct \{[^}]*height: 100%/);
-    expect(css).toMatch(/\.list \{[^}]*min-height: 200px/);
+    // the list box has an explicit pixel height from its rows (never 100% of a flexed parent), long lists capped with a floor
+    expect(css).toMatch(/\.list\[style\*='--rows'\] \{[^}]*height: calc\(var\(--rows\) \* 62px \+ 2px\)/);
+    expect(css).toMatch(/\.list\[style\*='--rows'\] \{[^}]*max-height: max\(320px/);
+    expect(src('profile/ContentTab.svelte')).toContain('<div class="list" style:--rows={shown.length}>');
   });
   it('the Overview mods tile takes the same count as the tab', () => {
     expect(src('ProfilePage.svelte')).toContain('modCount={items ? counts.mod : p.modCount}');
