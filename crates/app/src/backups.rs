@@ -583,8 +583,8 @@ fn check_entries<R: Read + Seek>(
     }
     for i in 0..zip.len() {
         let f = zip.by_index_raw(i).map_err(corrupt)?;
-        let name = f.name();
-        if !zip_name_ok(name) || !allowed(name) {
+        let name = f.name().map_err(corrupt)?.into_owned();
+        if !zip_name_ok(&name) || !allowed(&name) {
             return Err(corrupt(format!("unexpected entry {name:?}")));
         }
         if mango_archive::is_symlink_mode(f.unix_mode()) {

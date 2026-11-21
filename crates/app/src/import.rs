@@ -270,7 +270,12 @@ fn is_curseforge_manifest(zip: &mut zip::ZipArchive<File>) -> bool {
 /// the network.
 fn scan_archive(path: &Path) -> Res<Scan> {
     let mut zip = open_zip(path)?;
-    let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+    // an entry name that cannot be decoded makes the whole archive invalid
+    let names: Vec<String> = zip
+        .file_names()
+        .map(|n| n.map(|n| n.into_owned()))
+        .collect::<Result<_, _>>()
+        .map_err(|_| invalid("unreadable entry name"))?;
     let has = |n: &str| names.iter().any(|x| x == n);
     // Nothing is extracted here, so a root that never exists is enough to
     // check that the paths stay inside.

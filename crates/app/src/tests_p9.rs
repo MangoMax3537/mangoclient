@@ -558,7 +558,7 @@ async fn symlinks_inside_a_world_are_not_followed() {
         .join(format!("{}.zip", b.id));
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_file).unwrap()).unwrap();
     let names: Vec<String> = (0..zip.len())
-        .map(|i| zip.by_index(i).unwrap().name().to_string())
+        .map(|i| zip.by_index(i).unwrap().name().unwrap().to_string())
         .collect();
     assert!(names.contains(&"W/level.dat".to_string()));
     assert!(
@@ -850,7 +850,7 @@ async fn snapshot_restore_puts_back_folders_and_the_mod_list() {
         .join(format!("{}.zip", snap.id));
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_file).unwrap()).unwrap();
     let names: Vec<String> = (0..zip.len())
-        .map(|i| zip.by_index(i).unwrap().name().to_string())
+        .map(|i| zip.by_index(i).unwrap().name().unwrap().to_string())
         .collect();
     assert!(names.contains(&MANIFEST.to_string()));
     assert!(names.contains(&"mods/a.jar".to_string()));

@@ -110,7 +110,7 @@ fn read_pack(pack: &Path, game_dir: &Path) -> Result<PackIndex> {
     let mut overrides = Vec::new();
     for i in 0..zip.len() {
         let f = zip.by_index_raw(i).map_err(zip_err)?;
-        let name = f.name().to_string();
+        let name = f.name().map_err(zip_err)?.to_string();
         if OVERRIDE_FOLDERS
             .iter()
             .any(|p| name.starts_with(&format!("{p}/")))
@@ -167,7 +167,7 @@ fn extract_overrides(pack: &Path, game_dir: &Path) -> Result<()> {
         let prefix = format!("{folder}/");
         for i in 0..zip.len() {
             let mut f = zip.by_index(i).map_err(zip_err)?;
-            let name = f.name().to_string();
+            let name = f.name().map_err(zip_err)?.to_string();
             if !name.starts_with(&prefix) || f.is_dir() {
                 continue;
             }

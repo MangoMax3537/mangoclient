@@ -122,7 +122,7 @@ fn write_zip(dir: &Path, name: &str, entries: &[(&str, &[u8])]) -> PathBuf {
 
 fn zip_names(p: &Path) -> Vec<String> {
     let z = zip::ZipArchive::new(std::fs::File::open(p).unwrap()).unwrap();
-    let mut v: Vec<String> = z.file_names().map(str::to_string).collect();
+    let mut v: Vec<String> = z.file_names().map(|n| n.unwrap().into_owned()).collect();
     v.sort();
     v
 }

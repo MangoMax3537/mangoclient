@@ -184,7 +184,7 @@ pub fn extract_zip<R: Read + Seek>(
     for i in 0..zip.len() {
         let f = zip.by_index_raw(i)?;
         infos.push(EntryInfo {
-            name: f.name().to_string(),
+            name: f.name()?.to_string(),
             size: f.size(),
             is_dir: f.is_dir(),
             unix_mode: f.unix_mode(),
@@ -196,7 +196,7 @@ pub fn extract_zip<R: Read + Seek>(
     let mut total = 0u64;
     for i in 0..zip.len() {
         let mut f = zip.by_index(i)?;
-        let name = f.name().to_string();
+        let name = f.name()?.to_string();
         let target = safe_archive_path(dest, &name)?;
         if f.is_dir() {
             fs::create_dir_all(&target)?;
@@ -226,7 +226,7 @@ fn subtree_entries<R: Read + Seek>(
     let mut out = Vec::new();
     for i in 0..zip.len() {
         let f = zip.by_index_raw(i)?;
-        let name = f.name().to_string();
+        let name = f.name()?.to_string();
         let Some(rel) = name.strip_prefix(prefix) else {
             continue;
         };

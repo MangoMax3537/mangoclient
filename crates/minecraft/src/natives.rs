@@ -24,7 +24,7 @@ fn extract_one(archive: &Path, dir: &Path, exclude: &[String]) -> std::result::R
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(|e| e.to_string())?.to_string();
         if name.starts_with("META-INF/") || exclude.iter().any(|ex| name.starts_with(ex.as_str())) {
             continue;
         }
