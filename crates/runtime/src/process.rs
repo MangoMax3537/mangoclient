@@ -218,9 +218,32 @@ fn probe_exists_other(pid: u32) -> bool {
     std::path::Path::new(&format!("/proc/{pid}")).exists()
 }
 
-#[cfg(not(target_os = "linux"))]
-fn probe_exists_other(_pid: u32) -> bool {
-    false
+/// `kill -0` only asks whether the pid exists (and may be signalled); it sends nothing.
+#[cfg(all(unix, not(target_os = "linux")))]
+fn probe_exists_other(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// CSV rows of `tasklist` are `"image","pid",...`; any row means the pid exists.
+#[cfg(windows)]
+fn probe_exists_other(pid: u32) -> bool {
+    let mut cmd = Command::new("tasklist");
+    hide_console(&mut cmd);
+    let out = cmd
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    let Ok(out) = out else { return false };
+    let needle = format!("\",\"{pid}\",");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|l| l.contains(&needle))
 }
 
 /// Windows: spawned helper tools must not open a console window of their own.

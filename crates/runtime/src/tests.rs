@@ -193,6 +193,24 @@ mod unix {
 
     const LOOP: &str = "while :; do sleep 0.05; done";
 
+    /// A long-running process whose process name is `java`, as a real JVM's is. Linux names a script's process after the
+    /// script file; macOS names it after the interpreter (`sh`), so there a copy of `/bin/sh` called `java` runs the loop.
+    fn looping_java(dir: &Path, cb: EventCb) -> SpawnOptions {
+        #[cfg(target_os = "linux")]
+        {
+            opts(dir, script(dir, "java", LOOP), cb)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let java = dir.join("java");
+            std::fs::copy("/bin/sh", &java).unwrap();
+            std::fs::set_permissions(&java, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let mut o = opts(dir, java, cb);
+            o.command.args = vec!["-c".into(), LOOP.into()];
+            o
+        }
+    }
+
     #[test]
     fn clean_exit_detects_running_and_parses_log() {
         let dir = tempfile::tempdir().unwrap();
@@ -249,9 +267,8 @@ mod unix {
     #[test]
     fn fallback_marks_running_then_stop() {
         let dir = tempfile::tempdir().unwrap();
-        let java = script(dir.path(), "java", LOOP);
         let (cb, store) = collect();
-        let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
+        let g = GameInstance::spawn(looping_java(dir.path(), cb)).unwrap();
         wait_until_alive(&g.session());
         let begun = std::time::Instant::now();
         while !g.is_running() {
@@ -284,9 +301,8 @@ mod unix {
     #[test]
     fn adopts_a_live_session_and_notices_its_death() {
         let dir = tempfile::tempdir().unwrap();
-        let java = script(dir.path(), "java", LOOP);
         let (cb, _s) = collect();
-        let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
+        let g = GameInstance::spawn(looping_java(dir.path(), cb)).unwrap();
         let session = g.session();
         wait_until_alive(&session);
 
