@@ -285,7 +285,11 @@ mod tests {
                 let p = e.path();
                 if p.extension().is_some_and(|x| x == "ts") {
                     let name = e.file_name().to_string_lossy().into_owned();
-                    out.insert(name, std::fs::read_to_string(&p).unwrap_or_default());
+                    // A Windows checkout (git autocrlf) has CRLF: compare the text, not the line endings.
+                    let text = std::fs::read_to_string(&p)
+                        .unwrap_or_default()
+                        .replace("\r\n", "\n");
+                    out.insert(name, text);
                 }
             }
         }
