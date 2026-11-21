@@ -2,7 +2,7 @@
   // THE background engine, mounted once in the app shell behind every view. Two stacked layers: the next image is loaded AND decoded before it
   // fades in (opacity only, ~1.8 s), then the old layer is dropped so its images leave memory. mode 'hero' (Home) draws the full-strength hero
   // look (the Home hero is transparent over it); mode 'full' (every other view) draws a still image under a strong uniform scrim and blur.
-  // With `auto` (and `cycle`) it crossfades through the pool (generic wallpapers + panoramas + brand surface) every 30 s in shuffled order.
+  // With `auto` (and `cycle`) it crossfades through the pool (version wallpaper + generic wallpapers + the user's panoramas) every 30 s in shuffled order.
   // The timer pauses while the document is hidden or the window was blurred. Reduced motion does NOT stop the cycle (WebKitGTK reports it whenever the desktop has animations off): the swap is just instant. Only the Settings toggle turns cycling off.
   import { onMount, untrack } from 'svelte';
   import BgLayer from './BgLayer.svelte';
@@ -50,7 +50,8 @@
   $effect(() => {
     const f = first;
     untrack(() => {
-      if (slots[base].res === null || slots[base].key === 'first') {
+      // while `auto` the engine is one continuous show: switching view / instance never swaps the slide in place (only the first fill)
+      if (slots[base].res === null || (slots[base].key === 'first' && !(isAuto && settingKey === 'auto|'))) {
         slots[base] = { res: f, key: 'first', shown: true };
         if (incoming !== null) { slots[incoming === 0 ? 0 : 1] = { res: null, key: '', shown: false }; incoming = null; fading = false; clearTimeout(fadeTimer); timer?.done(); }
       }
@@ -59,7 +60,8 @@
   // the setting itself changed (kind / image): forget the cycled state
   let settingKey = '';
   $effect(() => {
-    const k = `${profileId}|${JSON.stringify(background)}`;
+    // `auto` is the same setting whichever instance it comes from: navigating between instances must not reset the cycle
+    const k = background.kind === 'auto' ? 'auto|' : `${profileId}|${JSON.stringify(background)}`;
     untrack(() => {
       if (settingKey && k !== settingKey && slots[base].key !== 'first') {
         const other: 0 | 1 = base === 0 ? 1 : 0;
@@ -142,7 +144,7 @@
   const look = (r: ResolvedBackground) => (full ? { dim: FULL_DIM, blur: FULL_BLUR } : backgroundStyle(background, r));
 </script>
 
-<div class="stack" class:full class:calm aria-hidden="true" data-bg-engine>
+<div class="stack" class:full class:calm aria-hidden="true" data-bg-engine data-slide={slots[base].key}>
   {#each slots as s, i (i)}
     {#if s.res}
       {@const r = shown(s.res)}

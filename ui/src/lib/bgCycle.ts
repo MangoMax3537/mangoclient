@@ -1,5 +1,5 @@
 // Background pool + Home cycling (UI rules for "auto" backgrounds).
-//   Pool = generic wallpapers + one panorama set per installed version (panorama_pool) + the brand surface.
+//   Pool = the instance's version wallpaper + generic wallpapers + one panorama set per installed version (panorama_pool). No brand surface.
 //   Instance hero, kind 'auto': (a) wallpaper whose manifest versions rule matches the Minecraft version, (b) the instance's own
 //   panorama, (c) deterministic pool member by hash of the profile id.
 //   Home: when the instance's background is 'auto', crossfades through the shuffled pool every 30 s.
@@ -14,15 +14,14 @@ export type PoolItem =
 
 export const poolKey = (i: PoolItem): string => (i.kind === 'wallpaper' ? `w:${i.id}` : i.kind === 'panorama' ? `p:${i.id}` : 'brand');
 
-/** Generic wallpapers, the panorama sets and the brand surface, in a stable order. */
+/** Version wallpaper, generic wallpapers and the user's own panoramas, in a stable order. The MangoClient logo is never a background slide. */
 export function buildPool(wallpapers: readonly Wallpaper[], sets: readonly PanoramaSet[], own: Wallpaper | null = null): PoolItem[] {
   const pool: PoolItem[] = [];
   const seen = new Set<string>();
-  // the instance's own version wallpaper always takes part, so the pool has at least 2 entries (it + the brand surface) even without generic art
+  // the instance's own version wallpaper always takes part
   if (own) { seen.add(own.id); pool.push({ kind: 'wallpaper', id: own.id, url: own.url, scrim: own.scrim }); }
   for (const w of wallpapers) if (w.generic && !seen.has(w.id)) { seen.add(w.id); pool.push({ kind: 'wallpaper', id: w.id, url: w.url, scrim: w.scrim }); }
   for (const s of sets) if (s.faces.length === 6 && !pool.some((p) => p.kind === 'panorama' && p.id === s.mcVersion)) pool.push({ kind: 'panorama', id: s.mcVersion, set: s });
-  pool.push({ kind: 'brand', id: 'brand' });
   return pool;
 }
 
@@ -39,7 +38,8 @@ export function resolveAuto(c: AutoCtx): { item: PoolItem; rule: AutoRuleHit } {
   const w = versionWallpaper(c.wallpapers, c.mcVersion, c.profileId);
   if (w) return { item: { kind: 'wallpaper', id: w.id, url: w.url, scrim: w.scrim }, rule: 'version' };
   if (c.ownPanorama && c.ownPanorama.faces.length === 6) return { item: { kind: 'panorama', id: c.ownPanorama.mcVersion, set: c.ownPanorama }, rule: 'panorama' };
-  const pool = c.pool.length ? c.pool : buildPool([], []);
+  // only reachable with no image at all: the instance hero falls back to its own MangoClient surface (never part of the cycling pool)
+  const pool: readonly PoolItem[] = c.pool.length ? c.pool : [{ kind: 'brand', id: 'brand' }];
   return { item: pool[hashId(c.profileId) % pool.length], rule: 'pool' };
 }
 

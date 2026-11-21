@@ -71,7 +71,7 @@
     <Rail />
     <main>
       {#if bgOn}
-        <AppBackground profileId={bgProfile?.id ?? ''} mcVersion={bgProfile?.mcVersion ?? ''} background={bgProfile?.background ?? { kind: 'auto' }} tint={bgProfile?.color ?? null} mode={bgMode} cycle={nav.view !== 'profile'} />
+        <AppBackground profileId={bgProfile?.id ?? ''} mcVersion={bgProfile?.mcVersion ?? ''} background={bgProfile?.background ?? { kind: 'auto' }} tint={bgProfile?.color ?? null} mode={bgMode} />
       {/if}
       {#if !app.ready}
         {#if boot.show}<Lazy load={skeletons.view} props={{ view: nav.view }} />{/if}

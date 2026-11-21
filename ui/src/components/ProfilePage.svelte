@@ -99,7 +99,8 @@
 {#if p}
   <div class="page">
     <section class="hero on-stage notch" style:--n="18px" use:contextmenu={() => pageMenu(p)}>
-      <PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />
+      <!-- `auto` shows the one global engine behind the whole window (it keeps cycling across views and tabs); only an explicit choice gets its own layer -->
+      {#if p.background.kind !== 'auto'}<PanoramaBackground profileId={p.id} mcVersion={p.mcVersion} background={p.background} tint={p.color} />{/if}
       <div class="inner">
         <div class="top">
           <button class="btn ghost back" type="button" onclick={() => (nav.view = 'library')}><ArrowLeftIcon weight="bold" size={14} aria-hidden="true" />{t('nav.library')}</button>
@@ -154,7 +155,7 @@
   .page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 16px 20px 0; gap: 12px; }
   /* The hero is the same on every tab: back/tools row on top, identity and Play below. Nothing is positioned absolutely, so nothing can overlap,
      and the Play column wraps under the identity when the window is narrow. */
-  .hero { position: relative; flex: none; overflow: hidden; display: flex; }
+  .hero { background: linear-gradient(rgba(11, 12, 14, 0.5), rgba(11, 12, 14, 0.5)); position: relative; flex: none; overflow: hidden; display: flex; }
   .inner { position: relative; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 10px 20px 18px 28px; }
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .back { height: 28px; margin-left: -10px; }

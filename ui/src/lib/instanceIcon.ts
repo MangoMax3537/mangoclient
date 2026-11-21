@@ -77,7 +77,7 @@ export interface BackgroundContext {
   mcVersion: string; profileId: string;
   panorama: PanoramaSet | null | undefined;
   wallpapers: readonly Wallpaper[];
-  /** Generic wallpapers + panorama sets + the brand surface (bgCycle.buildPool); empty = just the brand surface. */
+  /** Version wallpaper + generic wallpapers + panorama sets (bgCycle.buildPool); empty = the instance's own MangoClient surface. */
   pool?: readonly PoolItem[];
 }
 
@@ -89,7 +89,7 @@ export function resolvePoolItem(i: PoolItem): ResolvedBackground {
 /**
  * image -> that image; none -> plain surface; panorama -> the Minecraft panorama (watermark until it is extracted);
  * wallpaper -> the bundled wallpaper with that id (auto when it no longer exists); auto -> version wallpaper, else the instance's own
- * panorama, else a deterministic pool member (generic wallpapers + panorama sets + the brand surface).
+ * panorama, else a deterministic pool member (generic wallpapers + panorama sets).
  */
 export function resolveBackground(bg: ProfileBackground | null | undefined, c: BackgroundContext): ResolvedBackground {
   const b = bg ?? { kind: 'auto' as const };

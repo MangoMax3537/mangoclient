@@ -3,12 +3,26 @@
   import TerminalIcon from 'phosphor-svelte/lib/TerminalIcon';
   import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
   import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
+  import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
+  import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import { writeClipboard } from '../lib/clipboard';
   import { clearConsole, consoles, t, tp } from '../lib/stores.svelte';
 
   let { profileId }: { profileId: string } = $props();
   let open = $state(true);
   let box: HTMLDivElement | undefined = $state();
   const lines = $derived(consoles[profileId] ?? []);
+
+  let copied = $state(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  /** ALL lines (not only the visible ones) as plain text. */
+  async function copyAll() {
+    if (!lines.length) return;
+    if (!(await writeClipboard(lines.map((l) => l.line).join('\n')))) return;
+    copied = true; clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = false), 1500);
+  }
+  $effect(() => () => clearTimeout(copiedTimer));
 
   $effect(() => {
     void lines.length;
@@ -29,6 +43,12 @@
       <span class="caret" class:open><CaretDownIcon weight="bold" size={14} aria-hidden="true" /></span>
       <span class="sr-only">{open ? t('console.hide') : t('console.show')}</span>
     </button>
+    <span class="sr-only" role="status" aria-live="polite">{copied ? t('console.copied') : ''}</span>
+    {#if open}
+      <button class="btn ghost small" type="button" disabled={!lines.length} onclick={copyAll}>
+        {#if copied}<CheckIcon weight="bold" size={14} aria-hidden="true" />{t('console.copied')}{:else}<CopyIcon weight="bold" size={14} aria-hidden="true" />{t('console.copyAll')}{/if}
+      </button>
+    {/if}
     {#if open && lines.length}
       <button class="btn ghost small" type="button" onclick={() => clearConsole(profileId)}>
         <TrashIcon weight="bold" size={14} aria-hidden="true" />{t('console.clear')}
