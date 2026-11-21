@@ -2,7 +2,7 @@
   // THE background engine, mounted once in the app shell behind every view. Two stacked layers: the next image is loaded AND decoded before it
   // fades in (opacity only, ~1.8 s), then the old layer is dropped so its images leave memory. mode 'hero' (Home) draws the full-strength hero
   // look (the Home hero is transparent over it); mode 'full' (every other view) draws a still image under a strong uniform scrim and blur.
-  // With `auto` (and `cycle`) it crossfades through the pool (version wallpaper + generic wallpapers + the user's panoramas) every 30 s in shuffled order.
+  // With `auto` (and `cycle`) it crossfades through the pool (version wallpaper + generic wallpapers, all bundled with the app) every 30 s in shuffled order.
   // The timer pauses while the document is hidden or the window was blurred. Reduced motion does NOT stop the cycle (WebKitGTK reports it whenever the desktop has animations off): the swap is just instant. Only the Settings toggle turns cycling off.
   import { onMount, untrack } from 'svelte';
   import BgLayer from './BgLayer.svelte';
@@ -12,7 +12,7 @@
   import { wallpapers, DEFAULT_SCRIM } from '../lib/wallpapers';
   import { FULL_BLUR, FULL_DIM, flatten } from '../lib/bgMode';
   import { artUrl, floorCandidates, readLastWallpaper, rememberWallpaper } from '../lib/bgFloor';
-  import { loadPanorama, panoramaPool, panoramas, ui } from '../lib/stores.svelte';
+  import { loadPanorama, panoramas, ui } from '../lib/stores.svelte';
   import type { ProfileBackground } from '../lib/types';
 
   interface Props { profileId: string; mcVersion: string; background: ProfileBackground; tint?: string | null; mode?: 'hero' | 'full'; cycle?: boolean }
@@ -20,11 +20,11 @@
   void DEFAULT_SCRIM;
 
   const isAuto = $derived(background.kind === 'auto');
-  $effect(() => { if (profileId && (isAuto || background.kind === 'panorama')) void loadPanorama(profileId); });
+  $effect(() => { if (profileId && background.kind === 'panorama') void loadPanorama(profileId); });
   // slides that failed to load or decode this session: skipped from now on, the current slide stays
   let bad = $state<string[]>([]);
   const isBad = (r: ResolvedBackground | null): boolean => { const u = r && artUrl(r); return !!u && bad.includes(u); };
-  const pool = $derived(buildPool(wallpapers, panoramaPool.sets, versionWallpaper(wallpapers, mcVersion, profileId)).filter((p) => !isBad(resolvePoolItem(p))));
+  const pool = $derived(buildPool(wallpapers, versionWallpaper(wallpapers, mcVersion, profileId)).filter((p) => !isBad(resolvePoolItem(p))));
   // THE floor: a bundled wallpaper under everything, the last one shown (else a fixed generic one). Drawn at once, never faded, never removed.
   // If the floor image itself fails to load, the next bundled wallpaper takes over (loudly, in the console): the window is never left without an image.
   const floorList = floorCandidates(wallpapers, readLastWallpaper());

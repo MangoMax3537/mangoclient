@@ -375,7 +375,7 @@ export async function init(api: Api = defaultApi): Promise<void> {
     api.listen('content:changed', (e) => { contentRev[e.profileId] = (contentRev[e.profileId] ?? 0) + 1; }),
     api.listen('accounts:changed', () => { void refreshAccounts(); }),
     api.listen('blocks:status', applyBlocksStatus),
-    api.listen('panorama:ready', (e) => { if (e.profileId) void loadPanorama(e.profileId, true); else void loadPanoramaPool(); }),
+    api.listen('panorama:ready', (e) => { if (e.profileId) void loadPanorama(e.profileId, true); }),
     api.listen('skin:updated', (e) => { skinRev[e.uuid] = (skinRev[e.uuid] ?? 0) + 1; void refreshAccounts(); }),
     api.listen('window:state', (e) => { Object.assign(win, e); }),
   ]);
@@ -390,7 +390,6 @@ export async function init(api: Api = defaultApi): Promise<void> {
   }
   app.ready = true;
   void initBlocks();
-  void loadPanoramaPool();
 }
 
 export function applyInstallProgress(e: InstallProgressEvent): void {

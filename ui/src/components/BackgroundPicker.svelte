@@ -12,11 +12,11 @@
   import ImagePick from './ImagePick.svelte';
   import { fmtDateTime } from '../lib/format';
   import { MANGO_CLIENT_ID, uniqueWallpapers, wallpapers } from '../lib/wallpapers';
-  import { buildPool, resolveAuto } from '../lib/bgCycle';
+  import { buildPool, resolveAuto, versionWallpaper } from '../lib/bgCycle';
   import BgLayer from './BgLayer.svelte';
   import { BLUR_MAX, backgroundStyle, choiceFromBackground, previewBackground, resolveBackground, sameBackground, type BackgroundChoice } from '../lib/instanceIcon';
   import { imageDrop, type PickedImage } from '../lib/pickImage';
-  import { actions, app, errorText, getApi, lang, loadPanorama, loadPanoramaPool, panoramaPool, panoramas, t, toast } from '../lib/stores.svelte';
+  import { actions, app, errorText, getApi, lang, loadPanorama, panoramas, t, toast } from '../lib/stores.svelte';
   import type { Screenshot } from '../lib/types';
 
   let { profileId, onclose }: { profileId: string; onclose: () => void } = $props();
@@ -35,7 +35,7 @@
   let bad = $state(false);
   let shots = $state<Screenshot[] | null>(null);
 
-  $effect(() => { void loadPanorama(profileId); if (!panoramaPool.loaded) void loadPanoramaPool(); });
+  $effect(() => { void loadPanorama(profileId); });
   $effect(() => {
     if (shots) return;
     let dead = false;
@@ -60,10 +60,10 @@
   const mangoOn = $derived(draft.kind === 'wallpaper' && draft.id === MANGO_CLIENT_ID);
   const panoText = $derived(!pano ? t('bg.auto.none') : pano.source === 'own' ? t('bg.auto.own', { v: pano.mcVersion }) : t('bg.auto.nearest', { v: pano.mcVersion }));
   // the text must name exactly what the hero resolves to (same rules and pool as PanoramaBackground)
-  const auto = $derived(resolveAuto({ mcVersion: profile?.mcVersion ?? '', profileId, wallpapers, ownPanorama: pano, pool: buildPool(wallpapers, panoramaPool.sets) }));
-  const autoName = $derived(auto.item.kind === 'wallpaper' ? (wallpapers.find((w) => w.id === (auto.item as { id: string }).id)?.label ?? '') : auto.item.kind === 'panorama' ? t('bg.tab.panorama') : t('bg.wallpaper.mango'));
+  const auto = $derived(resolveAuto({ mcVersion: profile?.mcVersion ?? '', profileId, wallpapers, pool: buildPool(wallpapers, versionWallpaper(wallpapers, profile?.mcVersion ?? '', profileId)) }));
+  const autoName = $derived(auto.item.kind === 'wallpaper' ? (wallpapers.find((w) => w.id === (auto.item as { id: string }).id)?.label ?? '') : t('bg.wallpaper.mango'));
   const autoText = $derived(auto.rule === 'version' ? t('bg.auto.version', { v: profile?.mcVersion ?? '', name: autoName })
-    : auto.rule === 'panorama' ? panoText : t('bg.auto.generic', { name: autoName }));
+    : t('bg.auto.generic', { name: autoName }));
 
   const tabs = $derived([
     { value: 'auto', label: t('bg.tab.auto') },

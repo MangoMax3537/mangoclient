@@ -92,10 +92,10 @@ describe('background resolution', () => {
   it('auto = the wallpaper of the version rule, with its own scrim', () => {
     expect(resolveBackground({ kind: 'auto' }, ctx())).toMatchObject({ kind: 'image', url: 'pale.url', scrim: 0.4, source: 'wallpaper' });
   });
-  it('auto without a version rule: the instance\'s own panorama, else a deterministic pool member (generic wallpapers, panoramas, brand surface)', () => {
-    expect(resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10' })).kind).toBe('panorama');
-    const noOwn = resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10', panorama: null, pool: buildPool(walls, []) }));
-    expect(noOwn).toMatchObject({ url: 'bad.url' }); // pool = [badlands, brand]; profile p1 hashes to the wallpaper
+  it('auto without a version rule: a bundled wallpaper, even when the instance has its own panorama', () => {
+    expect(resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10' }))).toMatchObject({ kind: 'image', url: 'bad.url' });
+    const noOwn = resolveBackground({ kind: 'auto' }, ctx({ mcVersion: '1.7.10', panorama: null, pool: buildPool(walls) }));
+    expect(noOwn).toMatchObject({ url: 'bad.url' });
     expect(resolveBackground({ kind: 'auto' }, ctx({ wallpapers: [], panorama: null }))).toEqual({ kind: 'watermark' });
   });
   it('the version wallpaper beats the own panorama; the persisted panorama kind shows the panorama (watermark until extracted)', () => {

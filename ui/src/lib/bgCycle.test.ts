@@ -1,47 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CYCLE_MS, CycleScheduler, Order, buildPool, nextDelay, poolKey, resolveAuto, shuffle, versionWallpaper } from './bgCycle';
 import { buildWallpapers } from './wallpapers';
-import type { PanoramaSet } from './types';
 
 const walls = buildWallpapers(
   { wallpapers: [{ file: 'pale', label: 'Pale', versions: ['1.21.4'], scrim: 0.4 }, { file: 'badlands', label: 'B', generic: true }, { file: 'taiga', label: 'T', generic: true }] },
   { '/a/pale.webp': 'pale.url', '/a/badlands.jpg': 'bad.url', '/a/taiga.jpg': 'taiga.url' },
 );
-const set = (v: string): PanoramaSet => ({ mcVersion: v, source: 'own', faces: ['a', 'b', 'c', 'd', 'e', 'f'] });
 
 describe('pool', () => {
-  it('generic wallpapers + panorama sets (no brand surface); version-specific wallpapers are not pool members', () => {
-    const pool = buildPool(walls, [set('1.21.4'), set('1.20.6'), { ...set('1.8.9'), faces: ['x'] }]);
-    expect(pool.map(poolKey)).toEqual(['w:badlands', 'w:taiga', 'p:1.21.4', 'p:1.20.6']);
+  it('only bundled generic wallpapers (no brand surface, no runtime panoramas); version-specific wallpapers are not pool members', () => {
+    expect(buildPool(walls).map(poolKey)).toEqual(['w:badlands', 'w:taiga']);
   });
-  it('an empty world has an empty pool (the logo is never a background slide)', () => { expect(buildPool([], [])).toEqual([]); });
+  it('without any generic wallpaper every bundled one is in the pool, so auto is never left without an image', () => {
+    const only = walls.filter((w) => !w.generic);
+    expect(buildPool(only).map(poolKey)).toEqual(['w:pale']);
+  });
+  it('an empty world has an empty pool (the logo is never a background slide)', () => { expect(buildPool([])).toEqual([]); });
 });
 
 describe('auto resolution on an instance hero', () => {
-  const pool = buildPool(walls, [set('1.20.6')]);
+  const pool = buildPool(walls);
   it('(a) version rule first', () => {
-    const r = resolveAuto({ mcVersion: '1.21.4', profileId: 'p', wallpapers: walls, ownPanorama: set('1.21.4'), pool });
+    const r = resolveAuto({ mcVersion: '1.21.4', profileId: 'p', wallpapers: walls, pool });
     expect(r.rule).toBe('version'); expect(r.item).toMatchObject({ kind: 'wallpaper', id: 'pale' });
   });
-  it('(b) the own panorama when no version rule matches', () => {
-    const r = resolveAuto({ mcVersion: '1.20.6', profileId: 'p', wallpapers: walls, ownPanorama: set('1.20.6'), pool });
-    expect(r.rule).toBe('panorama'); expect(r.item).toMatchObject({ kind: 'panorama', id: '1.20.6' });
-  });
-  it('(c) a deterministic pick from the pool while the own panorama is not there (null) - same id, same pick', () => {
-    const a = resolveAuto({ mcVersion: '1.7.10', profileId: 'abc', wallpapers: walls, ownPanorama: null, pool });
-    const b = resolveAuto({ mcVersion: '1.7.10', profileId: 'abc', wallpapers: walls, ownPanorama: undefined, pool });
+  it('(b) a deterministic pick of a bundled wallpaper, never a panorama - same id, same pick', () => {
+    const a = resolveAuto({ mcVersion: '1.7.10', profileId: 'abc', wallpapers: walls, pool });
+    const b = resolveAuto({ mcVersion: '1.7.10', profileId: 'abc', wallpapers: walls, pool });
     expect(a.rule).toBe('pool'); expect(poolKey(a.item)).toBe(poolKey(b.item));
-    const picks = new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => poolKey(resolveAuto({ mcVersion: '1.7.10', profileId: id, wallpapers: walls, ownPanorama: null, pool }).item)));
-    expect(picks.size).toBeGreaterThan(1);
+    const picks = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => resolveAuto({ mcVersion: '1.7.10', profileId: id, wallpapers: walls, pool }).item);
+    expect(new Set(picks.map(poolKey)).size).toBeGreaterThan(1);
+    for (const p of picks) expect(p.kind).toBe('wallpaper');
   });
   it('an empty pool still resolves (the instance hero falls back to its own surface)', () => {
-    expect(resolveAuto({ mcVersion: '1.7.10', profileId: 'p', wallpapers: [], ownPanorama: null, pool: [] }).item.kind).toBe('brand');
+    expect(resolveAuto({ mcVersion: '1.7.10', profileId: 'p', wallpapers: [], pool: [] }).item.kind).toBe('brand');
     expect(versionWallpaper(walls, '1.7.10', 'p')).toBeNull();
   });
 });
 
 describe('Order (shuffle without repeats)', () => {
-  const pool = buildPool(walls, [set('1.21.4'), set('1.20.6')]);
+  const pool = buildPool(walls, walls[0]);
   it('visits every member before repeating and never shows the same one twice in a row, also across the wrap', () => {
     const o = new Order(); o.setPool(pool); o.seed('w:badlands');
     let prev = 'w:badlands';
@@ -52,7 +50,7 @@ describe('Order (shuffle without repeats)', () => {
     expect(new Set(seen.slice(0, pool.length - 1)).size).toBe(pool.length - 1);
   });
   it('needs two members to cycle', () => {
-    const o = new Order(); o.setPool(buildPool([], []));
+    const o = new Order(); o.setPool(buildPool([]));
     expect(o.next()).toBeNull();
   });
   it('shuffle keeps all items', () => { expect(shuffle([1, 2, 3, 4, 5]).sort()).toEqual([1, 2, 3, 4, 5]); });
@@ -61,12 +59,12 @@ describe('Order (shuffle without repeats)', () => {
 describe('pool with only a version wallpaper', () => {
   const own = { id: 'v', url: 'u', scrim: 0.4, generic: false, versions: ['1.21'] } as unknown as Parameters<typeof buildPool>[0][number];
   it('contains the version wallpaper and never the brand', () => {
-    const pool = buildPool([], [], own);
+    const pool = buildPool([], own);
     expect(pool.map(poolKey)).toEqual(['w:v']);
   });
   it('does not list the same wallpaper twice when it is also generic', () => {
     const g = { ...own, generic: true } as typeof own;
-    expect(buildPool([g], [], g).map(poolKey)).toEqual(['w:v']);
+    expect(buildPool([g], g).map(poolKey)).toEqual(['w:v']);
   });
 });
 
@@ -139,7 +137,7 @@ describe('built-in Mango Client wallpaper', () => {
   it('the picker keeps it as a wallpaper choice (not "auto")', () => {
     expect(choiceFromBackground({ kind: 'wallpaper', id: MANGO_CLIENT_ID }, [])).toMatchObject({ kind: 'wallpaper', id: 'mango-client' });
   });
-  it('it is not a member of the auto / Home pool', () => { expect(buildPool([], []).map(poolKey)).not.toContain('brand'); });
+  it('it is not a member of the auto / Home pool', () => { expect(buildPool([]).map(poolKey)).not.toContain('brand'); });
 });
 
 describe('CycleScheduler restart', () => {

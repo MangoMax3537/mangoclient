@@ -1,7 +1,8 @@
 // Background pool + Home cycling (UI rules for "auto" backgrounds).
-//   Pool = the instance's version wallpaper + generic wallpapers + one panorama set per installed version (panorama_pool). No brand surface.
-//   Instance hero, kind 'auto': (a) wallpaper whose manifest versions rule matches the Minecraft version, (b) the instance's own
-//   panorama, (c) deterministic pool member by hash of the profile id.
+//   Pool = the instance's version wallpaper + generic wallpapers, all bundled with the app (assets/backgrounds), so an auto background is
+//   always a real image that ships in the download. Minecraft panoramas (read from the user's game files at runtime) are never auto
+//   slides; they only show when an instance explicitly picks the panorama background. No brand surface.
+//   Instance hero, kind 'auto': (a) wallpaper whose manifest versions rule matches the Minecraft version, (b) deterministic pool member.
 //   Home: when the instance's background is 'auto', crossfades through the shuffled pool every 30 s.
 import { hashId } from './fallbackImage';
 import { versionMatches, type Wallpaper } from './wallpapers';
@@ -14,14 +15,17 @@ export type PoolItem =
 
 export const poolKey = (i: PoolItem): string => (i.kind === 'wallpaper' ? `w:${i.id}` : i.kind === 'panorama' ? `p:${i.id}` : 'brand');
 
-/** Version wallpaper, generic wallpapers and the user's own panoramas, in a stable order. The MangoClient logo is never a background slide. */
-export function buildPool(wallpapers: readonly Wallpaper[], sets: readonly PanoramaSet[], own: Wallpaper | null = null): PoolItem[] {
+/**
+ * Version wallpaper and generic wallpapers (every bundled one when none is generic), in a stable order. Only bundled images: the
+ * MangoClient logo and runtime panoramas are never background slides.
+ */
+export function buildPool(wallpapers: readonly Wallpaper[], own: Wallpaper | null = null): PoolItem[] {
   const pool: PoolItem[] = [];
   const seen = new Set<string>();
   // the instance's own version wallpaper always takes part
   if (own) { seen.add(own.id); pool.push({ kind: 'wallpaper', id: own.id, url: own.url, scrim: own.scrim }); }
-  for (const w of wallpapers) if (w.generic && !seen.has(w.id)) { seen.add(w.id); pool.push({ kind: 'wallpaper', id: w.id, url: w.url, scrim: w.scrim }); }
-  for (const s of sets) if (s.faces.length === 6 && !pool.some((p) => p.kind === 'panorama' && p.id === s.mcVersion)) pool.push({ kind: 'panorama', id: s.mcVersion, set: s });
+  const generic = wallpapers.some((w) => w.generic);
+  for (const w of wallpapers) if ((w.generic || !generic) && !seen.has(w.id)) { seen.add(w.id); pool.push({ kind: 'wallpaper', id: w.id, url: w.url, scrim: w.scrim }); }
   return pool;
 }
 
@@ -31,13 +35,12 @@ export function versionWallpaper(list: readonly Wallpaper[], mcVersion: string, 
   return v.length ? v[hashId(profileId) % v.length] : null;
 }
 
-export interface AutoCtx { mcVersion: string; profileId: string; wallpapers: readonly Wallpaper[]; ownPanorama: PanoramaSet | null | undefined; pool: readonly PoolItem[] }
-export type AutoRuleHit = 'version' | 'panorama' | 'pool';
-/** The instance's own hero for kind 'auto': (a) version wallpaper, (b) its own panorama, (c) hash pick from the pool. */
+export interface AutoCtx { mcVersion: string; profileId: string; wallpapers: readonly Wallpaper[]; pool: readonly PoolItem[] }
+export type AutoRuleHit = 'version' | 'pool';
+/** The instance's own hero for kind 'auto': (a) version wallpaper, (b) hash pick from the pool of bundled wallpapers. */
 export function resolveAuto(c: AutoCtx): { item: PoolItem; rule: AutoRuleHit } {
   const w = versionWallpaper(c.wallpapers, c.mcVersion, c.profileId);
   if (w) return { item: { kind: 'wallpaper', id: w.id, url: w.url, scrim: w.scrim }, rule: 'version' };
-  if (c.ownPanorama && c.ownPanorama.faces.length === 6) return { item: { kind: 'panorama', id: c.ownPanorama.mcVersion, set: c.ownPanorama }, rule: 'panorama' };
   // only reachable with no image at all: the instance hero falls back to its own MangoClient surface (never part of the cycling pool)
   const pool: readonly PoolItem[] = c.pool.length ? c.pool : [{ kind: 'brand', id: 'brand' }];
   return { item: pool[hashId(c.profileId) % pool.length], rule: 'pool' };
