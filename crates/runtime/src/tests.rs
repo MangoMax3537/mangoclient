@@ -128,12 +128,33 @@ fn follower_reads_in_pieces_and_handles_truncation() {
         FollowStart::Beginning,
         move |t| sink.lock().unwrap().push_str(t),
     );
+    // append like the game does: rewriting the file would truncate it first, and a poll in between rightly reads that
+    // as a new session (which made this test flaky)
+    use std::io::Write as _;
+    let append = |b: &[u8]| {
+        let mut log = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&file)
+            .unwrap();
+        log.write_all(b).unwrap();
+    };
     let bytes = "h\u{e4}llo\n".as_bytes().to_vec();
-    std::fs::write(&file, &bytes[..2]).unwrap(); // cuts the umlaut in half
+    append(&bytes[..2]); // cuts the umlaut in half
     std::thread::sleep(Duration::from_millis(80));
-    std::fs::write(&file, &bytes).unwrap();
+    append(&bytes[2..]);
+    let begun = std::time::Instant::now();
+    while got.lock().unwrap().as_str() != "h\u{e4}llo\n" {
+        assert!(
+            begun.elapsed() < Duration::from_secs(5),
+            "got {:?}",
+            got.lock().unwrap()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // a new session truncates the file and writes less than before: the follower starts over at the beginning
+    std::fs::write(&file, "neu\n").unwrap();
     f.stop();
-    assert_eq!(*got.lock().unwrap(), "h\u{e4}llo\n");
+    assert_eq!(*got.lock().unwrap(), "h\u{e4}llo\nneu\n");
 }
 
 #[test]
