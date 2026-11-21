@@ -900,7 +900,13 @@ async fn snapshot_restore_puts_back_folders_and_the_mod_list() {
     assert_eq!(stored.len(), 2);
     assert_eq!(
         stored[0].file.as_deref(),
-        Some(inst.join("mods/a.jar").display().to_string().as_str())
+        Some(
+            inst.join("mods")
+                .join("a.jar")
+                .display()
+                .to_string()
+                .as_str()
+        )
     );
     assert!(f
         .sink

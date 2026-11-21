@@ -401,10 +401,9 @@ fn rebased_records_cannot_leave_the_instance() {
         "/old/inst",
         &new_dir,
     );
-    assert_eq!(
-        out[0].file.as_deref(),
-        Some("/data/instances/new/mods/a.jar")
-    );
+    // native separators only (Windows: `\data\...\new\mods\a.jar` style, never mixed)
+    let want = new_dir.join("mods").join("a.jar").display().to_string();
+    assert_eq!(out[0].file.as_deref(), Some(want.as_str()));
     assert_eq!(out[1].file, None);
     assert_eq!(out[2].file, None);
 }

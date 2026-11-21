@@ -1014,7 +1014,10 @@ fn rebase_records(mods: Vec<ModRecord>, old_dir: &str, new_dir: &Path) -> Vec<Mo
                             .components()
                             .all(|c| matches!(c, std::path::Component::Normal(_))) =>
                     {
-                        m.file = Some(new_dir.join(rel).display().to_string());
+                        // component by component, so the result uses the platform's separators only
+                        let mut to = new_dir.to_path_buf();
+                        to.extend(rel.components());
+                        m.file = Some(to.display().to_string());
                     }
                     Ok(_) => m.file = None,
                     Err(_) => {}
