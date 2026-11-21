@@ -107,8 +107,7 @@
           {#each others as o (o.id)}
             {@const ob = isBusy(o.id)}
             <li use:contextmenu={() => instanceMenu(o)}>
-              <MediaCard title={o.name} selected={o.id === p.id} live={ob} pressed={o.id === p.id} handlers={cardHandlers(o.id, ops)}
-                go={{ label: `${t('home.play')}: ${o.name}`, disabled: ob || !app.accounts.length, onclick: async () => { await actions.selectProfile(o.id); actions.play(o.id); } }}>
+              <MediaCard title={o.name} selected={o.id === p.id} live={ob} pressed={o.id === p.id} handlers={cardHandlers(o.id, ops)}>
                 {#snippet art()}<InstanceIcon profile={o} fill radius={0} />{/snippet}
                 {#snippet lines()}
                   <InfoLine facts={versionLoaderFacts(o, t)} />

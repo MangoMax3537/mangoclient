@@ -32,3 +32,15 @@ describe('rail tile', () => {
     h.onclick({ button: 0 }); expect(log).toEqual(['select:p1', 'open:p1']);
   });
 });
+
+describe('Library cards use one-click open (Home cards keep select / double-click open)', () => {
+  it('Library.svelte wires the one-click handlers, Home.svelte the select-then-open ones', async () => {
+    const { readFileSync } = await import('node:fs');
+    const lib = readFileSync(new URL('../components/Library.svelte', import.meta.url), 'utf8');
+    const home = readFileSync(new URL('../components/Home.svelte', import.meta.url), 'utf8');
+    expect(lib).toContain('railTileHandlers(id, ops)');
+    expect(lib).not.toContain('cardHandlers(');
+    expect(home).toContain('cardHandlers(o.id, ops)');
+    expect(home).not.toMatch(/go=\{\{/); // instance cards have no play badge
+  });
+});

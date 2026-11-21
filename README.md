@@ -18,7 +18,7 @@ MangoClient brings Modrinth discovery, separate Minecraft setups, and account sw
 
 ## Features
 
-- **Profiles that stay separate** — each profile has its own game version, loader, mods, worlds, settings, memory, Java, window size, icon, background, group and tags, and playtime. Right-click an instance for its menu; double-click opens it.
+- **Profiles that stay separate** — each profile has its own game version, loader, mods, worlds, settings, memory, Java, window size, icon, background, group and tags, and playtime. Right-click an instance for its menu; a click opens it in the Library (on Home a click selects it, a double click opens it).
 - **Modrinth built in** — mods, shaders, resource packs and modpacks. Installing asks which instances to use (instances that already have the project or cannot take it are dimmed with the reason) and shows required and optional dependencies before anything is installed. Mods, shaders and resource packs have their own tabs per instance.
 - **Import and export** — import Modrinth `.mrpack` files and Prism/MultiMC instances, export an instance as `.mrpack`.
 - **Safety nets** — world backups and instance snapshots (automatic before updates and removals), crash analysis in plain language, and a diagnostics export that scrubs paths and tokens.

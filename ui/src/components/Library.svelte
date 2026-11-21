@@ -19,7 +19,7 @@
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
   import { writeLibraryLayout } from '../lib/layoutHint';
   import { pickAndImport } from '../lib/portability.svelte';
-  import { cardHandlers } from '../lib/instanceCard';
+  import { railTileHandlers } from '../lib/instanceCard';
   import { instanceMenu } from '../lib/instanceMenu';
   import { cm, contextmenu, openMenuFor } from '../lib/contextMenu.svelte';
   import { actions, app, lang, openProfile, nav, selectedProfile, t, tp } from '../lib/stores.svelte';
@@ -54,9 +54,9 @@
     try { globalThis.localStorage?.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch { /* ignore */ }
   }
   const selId = $derived(selectedProfile()?.id ?? null);
-  /** Single click selects (the Home instance), double click or Enter opens the page. */
+  /** Library: ONE click (or Enter) opens the page and also makes it the Home instance. (Home's own cards select on click, open on double click.) */
   const ops = { select: (id: string) => void actions.selectProfile(id), open: (id: string) => openProfile(id), isSelected: (id: string) => selectedProfile()?.id === id };
-  const hand = (id: string) => cardHandlers(id, ops);
+  const hand = (id: string) => railTileHandlers(id, ops);
 </script>
 
 <div class="lib">
