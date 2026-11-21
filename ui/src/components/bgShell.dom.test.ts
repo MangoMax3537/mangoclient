@@ -27,12 +27,14 @@ beforeEach(() => {
   ui.cycleBackgrounds = true;
   made.n = 0;
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const srcs = (root: ParentNode) => root.querySelector('[data-bg-engine]')?.getAttribute('data-slide') ?? '';
 
 describe('global background across navigation', () => {
   it('keeps one engine and one timer, and changes the slide every 30-60 s on every view and instance tab switch', async () => {
+    // Math.random = 0: every wait is the shortest one (30 s), so one interval below sees exactly one change
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     await init(createMockApi());
     const target = document.createElement('div'); document.body.append(target);
     const app_ = mount(Harness, { target });
@@ -62,8 +64,8 @@ describe('global background across navigation', () => {
       expect(srcs(target)).toBe(seen);
       expect(target.querySelector('[data-bg-engine]')).toBe(engine);
       expect(made.n).toBe(1);
-      // the timer keeps running: within one 30-60 s interval (+ fade) the slide changes
-      await vi.advanceTimersByTimeAsync(60_000 + 2_500);
+      // the timer keeps running: within one interval (+ fade) the slide changes
+      await vi.advanceTimersByTimeAsync(30_000 + 2_500);
       const now = srcs(target);
       changes.push(now !== seen ? 1 : 0);
       seen = now;
