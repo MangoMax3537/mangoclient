@@ -25,3 +25,11 @@ export function floorWallpaper(list: readonly Wallpaper[], lastId: string | null
 /** Stable identity of what a resolved image / panorama draws (the first URL), used to mark a slide bad for the session. */
 export const artUrl = (r: { kind: string; url?: string; set?: { faces: string[] } }): string | null =>
   r.kind === 'image' ? r.url ?? null : r.kind === 'panorama' ? r.set?.faces[0] ?? null : null;
+
+/** The floor first, then every other bundled wallpaper (generic ones first): the order in which the engine tries them when an image fails. */
+export function floorCandidates(list: readonly Wallpaper[], lastId: string | null, seed = 'mango'): Wallpaper[] {
+  const first = floorWallpaper(list, lastId, seed);
+  if (!first) return [];
+  const rest = [...list.filter((w) => w.generic), ...list.filter((w) => !w.generic)].filter((w) => w.id !== first.id);
+  return [first, ...rest];
+}

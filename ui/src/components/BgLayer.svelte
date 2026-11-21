@@ -22,8 +22,10 @@
     /** Shown at once without a fade (the engine's floor). */
     instant?: boolean;
     onfail?: () => void;
+    /** The image of a non-bare layer failed (the engine's floor uses it to try the next bundled wallpaper). */
+    onbroken?: () => void;
   }
-  let { res: want, look, tint = null, angle, paused = false, full = false, onready, bare = false, instant = false, onfail }: Props = $props();
+  let { res: want, look, tint = null, angle, paused = false, full = false, onready, bare = false, instant = false, onfail, onbroken }: Props = $props();
 
   // the bundled wallpaper: what stands in for anything that is missing, broken or a flat surface (never a plain colour)
   const fb = floorWallpaper(wallpapers, readLastWallpaper());
@@ -35,6 +37,7 @@
   const flat = $derived(want.kind === 'plain' || want.kind === 'watermark');
   const res = $derived(!bare && fbRes && (broken || flat) ? fbRes : want);
   $effect(() => { if (broken && bare) onfail?.(); });
+  $effect(() => { if (broken && !bare) { console.warn('[bg] background image failed to load:', want.kind === 'image' ? want.url : 'panorama'); onbroken?.(); } });
   const showUnder = $derived(!bare && !!fbRes && !(res.kind === 'image' && res.url === fbRes.url));
 
   const artKey = $derived(res.kind === 'image' ? res.url : res.kind === 'panorama' ? res.set.faces.join('|') : '');

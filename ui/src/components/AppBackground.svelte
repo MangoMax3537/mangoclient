@@ -11,7 +11,7 @@
   import { reducedMotion } from '../lib/motion';
   import { wallpapers, DEFAULT_SCRIM } from '../lib/wallpapers';
   import { FULL_BLUR, FULL_DIM, flatten } from '../lib/bgMode';
-  import { artUrl, floorWallpaper, readLastWallpaper, rememberWallpaper } from '../lib/bgFloor';
+  import { artUrl, floorCandidates, readLastWallpaper, rememberWallpaper } from '../lib/bgFloor';
   import { loadPanorama, panoramaPool, panoramas, ui } from '../lib/stores.svelte';
   import type { ProfileBackground } from '../lib/types';
 
@@ -26,8 +26,15 @@
   const isBad = (r: ResolvedBackground | null): boolean => { const u = r && artUrl(r); return !!u && bad.includes(u); };
   const pool = $derived(buildPool(wallpapers, panoramaPool.sets, versionWallpaper(wallpapers, mcVersion, profileId)).filter((p) => !isBad(resolvePoolItem(p))));
   // THE floor: a bundled wallpaper under everything, the last one shown (else a fixed generic one). Drawn at once, never faded, never removed.
-  const floor = floorWallpaper(wallpapers, readLastWallpaper());
-  const floorRes: ResolvedBackground | null = floor ? { kind: 'image', url: floor.url, scrim: floor.scrim, source: 'wallpaper' } : null;
+  // If the floor image itself fails to load, the next bundled wallpaper takes over (loudly, in the console): the window is never left without an image.
+  const floorList = floorCandidates(wallpapers, readLastWallpaper());
+  let floorIdx = $state(0);
+  const floor = $derived(floorList[floorIdx] ?? null);
+  const floorRes = $derived<ResolvedBackground | null>(floor ? { kind: 'image', url: floor.url, scrim: floor.scrim, source: 'wallpaper' } : null);
+  function floorFailed(): void {
+    console.warn('[bg] floor wallpaper failed to load, trying the next bundled one:', floor?.url);
+    if (floorIdx < floorList.length - 1) floorIdx += 1;
+  }
   /** Only real images and panoramas become slides; plain / watermark results leave the floor showing. */
   const real = (r: ResolvedBackground | null): ResolvedBackground | null => (r && (r.kind === 'image' || r.kind === 'panorama') ? r : null);
   function remember(r: ResolvedBackground): void {
@@ -169,7 +176,7 @@
 </script>
 
 <div class="stack" class:full class:calm aria-hidden="true" data-bg-engine data-slide={slots[base].key}>
-  {#if floorRes}<div class="floor" data-bg-floor><BgLayer res={floorRes} look={floorLook} {tint} {full} angle={0} instant /></div>{/if}
+  {#if floorRes}<div class="floor" data-bg-floor><BgLayer res={floorRes} look={floorLook} {tint} {full} angle={0} instant onbroken={floorFailed} /></div>{/if}
   {#each slots as s, i (i)}
     {#if s.res}
       {@const r = shown(s.res)}
