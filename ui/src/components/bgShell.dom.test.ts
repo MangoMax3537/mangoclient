@@ -11,7 +11,7 @@ vi.mock('../lib/bgCycle', async (orig) => {
 });
 import Harness from './testing/BgShellHarness.svelte';
 import { createMockApi } from '../lib/mockApi';
-import { app, init, nav, resetStores, ui } from '../lib/stores.svelte';
+import { actions, app, init, nav, resetStores, ui } from '../lib/stores.svelte';
 
 beforeEach(() => {
   Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, get: () => true });
@@ -82,3 +82,26 @@ describe('global background across navigation', () => {
     expect(src.match(/<AppBackground[^>]*\/>/)?.[0]).not.toMatch(/cycle=/);
   });
 });
+describe('instance switch on Home', () => {
+  it('selecting another auto instance fades to a different slide at once and restarts the wait', async () => {
+    await init(createMockApi());
+    const target = document.createElement('div'); document.body.append(target);
+    const app_ = mount(Harness, { target });
+    flushSync();
+    await vi.advanceTimersByTimeAsync(3_000);
+    const autos = app.profiles.filter((p) => p.background.kind === 'auto');
+    expect(autos.length).toBeGreaterThan(1);
+    await actions.selectProfile(autos[0].id);
+    await vi.advanceTimersByTimeAsync(3_000);
+    for (const p of autos.slice(1, 4)) {
+      const before = srcs(target);
+      await actions.selectProfile(p.id);
+      // well inside the shortest 30 s wait: only the switch itself can have changed the slide
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(srcs(target), `switch to ${p.name}`).not.toBe(before);
+      expect(srcs(target)).not.toBe('');
+    }
+    unmount(app_);
+  });
+});
+

@@ -4,14 +4,16 @@ import { flushSync, mount, unmount } from 'svelte';
 import Harness from './testing/BgShellHarness.svelte';
 import { createMockApi } from '../lib/mockApi';
 import { app, init, nav, resetStores, ui } from '../lib/stores.svelte';
-import { LAST_BG_KEY, floorWallpaper } from '../lib/bgFloor';
+import { LAST_BG_KEY } from '../lib/bgFloor';
 import { wallpapers } from '../lib/wallpapers';
 
 type Behavior = 'ok' | 'fail' | 'delay';
 let behave: (src: string) => Behavior = () => 'ok';
 const ready = new Set<string>();
 const srcOf = (el: HTMLImageElement) => el.getAttribute('src') ?? '';
-const floorUrl = () => floorWallpaper(wallpapers, null)!.url;
+/** With Math.random pinned to `r`: the generic wallpaper the engine picks as its floor. */
+const generic = () => wallpapers.filter((w) => w.generic);
+const floorAt = (r: number) => generic()[Math.floor(r * generic().length)].url;
 
 beforeEach(() => {
   behave = () => 'ok'; ready.clear();
@@ -28,8 +30,10 @@ beforeEach(() => {
   try { localStorage.removeItem(LAST_BG_KEY); } catch { /* ignore */ }
   resetStores();
   ui.cycleBackgrounds = true;
+  // the floor and the start slide are random per app start: pinned here so every test knows which floor it gets
+  vi.spyOn(Math, 'random').mockReturnValue(0);
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 /** What the engine must always have: a floor layer with a real image src, inside the engine, never display:none. */
 function expectImage(root: ParentNode, url?: string): void {
@@ -51,17 +55,17 @@ const mountShell = () => { const target = document.createElement('div'); documen
 describe('the background is never missing', () => {
   it('before the app is ready (boot) and with zero instances', async () => {
     const { target, a } = mountShell();
-    expectImage(target, floorUrl());           // first paint: no app state yet
+    expectImage(target, floorAt(0));           // first paint: no app state yet
     await init(createMockApi({ noProfiles: true }));
     flushSync();
     expect(app.profiles.length).toBe(0);
-    expectImage(target, floorUrl());
+    expectImage(target, floorAt(0));
     await run(target, 6_000);
     unmount(a);
   });
 
   it('every image fails except the bundled floor: the floor stays, nothing is retried forever', async () => {
-    const fl = floorUrl();
+    const fl = floorAt(0);
     behave = (s) => (s === fl ? 'ok' : 'fail');
     await init(createMockApi());
     const { target, a } = mountShell();
@@ -79,7 +83,7 @@ describe('the background is never missing', () => {
   });
 
   it('delayed decode: the floor is there while slides load, the slide fades in only once it loaded', async () => {
-    const fl = floorUrl();
+    const fl = floorAt(0);
     behave = (s) => (s === fl ? 'ok' : 'delay');
     await init(createMockApi());
     const { target, a } = mountShell();
@@ -94,16 +98,21 @@ describe('the background is never missing', () => {
     unmount(a);
   });
 
-  it('the last shown bundled wallpaper paints first, a broken storage falls back to a fixed one', async () => {
-    const other = wallpapers.find((x) => x.id !== floorWallpaper(wallpapers, null)!.id)!;
-    localStorage.setItem(LAST_BG_KEY, other.id);
+  it('every app start paints a random generic bundled wallpaper first, also with a broken storage', async () => {
+    expect(generic().length).toBeGreaterThan(1);
+    localStorage.setItem(LAST_BG_KEY, wallpapers[0].id);
     await init(createMockApi());
+    const rnd = vi.mocked(Math.random);
     let m = mountShell();
-    expectImage(m.target, other.url);
+    expectImage(m.target, floorAt(0));
+    unmount(m.a);
+    rnd.mockReturnValue(0.99);
+    m = mountShell();
+    expectImage(m.target, floorAt(0.99));
     unmount(m.a);
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     m = mountShell();
-    expectImage(m.target, floorUrl());
+    expectImage(m.target, floorAt(0.99));
     unmount(m.a);
     vi.restoreAllMocks();
   });

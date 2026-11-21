@@ -30,9 +30,11 @@
   let bad = $state<string[]>([]);
   const isBad = (r: ResolvedBackground | null): boolean => { const u = r && artUrl(r); return !!u && bad.includes(u); };
   const pool = $derived(buildPool(wallpapers, versionWallpaper(wallpapers, mcVersion, profileId)).filter((p) => !isBad(resolvePoolItem(p))));
-  // THE floor: a bundled wallpaper under everything, the last one shown (else a fixed generic one). Drawn at once, never faded, never removed.
-  // If the floor image itself fails to load, the next bundled wallpaper takes over (loudly, in the console): the window is never left without an image.
-  const floorList = floorCandidates(wallpapers, readLastWallpaper());
+  // THE floor: a bundled wallpaper under everything (the main engine picks a random generic one per app start; a mirror keeps the
+  // last shown one). Drawn at once, never faded, never removed. If the floor image itself fails to load, the next bundled wallpaper takes
+  // over (loudly, in the console): the window is never left without an image.
+  const pickAny = <T,>(l: readonly T[]): T | null => (l.length ? l[Math.floor(Math.random() * l.length)] : null);
+  const floorList = floorCandidates(wallpapers, untrack(() => mirror) ? readLastWallpaper() : (pickAny(wallpapers.filter((w) => w.generic))?.id ?? readLastWallpaper()));
   let floorIdx = $state(0);
   const floor = $derived(floorList[floorIdx] ?? null);
   const floorRes = $derived<ResolvedBackground | null>(floor ? { kind: 'image', url: floor.url, scrim: floor.scrim, source: 'wallpaper' } : null);
@@ -74,12 +76,19 @@
   const own = $derived(resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers, pool }));
   // a mirror starts on what the main engine shows (read once: later changes fade in through the follow effect below)
   const first = $derived(mirror && isAuto ? (untrack(() => bgNow.res) ?? own) : own);
+  /** The main engine's `auto` start: a random member of the instance's pool (version wallpaper + generic wallpapers), new on every app start. */
+  const randomStart = (): ResolvedBackground | null => { const i = pickAny(pool); return i ? real(resolvePoolItem(i)) : null; };
+  const autoStart = $derived(isAuto && !mirror);
   /** `first` is applied while nothing has been swapped in yet (a changed setting or a late panorama updates it in place). */
   $effect(() => {
     const f0 = real(first);
+    const pid = profileId;
+    void pool;
     untrack(() => {
+      // auto before the instance is known (boot): the floor shows, the random start comes with the instance's pool
+      if (autoStart && !pid) return;
       // a slide that failed before is not tried again: the next good pool member (or the floor) takes its place
-      const f = isBad(f0) ? (pool.length ? real(resolvePoolItem(pool[0])) : null) : f0;
+      const f = autoStart ? randomStart() : isBad(f0) ? (pool.length ? real(resolvePoolItem(pool[0])) : null) : f0;
       // while `auto` the engine is one continuous show: switching view / instance never swaps the slide in place (only the first fill)
       if (slots[base].res === null || (slots[base].key === 'first' && !(isAuto && settingKey === 'auto|'))) {
         slots[base] = { res: f, key: 'first', shown: true };
@@ -87,21 +96,33 @@
       }
     });
   });
-  // the setting itself changed (kind / image): forget the cycled state
+  // the setting itself changed (kind / image): forget the cycled state. Another `auto` instance selected: fade to a new random slide.
   let settingKey = '';
+  let lastProfile = '';
   $effect(() => {
-    // `auto` is the same setting whichever instance it comes from: navigating between instances must not reset the cycle
     const k = background.kind === 'auto' ? 'auto|' : `${profileId}|${JSON.stringify(background)}`;
+    const pid = profileId;
     untrack(() => {
+      const switched = !!lastProfile && !!pid && pid !== lastProfile;
       if (settingKey && k !== settingKey && slots[base].key !== 'first') {
         const other: 0 | 1 = base === 0 ? 1 : 0;
         slots[other] = { res: null, key: '', shown: false }; incoming = null; fading = false; clearTimeout(fadeTimer);
-        slots[base] = { res: real(first), key: 'first', shown: true };
+        slots[base] = { res: autoStart ? randomStart() : real(first), key: 'first', shown: true };
         timer?.done();
-      }
+      } else if (switched && autoStart && k === settingKey && slots[base].res) switchNow();
       settingKey = k;
+      if (pid) lastProfile = pid;
     });
   });
+  /** Instance switch while `auto`: crossfade to the next shuffled slide of the new instance's pool and restart the 30-60 s wait. */
+  function switchNow(): void {
+    if (incoming !== null) return;
+    order.setPool(pool);
+    const run = !!timer?.running;
+    timer?.stop();
+    advance();
+    if (run) timer?.start();
+  }
   $effect(() => { order.setPool(pool); });
   // the main engine publishes what is on screen, or what it is fading to, so a mirror loads it at the same time
   $effect(() => { if (!mirror) bgNow.res = slots[incoming ?? base].res; });
