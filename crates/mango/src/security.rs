@@ -178,17 +178,24 @@ mod tests {
 
     #[test]
     fn exact_renderer_url() {
-        let f = Path::new("/app/ui/index.html");
-        assert!(is_exact_renderer_url("file:///app/ui/index.html", f));
+        // an absolute path on each platform (`/app/...` is not absolute on Windows)
+        #[cfg(windows)]
+        let (f, base) = (Path::new(r"C:\app\ui\index.html"), "C:/app/ui");
+        #[cfg(not(windows))]
+        let (f, base) = (Path::new("/app/ui/index.html"), "app/ui");
+        assert!(is_exact_renderer_url(
+            &format!("file:///{base}/index.html"),
+            f
+        ));
         for bad in [
-            "file:///app/ui/index.html?x=1",
-            "file:///app/ui/index.html#x",
-            "file:///app/ui/other.html",
-            "https://app/ui/index.html",
-            "file://host/app/ui/index.html",
-            "garbage",
+            format!("file:///{base}/index.html?x=1"),
+            format!("file:///{base}/index.html#x"),
+            format!("file:///{base}/other.html"),
+            "https://app/ui/index.html".to_string(),
+            format!("file://host/{base}/index.html"),
+            "garbage".to_string(),
         ] {
-            assert!(!is_exact_renderer_url(bad, f), "{bad}");
+            assert!(!is_exact_renderer_url(&bad, f), "{bad}");
         }
     }
 
