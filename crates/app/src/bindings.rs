@@ -71,6 +71,7 @@ fn export_roots(cfg: &Config) -> Result<(), ts_rs::ExportError> {
         PanoramaSet,
         ServerEntry,
         ServerStatus,
+        VersionRange,
         Screenshot,
         LogEntry,
         LogText,
@@ -388,6 +389,7 @@ mod tests {
                 motd: String::new(),
                 players: None,
                 version: None,
+                version_range: None,
                 icon_url: None,
             }),
             Event::UpdateStatus(UpdateStatus {

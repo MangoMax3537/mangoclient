@@ -7,6 +7,7 @@ pub mod icons;
 pub mod nbt;
 pub mod ping;
 pub mod serverlist;
+pub mod version;
 
 pub use error::{Result, ServersError};
 pub use icons::{normalize_address, valid_icon, IconStore, NoIcons, ServerIcons};
@@ -19,6 +20,7 @@ pub use serverlist::{
     cache_featured_server_icons, empty_server_list, ensure_featured_servers, featured_name,
     featured_servers, read_server_list, seed_featured_servers, write_server_list, FeaturedServer,
 };
+pub use version::{parse_version_range, protocol_range, VersionRange};
 
 #[cfg(test)]
 mod tests;

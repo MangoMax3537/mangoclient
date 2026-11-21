@@ -207,6 +207,14 @@ args! {
     }
     DiagnosticsExportArgs { profile_id: String, out_path: String }
     AddressArgs { address: String }
+    ServerAddArgs { name: String, address: String }
+    ServerUpdateArgs {
+        id: String,
+        name: String,
+        #[ts(optional = nullable)]
+        address: Option<String>,
+    }
+    ServerStarArgs { id: String, starred: bool }
     ScreenshotActionArgs { profile_id: String, name: String, action: ScreenshotAction }
     LogFileArgs { profile_id: String, id: String }
     StatsSummaryArgs { days: u32 }
@@ -418,6 +426,11 @@ table! {
         |s, a| s.diagnostics_export(a.profile_id, a.out_path).await;
     "servers_list": NoArgs => Vec<ServerEntry> = |s, _a| s.servers_list().await;
     "servers_ping_all": NoArgs => () = |s, _a| s.servers_ping_all().await;
+    "servers_add": ServerAddArgs => Vec<ServerEntry> = |s, a| s.servers_add(a.name, a.address).await;
+    "servers_update": ServerUpdateArgs => Vec<ServerEntry> =
+        |s, a| s.servers_update(a.id, a.name, a.address).await;
+    "servers_remove": IdArgs => Vec<ServerEntry> = |s, a| s.servers_remove(a.id).await;
+    "servers_star": ServerStarArgs => Vec<ServerEntry> = |s, a| s.servers_star(a.id, a.starred).await;
     "servers_ping": AddressArgs => ServerStatus = |s, a| s.servers_ping(a.address).await;
     "screenshots_list": ProfileIdArgs => Vec<Screenshot> =
         |s, a| s.screenshots_list(a.profile_id).await;

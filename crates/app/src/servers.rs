@@ -1,10 +1,12 @@
 //! `servers_*` commands. Read-only on `servers.dat`: the player's list is
-//! never rewritten here.
+//! never rewritten here. What the user changes in the launcher (added
+//! servers, renames, stars, removals) lives in `servers-user.json` next to the
+//! other launcher files and is layered over the list.
 
 use crate::error::{AppError, Res};
 use crate::events::Event;
 use crate::image_protocol::{file_url, server_icons_dir, sniff_extension};
-use crate::models::{ServerEntry, ServerPlayers, ServerStatus};
+use crate::models::{ServerEntry, ServerPlayers, ServerStatus, VersionRange};
 use crate::service::AppService;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -12,9 +14,11 @@ use mango_servers::{
     nbt, normalize_address, ping_all, ping_server_cached, read_server_list, strip_color_codes,
     FeaturedServer, IconStore,
 };
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
+use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const MAX_ICON_BYTES: usize = 2 * 1024 * 1024;
 
@@ -23,6 +27,53 @@ struct ListedServer {
     name: String,
     address: String,
     icon: Option<String>,
+}
+
+/// Launcher-side edits of the server list (`servers-user.json`).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct UserServers {
+    /// Servers added in the launcher, in the order they were added.
+    custom: Vec<CustomServer>,
+    /// Normalized addresses the user starred.
+    starred: Vec<String>,
+    /// Normalized addresses of `servers.dat` entries the user removed here.
+    hidden: Vec<String>,
+    /// Display names the user changed, by normalized address.
+    names: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CustomServer {
+    name: String,
+    address: String,
+}
+
+/// Serializes read-modify-write of `servers-user.json`.
+static USER_LOCK: Mutex<()> = Mutex::new(());
+
+fn user_file(paths: &mango_core::Paths) -> std::path::PathBuf {
+    paths.root().join("servers-user.json")
+}
+
+fn load_user(paths: &mango_core::Paths) -> UserServers {
+    mango_core::persistence::read_json_or(&user_file(paths), UserServers::default())
+}
+
+fn save_user(paths: &mango_core::Paths, u: &UserServers) -> Res<()> {
+    mango_core::persistence::write_json_atomic(&user_file(paths), u)?;
+    Ok(())
+}
+
+fn valid_address(address: &str) -> bool {
+    let a = address.trim();
+    !a.is_empty() && a.len() <= 255 && !a.chars().any(|c| c.is_whitespace() || c.is_control())
+}
+
+fn clean_name(name: &str) -> Option<String> {
+    let n: String = name.chars().filter(|c| !c.is_control()).collect();
+    let n = n.trim();
+    (!n.is_empty() && n.chars().count() <= 64).then(|| n.to_string())
 }
 
 fn user_id(address: &str) -> String {
@@ -99,9 +150,165 @@ impl AppService {
         let icons = Arc::clone(&self.inner.icons);
         let partners = self.inner.opts.partners.clone();
         Ok(tokio::task::spawn_blocking(move || {
-            build_entries(&paths, &partners, &listed, icons.as_ref())
+            let user = load_user(&paths);
+            build_entries(&paths, &partners, &listed, &user, icons.as_ref())
         })
         .await?)
+    }
+
+    /// Add a server of the user's own (name + address); returns the new list.
+    pub async fn servers_add(&self, name: String, address: String) -> Res<Vec<ServerEntry>> {
+        let name =
+            clean_name(&name).ok_or_else(|| AppError::new("servers.name", "Invalid name"))?;
+        if !valid_address(&address) {
+            return Err(AppError::new("servers.address", "Invalid server address"));
+        }
+        let address = address.trim().to_string();
+        let key = normalize_address(&address);
+        let current = self.servers_list().await?;
+        let paths = self.inner.paths.clone();
+        {
+            let _g = USER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let mut u = load_user(&paths);
+            let listed = current.iter().any(|e| normalize_address(&e.address) == key);
+            if listed {
+                return Err(AppError::new(
+                    "servers.duplicate",
+                    "This server is already in the list",
+                ));
+            }
+            // A previously removed servers.dat entry comes back as itself.
+            if u.hidden.contains(&key) {
+                u.hidden.retain(|h| *h != key);
+            }
+            u.custom.push(CustomServer { name, address });
+            save_user(&paths, &u)?;
+        }
+        self.servers_list().await
+    }
+
+    /// Rename a server; a launcher-added one can change its address too.
+    pub async fn servers_update(
+        &self,
+        id: String,
+        name: String,
+        address: Option<String>,
+    ) -> Res<Vec<ServerEntry>> {
+        let name =
+            clean_name(&name).ok_or_else(|| AppError::new("servers.name", "Invalid name"))?;
+        let current = self.servers_list().await?;
+        let entry = current
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or_else(|| AppError::new("servers.not_found", "Unknown server"))?;
+        if entry.partner {
+            return Err(AppError::new(
+                "servers.partner",
+                "Partner servers are fixed",
+            ));
+        }
+        let old = normalize_address(&entry.address);
+        let new_address = match address.map(|a| a.trim().to_string()) {
+            Some(a) if entry.custom && normalize_address(&a) != old => {
+                if !valid_address(&a) {
+                    return Err(AppError::new("servers.address", "Invalid server address"));
+                }
+                let key = normalize_address(&a);
+                if current.iter().any(|e| normalize_address(&e.address) == key) {
+                    return Err(AppError::new(
+                        "servers.duplicate",
+                        "This server is already in the list",
+                    ));
+                }
+                Some(a)
+            }
+            _ => None,
+        };
+        let paths = self.inner.paths.clone();
+        let custom = entry.custom;
+        {
+            let _g = USER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let mut u = load_user(&paths);
+            if custom {
+                if let Some(c) = u
+                    .custom
+                    .iter_mut()
+                    .find(|c| normalize_address(&c.address) == old)
+                {
+                    c.name = name;
+                    if let Some(a) = &new_address {
+                        c.address = a.clone();
+                        if u.starred.contains(&old) {
+                            u.starred.retain(|s| *s != old);
+                            u.starred.push(normalize_address(a));
+                        }
+                    }
+                }
+            } else {
+                u.names.insert(old, name);
+            }
+            save_user(&paths, &u)?;
+        }
+        self.servers_list().await
+    }
+
+    /// Remove a server from the list. `servers.dat` is not touched: an entry
+    /// from it is hidden in the launcher instead. Partners cannot go.
+    pub async fn servers_remove(&self, id: String) -> Res<Vec<ServerEntry>> {
+        let current = self.servers_list().await?;
+        let entry = current
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or_else(|| AppError::new("servers.not_found", "Unknown server"))?;
+        if entry.partner {
+            return Err(AppError::new(
+                "servers.partner",
+                "Partner servers are fixed",
+            ));
+        }
+        let key = normalize_address(&entry.address);
+        let custom = entry.custom;
+        let paths = self.inner.paths.clone();
+        {
+            let _g = USER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let mut u = load_user(&paths);
+            u.starred.retain(|s| *s != key);
+            u.names.remove(&key);
+            if custom {
+                u.custom.retain(|c| normalize_address(&c.address) != key);
+            } else if !u.hidden.contains(&key) {
+                u.hidden.push(key);
+            }
+            save_user(&paths, &u)?;
+        }
+        self.servers_list().await
+    }
+
+    /// Star or unstar a server (partners stay pinned and cannot change).
+    pub async fn servers_star(&self, id: String, starred: bool) -> Res<Vec<ServerEntry>> {
+        let current = self.servers_list().await?;
+        let entry = current
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or_else(|| AppError::new("servers.not_found", "Unknown server"))?;
+        if entry.partner {
+            return Err(AppError::new(
+                "servers.partner",
+                "Partner servers are fixed",
+            ));
+        }
+        let key = normalize_address(&entry.address);
+        let paths = self.inner.paths.clone();
+        {
+            let _g = USER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let mut u = load_user(&paths);
+            u.starred.retain(|s| *s != key);
+            if starred {
+                u.starred.push(key);
+            }
+            save_user(&paths, &u)?;
+        }
+        self.servers_list().await
     }
 
     /// Every server the list shows, as ping targets.
@@ -143,10 +350,7 @@ impl AppService {
 
     pub async fn servers_ping(&self, address: String) -> Res<ServerStatus> {
         let address = address.trim().to_string();
-        if address.is_empty()
-            || address.len() > 255
-            || address.chars().any(|c| c.is_whitespace() || c.is_control())
-        {
+        if !valid_address(&address) {
             return Err(AppError::validation("Invalid server address"));
         }
         let id = self
@@ -179,6 +383,12 @@ fn status_of(dir: &Path, id: &str, s: &mango_servers::ServerStatus) -> ServerSta
             max: p.max,
         }),
         version: Some(s.version.clone()).filter(|v| !v.is_empty()),
+        version_range: mango_servers::parse_version_range(&s.version, s.protocol)
+            .filter(|_| s.online)
+            .map(|r| VersionRange {
+                min: r.min,
+                max: r.max,
+            }),
         // `ping_server_cached` already swapped in the durable first favicon.
         icon_url: s
             .favicon
@@ -191,6 +401,7 @@ fn build_entries(
     paths: &mango_core::Paths,
     partners: &[FeaturedServer],
     listed: &[ListedServer],
+    user: &UserServers,
     icons: &dyn IconStore,
 ) -> Vec<ServerEntry> {
     let dir = server_icons_dir(paths);
@@ -213,6 +424,7 @@ fn build_entries(
             address: f.address.clone(),
             partner: true,
             starred: true,
+            custom: false,
             icon_url: icon,
         });
     }
@@ -226,8 +438,15 @@ fn build_entries(
         if taken.contains(&key) || seen.contains(&key) {
             continue;
         }
-        seen.push(key);
-        let name = strip_color_codes(&l.name).trim().to_string();
+        if user.hidden.contains(&key) {
+            continue;
+        }
+        seen.push(key.clone());
+        let name = user
+            .names
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| strip_color_codes(&l.name).trim().to_string());
         let icon = l
             .icon
             .clone()
@@ -242,7 +461,27 @@ fn build_entries(
             },
             address: l.address.trim().to_string(),
             partner: false,
-            starred: false,
+            starred: user.starred.contains(&key),
+            custom: false,
+            icon_url: icon,
+        });
+    }
+    for c in &user.custom {
+        let key = normalize_address(&c.address);
+        if taken.contains(&key) || seen.contains(&key) {
+            continue;
+        }
+        seen.push(key.clone());
+        let icon = icons
+            .get(&c.address)
+            .and_then(|raw| materialize_icon(&dir, &raw));
+        out.push(ServerEntry {
+            id: user_id(&c.address),
+            name: c.name.clone(),
+            address: c.address.trim().to_string(),
+            partner: false,
+            starred: user.starred.contains(&key),
+            custom: true,
             icon_url: icon,
         });
     }

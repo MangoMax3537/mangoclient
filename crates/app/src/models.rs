@@ -168,7 +168,17 @@ pub struct ServerEntry {
     pub address: String,
     pub partner: bool,
     pub starred: bool,
+    /// Added in the launcher (its address can be edited); every non-partner
+    /// server can be renamed, starred and removed.
+    pub custom: bool,
     pub icon_url: Option<String>,
+}
+
+/// Inclusive range of game versions a server accepts; `max` may end in `.x`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct VersionRange {
+    pub min: String,
+    pub max: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -186,6 +196,9 @@ pub struct ServerStatus {
     pub motd: String,
     pub players: Option<ServerPlayers>,
     pub version: Option<String>,
+    /// The game versions the server accepts, from the version name or the
+    /// protocol number; `None` when the ping does not say.
+    pub version_range: Option<VersionRange>,
     /// `mangoimg://` URL of the server's durable favicon (first valid one
     /// wins), once any ping has returned one.
     pub icon_url: Option<String>,

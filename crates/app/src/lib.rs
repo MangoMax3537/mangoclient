@@ -90,6 +90,7 @@ pub use models::{
     ProjectVersion, Screenshot, ScreenshotAction, SearchParams, SearchResult, ServerEntry,
     ServerPlayers, ServerStatus, StatsDay, StatsProfile, StatsSummary, StorageKey, StorageUsage,
     TargetReason, TargetState, ToggleResult, UninstallResult, UpdateInfo, UpdateStatus,
+    VersionRange,
 };
 pub use outfile::FileExport;
 pub use path_grants::DEFAULT_GRANT_TTL;

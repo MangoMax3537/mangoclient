@@ -263,13 +263,14 @@ fn new_events_have_contract_names_and_camel_case_payloads() {
         motd: "m".into(),
         players: Some(ServerPlayers { online: 1, max: 2 }),
         version: None,
+        version_range: None,
         icon_url: None,
     });
     assert_eq!(e.name(), "servers:pinged");
     assert_eq!(
         e.payload(),
         json!({"id": "s", "online": true, "ping": 5, "motd": "m",
-               "players": {"online": 1, "max": 2}, "version": null, "iconUrl": null})
+               "players": {"online": 1, "max": 2}, "version": null, "versionRange": null, "iconUrl": null})
     );
     let e = Event::ContentChanged(ContentChangedEvent {
         profile_id: "p".into(),
@@ -1262,13 +1263,154 @@ async fn servers_list_puts_partners_first_and_dedupes() {
     }
     assert!(list[2].icon_url.is_none());
     let v = serde_json::to_value(&list[0]).unwrap();
-    for k in ["id", "name", "address", "partner", "starred", "iconUrl"] {
+    for k in [
+        "id", "name", "address", "partner", "starred", "custom", "iconUrl",
+    ] {
         assert!(v.get(k).is_some(), "missing {k}");
     }
     // The player's file was only read.
     let dat = std::fs::read(f.dir().join("servers.dat")).unwrap();
     let again = f.svc.servers_list().await.unwrap();
     assert_eq!(again, list);
+    assert_eq!(std::fs::read(f.dir().join("servers.dat")).unwrap(), dat);
+}
+
+#[tokio::test]
+async fn servers_user_edits_layer_over_the_list_and_never_touch_servers_dat() {
+    let f = fx_host(None, |o| {
+        o.partners = vec![mango_servers::FeaturedServer {
+            id: "partner".into(),
+            name: "Partner".into(),
+            address: "play.partner.net".into(),
+        }]
+    });
+    write_servers_dat(
+        &f.dir(),
+        vec![compound(&[("name", "Dat"), ("ip", "dat.example.com")])],
+    )
+    .await;
+    let dat = std::fs::read(f.dir().join("servers.dat")).unwrap();
+
+    // add: validated, deduplicated against partner, servers.dat and custom entries
+    let list = f
+        .svc
+        .servers_add(" Mine ".into(), "my.example.com".into())
+        .await
+        .unwrap();
+    let ids: Vec<_> = list.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["partner", "user:dat.example.com", "user:my.example.com"]
+    );
+    assert!(list[2].custom && !list[1].custom && list[2].name == "Mine");
+    for (n, a, code) in [
+        ("", "x.example.com", "servers.name"),
+        ("X", "bad address", "servers.address"),
+        ("X", "MY.example.com", "servers.duplicate"),
+        ("X", "dat.example.com:25565", "servers.duplicate"),
+        ("X", "play.partner.net", "servers.duplicate"),
+    ] {
+        assert_eq!(
+            f.svc
+                .servers_add(n.into(), a.into())
+                .await
+                .unwrap_err()
+                .code,
+            code
+        );
+    }
+
+    // star / unstar; the partner cannot change
+    let list = f
+        .svc
+        .servers_star("user:my.example.com".into(), true)
+        .await
+        .unwrap();
+    assert!(list[2].starred);
+    assert_eq!(
+        f.svc
+            .servers_star("partner".into(), false)
+            .await
+            .unwrap_err()
+            .code,
+        "servers.partner"
+    );
+    assert_eq!(
+        f.svc
+            .servers_star("user:nope".into(), true)
+            .await
+            .unwrap_err()
+            .code,
+        "servers.not_found"
+    );
+
+    // rename a servers.dat entry (name only) and change a custom one's address
+    let list = f
+        .svc
+        .servers_update(
+            "user:dat.example.com".into(),
+            "Renamed".into(),
+            Some("other.example.com".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (list[1].name.as_str(), list[1].address.as_str()),
+        ("Renamed", "dat.example.com")
+    );
+    let list = f
+        .svc
+        .servers_update(
+            "user:my.example.com".into(),
+            "Mine 2".into(),
+            Some("moved.example.com".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (list[2].id.as_str(), list[2].name.as_str(), list[2].starred),
+        ("user:moved.example.com", "Mine 2", true)
+    );
+    assert_eq!(
+        f.svc
+            .servers_update("partner".into(), "X".into(), None)
+            .await
+            .unwrap_err()
+            .code,
+        "servers.partner"
+    );
+
+    // remove: custom goes, a servers.dat entry is hidden, the partner stays
+    f.svc
+        .servers_remove("user:moved.example.com".into())
+        .await
+        .unwrap();
+    let list = f
+        .svc
+        .servers_remove("user:dat.example.com".into())
+        .await
+        .unwrap();
+    assert_eq!(
+        list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["partner"]
+    );
+    assert_eq!(
+        f.svc
+            .servers_remove("partner".into())
+            .await
+            .unwrap_err()
+            .code,
+        "servers.partner"
+    );
+    // a hidden entry can be added again and survives a reload
+    let list = f
+        .svc
+        .servers_add("Back".into(), "dat.example.com".into())
+        .await
+        .unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(f.svc.servers_list().await.unwrap(), list);
+
     assert_eq!(std::fs::read(f.dir().join("servers.dat")).unwrap(), dat);
 }
 
@@ -1353,6 +1495,13 @@ async fn servers_ping_reports_status_and_offline() {
     assert_eq!(s.motd, "Hello");
     assert_eq!(s.players, Some(ServerPlayers { online: 3, max: 20 }));
     assert_eq!(s.version.as_deref(), Some("1.21"));
+    assert_eq!(
+        s.version_range,
+        Some(VersionRange {
+            min: "1.21".into(),
+            max: "1.21".into()
+        })
+    );
     assert!(s.ping.is_some());
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["players"], json!({"online": 3, "max": 20}));

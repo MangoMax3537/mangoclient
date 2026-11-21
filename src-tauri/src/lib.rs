@@ -555,6 +555,31 @@ async fn servers_ping_all(svc: Svc<'_>) -> Res<()> {
 }
 
 #[tauri::command]
+async fn servers_add(svc: Svc<'_>, name: String, address: String) -> Res<Vec<ServerEntry>> {
+    svc.servers_add(name, address).await
+}
+
+#[tauri::command]
+async fn servers_update(
+    svc: Svc<'_>,
+    id: String,
+    name: String,
+    address: Option<String>,
+) -> Res<Vec<ServerEntry>> {
+    svc.servers_update(id, name, address).await
+}
+
+#[tauri::command]
+async fn servers_remove(svc: Svc<'_>, id: String) -> Res<Vec<ServerEntry>> {
+    svc.servers_remove(id).await
+}
+
+#[tauri::command]
+async fn servers_star(svc: Svc<'_>, id: String, starred: bool) -> Res<Vec<ServerEntry>> {
+    svc.servers_star(id, starred).await
+}
+
+#[tauri::command]
 async fn servers_ping(svc: Svc<'_>, address: String) -> Res<ServerStatus> {
     svc.servers_ping(address).await
 }
@@ -1165,6 +1190,10 @@ pub fn run() {
             diagnostics_export,
             servers_list,
             servers_ping_all,
+            servers_add,
+            servers_update,
+            servers_remove,
+            servers_star,
             servers_ping,
             screenshots_list,
             screenshot_action,
