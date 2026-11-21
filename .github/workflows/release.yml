@@ -217,7 +217,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          img="$(ls src-tauri/target/${TARGET}/release/bundle/appimage/*.AppImage)"
+          img="$(ls "src-tauri/target/${TARGET}/release/bundle/appimage/"*.AppImage)"
           img="$(readlink -f "$img")"
           plugin="$(find "$HOME/.cache/tauri" -maxdepth 2 -iname '*plugin-appimage*.AppImage' | head -n1)"
           [ -n "$plugin" ] || { echo "::error::linuxdeploy-plugin-appimage not found in ~/.cache/tauri"; ls -la "$HOME/.cache/tauri" || true; exit 1; }
