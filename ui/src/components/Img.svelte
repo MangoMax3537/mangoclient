@@ -43,7 +43,7 @@
   });
 </script>
 
-<span class="im {cls}" style:aspect-ratio={aspect} style:height={aspect ? 'auto' : undefined} data-phase={ph}>
+<span class="im {cls}" style:aspect-ratio={aspect} style:height={aspect ? 'auto' : undefined} data-phase={ph} data-img-fb={showsFallback(ph) && fallback ? '' : undefined}>
   {#if ph === 'loading'}<span class="skel fill" aria-hidden="true"></span>{/if}
   {#if src && !failed}
     <img

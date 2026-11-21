@@ -138,6 +138,9 @@ main > .view :is(dialog, [popover], [role='menu'], [role='listbox'], [role='tool
   --ink-1: var(--solid-1); --ink-2: var(--solid-2); --ink-3: var(--solid-3); --ink-4: var(--solid-4);
 }
 
+/* The MangoClient fallback icon stands free: the slot that holds it (a thumbnail, an icon box) drops its own surface colour. */
+:has(> [data-img-fb]) { background-color: transparent !important; }
+
 /* ---- signature shapes -------------------------------------------------------------------- */
 /* Notched corner: top-right and bottom-left are cut. Size via --n. clip-path hides outlines,
    so focus is drawn inside. */

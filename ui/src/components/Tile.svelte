@@ -6,7 +6,7 @@
   interface Props {
     kind: FallbackKind;
     id: string;
-    /** Real image (cover, icon, favicon, account headUrl). Falls back to the MangoClient icon on a neutral surface. */
+    /** Real image (cover, icon, favicon, account headUrl). Falls back to the MangoClient icon, free-standing (no surface). */
     src?: string | null;
     size?: number;
     alt?: string;
@@ -35,10 +35,6 @@
 
 <style>
   .tile { display: block; flex: none; position: relative; overflow: hidden; background: var(--ink-3); }
-  .tile.fb { background: var(--tile-bg, var(--ink-3)); }
-  .tile.fb[data-tone='0'] { --tile-bg: var(--ink-3); }
-  .tile.fb[data-tone='1'] { --tile-bg: var(--ink-4); }
-  .tile.fb[data-tone='2'] { --tile-bg: color-mix(in srgb, var(--ink-3) 82%, var(--leaf)); }
-  .tile.fb[data-tone='3'] { --tile-bg: color-mix(in srgb, var(--ink-3) 86%, var(--mango)); }
-  .tile.fb[style*='--tint'] { background: color-mix(in srgb, var(--ink-3) 78%, var(--tint)); }
+  /* the MangoClient icon stands free, with no surface around it (like the skin figures) */
+  .tile.fb { background: transparent; }
 </style>
