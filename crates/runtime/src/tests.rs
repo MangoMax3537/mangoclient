@@ -149,9 +149,15 @@ fn follower_start_at_end_skips_existing() {
         FollowStart::End,
         move |t| sink.lock().unwrap().push_str(t),
     );
-    let mut data = std::fs::read(&file).unwrap();
-    data.extend_from_slice(b"new\n");
-    std::fs::write(&file, data).unwrap();
+    // append like the game does (rewriting the file would truncate it first, which a poll in between rightly takes
+    // for a new session and reads from the start: that made this test flaky)
+    use std::io::Write as _;
+    let mut log = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&file)
+        .unwrap();
+    log.write_all(b"new\n").unwrap();
+    drop(log);
     f.stop();
     assert_eq!(*got.lock().unwrap(), "new\n");
 }
