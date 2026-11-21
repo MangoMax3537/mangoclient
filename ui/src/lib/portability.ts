@@ -216,7 +216,7 @@ export const CONFIDENCE_ORDER = { high: 0, medium: 1, low: 2 } as const;
 /** Known rule codes (docs/ipc.md Part 9). Titles/details/suggestions are localized by code, the Rust text is the fallback. */
 export const CRASH_CODES = [
   'java_version', 'jvm_heap_reserve', 'out_of_memory', 'wrong_mc_version', 'mod_dependency', 'loader_mismatch', 'duplicate_mods',
-  'mixin_failure', 'gl_driver', 'shader_failure', 'corrupt_world', 'disk_full', 'java_path', 'jvm_args', 'account_session',
+  'mixin_failure', 'gl_driver', 'shader_failure', 'corrupt_world', 'disk_full', 'java_path', 'jvm_args', 'account_session', 'lwjgl_natives',
 ] as const;
 export const isKnownCrashCode = (c: string): boolean => (CRASH_CODES as readonly string[]).includes(c);
 
