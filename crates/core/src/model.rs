@@ -60,6 +60,10 @@ pub struct Config {
     /// Automatic backups kept per instance (1..=50); manual ones never expire.
     #[serde(default = "default_backup_keep")]
     pub backup_keep: u32,
+    /// Set once the pre-2.0 "performance mods on by default" value has been
+    /// reset; from then on `performance_mods` only changes by the user's hand.
+    #[serde(default)]
+    pub performance_mods_reset: bool,
 }
 
 fn default_backup_keep() -> u32 {
@@ -85,7 +89,7 @@ impl Config {
             hide_on_launch: false,
             show_snapshots: false,
             mango_config: true,
-            performance_mods: true,
+            performance_mods: false,
             sidebar_open: true,
             concurrent_downloads: 12,
             performance_preset: "balanced".into(),
@@ -95,6 +99,7 @@ impl Config {
             telemetry: true,
             auto_snapshot: true,
             backup_keep: default_backup_keep(),
+            performance_mods_reset: true,
         }
     }
 
@@ -110,8 +115,15 @@ impl Config {
                 clean.insert(key.clone(), v);
             }
         }
+        // Older configs carry `performanceMods: true` as the old default, not
+        // as a choice: switch it off once, then keep whatever the user sets.
+        let reset_done = obj.get("performanceModsReset").and_then(Value::as_bool) == Some(true);
+        if !reset_done {
+            clean.insert("performanceMods".into(), Value::Bool(false));
+        }
         // Validated keys always fit the typed struct.
         let _ = config.merge(clean);
+        config.performance_mods_reset = true;
         config
     }
 
@@ -453,6 +465,20 @@ mod tests {
         assert_eq!(default_ram_mb(16384), 4096);
         assert_eq!(default_ram_mb(32768), 5120);
         assert_eq!(default_ram_mb(10000), 3072);
+    }
+
+    #[test]
+    fn performance_mods_default_off_and_legacy_true_is_reset_once() {
+        assert!(!Config::with_total_ram(16384).performance_mods);
+        // A pre-2.0 config: `true` was only the default, not a choice.
+        let old = Config::from_value(&json!({"performanceMods": true}), 16384);
+        assert!(!old.performance_mods);
+        assert!(old.performance_mods_reset);
+        // After the reset an explicit opt-in survives reloads.
+        let mut c = old;
+        c.apply_patch(&json!({"performanceMods": true})).unwrap();
+        let saved = serde_json::to_value(&c).unwrap();
+        assert!(Config::from_value(&saved, 16384).performance_mods);
     }
 
     #[test]

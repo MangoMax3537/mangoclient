@@ -10,7 +10,6 @@ use regex::Regex;
 
 use crate::error::ContentError;
 use crate::meta::{read_jar_meta, JarMeta};
-use crate::perf::managed_names;
 
 /// A jar found in the mods folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,14 +54,15 @@ pub fn is_own_mango_jar(name: &str) -> bool {
         .is_some_and(|r| r.is_match(name))
 }
 
-/// Map of `<name>.jar` -> jar for everything the player manages in `dir`.
+/// Map of `<name>.jar` -> jar for everything in `dir` except MangoConfig's own
+/// jar. Jars the launcher installed itself (performance mods) are listed too:
+/// hiding them left the player an empty list and no way to remove them.
 /// A missing folder yields an empty map.
 pub fn scan_mods_dir(dir: &Path) -> BTreeMap<String, JarFile> {
     let mut found: BTreeMap<String, JarFile> = BTreeMap::new();
     let Ok(rd) = std::fs::read_dir(dir) else {
         return found;
     };
-    let managed = managed_names(dir);
     let mut entries: Vec<_> = rd.flatten().collect();
     entries.sort_by_key(|e| e.file_name());
     for entry in entries {
@@ -70,7 +70,7 @@ pub fn scan_mods_dir(dir: &Path) -> BTreeMap<String, JarFile> {
         if !entry.file_type().is_ok_and(|t| t.is_file()) || !is_jar(&name) {
             continue;
         }
-        if is_own_mango_jar(&name) || managed.contains(&name) {
+        if is_own_mango_jar(&name) {
             continue;
         }
         let key = jar_name(&name);

@@ -154,7 +154,7 @@ fn fabric_jar(path: &Path, name: &str) {
 }
 
 #[test]
-fn unknown_jars_become_local_and_skip_managed() {
+fn unknown_jars_become_local_and_only_mangoconfig_is_hidden() {
     let (_t, paths, p, dir) = setup(Loader::Fabric);
     fabric_jar(&dir.join("a.jar"), "A");
     fabric_jar(&dir.join("b.jar.disabled"), "B");
@@ -169,12 +169,17 @@ fn unknown_jars_become_local_and_skip_managed() {
     std::fs::write(dir.join("notes.txt"), "x").unwrap();
     let r = sync_profile_mods(&paths, &p).unwrap();
     assert!(r.changed);
-    assert_eq!(r.mods.len(), 2);
+    // a, b and the launcher-installed sodium; only MangoConfig is hidden.
+    assert_eq!(r.mods.len(), 3);
     assert_eq!(r.mods[0].project_id.as_deref(), Some("local:a.jar"));
     assert_eq!(r.mods[0].local, Some(true));
     assert_eq!(r.mods[0].title.as_deref(), Some("A"));
     assert_eq!(r.mods[1].project_id.as_deref(), Some("local:b.jar"));
     assert_eq!(r.mods[1].enabled, Some(false));
+    assert_eq!(
+        r.mods[2].project_id.as_deref(),
+        Some("local:sodium-fabric-1.jar")
+    );
     // A second pass with the result is stable.
     let mut p2 = p.clone();
     p2.mods = r.mods;
@@ -317,8 +322,11 @@ async fn installs_and_writes_manifest() {
     .unwrap();
     assert_eq!(m["files"]["ferrite-core"], "ferritecore-7.jar");
     assert!(is_managed(&dir, "sodium-fabric-0.6.jar"));
-    // Managed jars stay out of the mod list.
-    assert!(sync_profile_mods(&paths, &p).unwrap().mods.is_empty());
+    // Installed performance mods are listed like any other jar (so they can
+    // be removed); a stale manifest never hides a jar.
+    let listed = sync_profile_mods(&paths, &p).unwrap().mods;
+    assert_eq!(listed.len(), 3);
+    assert!(listed.iter().all(|m| m.local == Some(true)));
     assert!(paths
         .cache()
         .join("performance-mods/sodium-1.21.1.json")

@@ -307,6 +307,39 @@ async fn non_strict_mode_keeps_typed_paths_working() {
     export(&f, &id, &out).await.unwrap();
 }
 
+/// Regression: jars listed in the performance manifest used to be hidden, so
+/// an instance holding only Sodium/Lithium/FerriteCore showed an empty list and
+/// the jars could not be removed.
+#[tokio::test]
+async fn launcher_installed_performance_jars_are_listed_and_removable() {
+    let f = fx_with(false, DEFAULT_GRANT_TTL, CannedFileDialog::default());
+    let id = f.profile();
+    let mods = f.root().join("instances").join(&id).join("mods");
+    std::fs::create_dir_all(&mods).unwrap();
+    std::fs::write(mods.join("sodium-fabric-1.jar"), b"s").unwrap();
+    std::fs::write(mods.join("lithium-fabric-1.jar.disabled"), b"l").unwrap();
+    std::fs::write(mods.join("MangoConfig-1.0+mc1.21.jar"), b"m").unwrap();
+    std::fs::write(
+        mods.join(".mangoclient-performance.json"),
+        r#"{"files":{"sodium":"sodium-fabric-1.jar","lithium":"lithium-fabric-1.jar.disabled"}}"#,
+    )
+    .unwrap();
+    let list = f.svc.content_list(id.clone()).await.unwrap();
+    let mut ids: Vec<_> = list.iter().map(|i| i.project_id.clone()).collect();
+    ids.sort();
+    assert_eq!(
+        ids,
+        ["local:lithium-fabric-1.jar", "local:sodium-fabric-1.jar"]
+    );
+    f.svc
+        .content_uninstall(id.clone(), "local:sodium-fabric-1.jar".into())
+        .await
+        .unwrap();
+    assert!(!mods.join("sodium-fabric-1.jar").exists());
+    assert!(mods.join("MangoConfig-1.0+mc1.21.jar").exists());
+    assert_eq!(f.svc.content_list(id).await.unwrap().len(), 1);
+}
+
 /// The record was valid when it was stored; afterwards `mods/` was swapped
 /// for a symlink to a folder outside the instance holding a same-named file.
 #[cfg(unix)]

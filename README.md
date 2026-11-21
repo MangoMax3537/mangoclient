@@ -25,7 +25,7 @@ MangoClient brings Modrinth discovery, separate Minecraft setups, and account sw
 - **Microsoft and offline accounts** — switch accounts without restarting. Sign-in tokens are encrypted with a key that only exists on your device (kept in the system keystore). A skins page offers a 3D preview, skin upload, capes and a skin library.
 - **Automatic Java setup** — a compatible local Java or the matching Eclipse Temurin runtime, with a per-instance override.
 - **Sensible memory** — 4 GB on 16 GB machines, 5 GB on 32 GB, 6 GB on 64 GB and more, adjustable per instance; packs can recommend their own value.
-- **Performance setup** — optionally manages Sodium, Lithium and FerriteCore for compatible Fabric and Quilt profiles while respecting your own mods.
+- **Performance setup** — off by default; nothing is installed behind your back. Turn it on (`performanceMods`) and the launcher keeps Sodium, Lithium and FerriteCore in compatible Fabric and Quilt instances, respecting your own mods. Anything installed is listed in the instance's mod list and can be removed there.
 - **MangoConfig included** — an optional in-game HUD and settings layer with zoom, ping and armor displays, fullbright, and Discord Rich Presence.
 - **Looks like a game launcher** — a Minecraft-style angular design, backgrounds per Minecraft version (or your own), instance icons from real blocks read from your own game files, skeleton loading, smooth transitions, keyboard shortcuts (press `?`), a custom title bar and a settings search that understands aliases.
 - **Useful tools** — live server status with icons and quick join, screenshots, launcher/game/crash logs, mclo.gs sharing, storage controls, signed automatic updates.
