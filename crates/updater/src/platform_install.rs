@@ -120,8 +120,9 @@ fn verified_source(file: &Path, dir: &Path) -> Result<PathBuf> {
     Ok(real)
 }
 
-/// The path being replaced must be a regular entry (not a link) whose parent is a
-/// real directory, so a swapped-in link cannot redirect the replacement.
+/// The path being replaced must be a regular entry (not a link). Its parent is resolved once and every later step works on
+/// that resolved directory, so a link swapped in afterwards cannot redirect the replacement. Links further up the path are
+/// fine (macOS `/var` -> `/private/var`, Fedora Silverblue `/home` -> `/var/home`, Windows `\\?\` verbatim paths).
 fn checked_target(path: &Path, want_dir: bool) -> Result<(PathBuf, OsString)> {
     let name = path
         .file_name()
@@ -139,7 +140,8 @@ fn checked_target(path: &Path, want_dir: bool) -> Result<(PathBuf, OsString)> {
         return Err(fail("install target has the wrong type"));
     }
     let real_parent = fs::canonicalize(parent)?;
-    if parent != real_parent || fs::canonicalize(path)? != real_parent.join(&name) {
+    // the entry itself must resolve to exactly its own name in the resolved parent (no link, no `..` games)
+    if fs::canonicalize(path)? != real_parent.join(&name) {
         return Err(fail("install target path goes through a symlink"));
     }
     Ok((real_parent, name))

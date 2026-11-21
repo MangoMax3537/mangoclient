@@ -148,14 +148,38 @@ fn symlinks_are_never_followed() {
     let inst = f.installer(Target::AppImage(target_link));
     assert!(inst.stage(&ok).is_err());
 
-    // Install target inside a symlinked directory.
+    // Install target inside a symlinked directory (macOS /var, Silverblue /home): the link is resolved once and the update
+    // lands on the real file in the real directory, never through the link and never anywhere else.
     let real_dir = f.install.join("real");
     fs::create_dir_all(&real_dir).unwrap();
     fs::write(real_dir.join("b.AppImage"), b"b").unwrap();
     let dir_link = f.install.join("dirlink");
     symlink(&real_dir, &dir_link).unwrap();
     let inst = f.installer(Target::AppImage(dir_link.join("b.AppImage")));
-    assert!(inst.stage(&ok).is_err());
+    inst.stage(&ok).unwrap();
+    assert_eq!(
+        fs::read(real_dir.join(".b.AppImage.new")).unwrap(),
+        b"new",
+        "staged beside the real file"
+    );
+    assert_eq!(
+        fs::read(real_dir.join("b.AppImage")).unwrap(),
+        b"b",
+        "nothing replaced before apply"
+    );
+    inst.apply_on_quit().unwrap();
+    assert_eq!(
+        fs::read(real_dir.join("b.AppImage")).unwrap(),
+        b"new",
+        "the real file was updated"
+    );
+    assert!(
+        fs::symlink_metadata(&dir_link)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the link itself is left alone"
+    );
 }
 
 #[test]
