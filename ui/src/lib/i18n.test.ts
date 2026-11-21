@@ -67,5 +67,8 @@ describe('i18n', () => {
     expect(plural('de', 'stats.sessionsN', 3)).toBe('3 Sitzungen');
     expect(plural('en', 'stats.sessionsN', 1)).toBe('1 session');
     expect(plural('en', 'stats.sessionsN', 0)).toBe('0 sessions');
+    // the tile label above the number follows it too
+    expect(plural('de', 'stats.sessions', 1)).toBe('Sitzung');
+    expect(plural('de', 'stats.sessions', 2)).toBe('Sitzungen');
   });
 });

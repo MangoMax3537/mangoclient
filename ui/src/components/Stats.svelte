@@ -55,7 +55,7 @@
   {#if data}
     <dl class="tiles nb" style:--n="16px" style:--fill="var(--ink-1)">
       <div><dt><TimerIcon weight="bold" size={14} aria-hidden="true" />{t('stats.total')}</dt><dd class="big mono">{fmtDuration(data.totalMs)}</dd></div>
-      <div><dt><GameControllerIcon weight="bold" size={14} aria-hidden="true" />{t('stats.sessions')}</dt><dd class="mono">{data.sessions}</dd></div>
+      <div><dt><GameControllerIcon weight="bold" size={14} aria-hidden="true" />{tp('stats.sessions', data.sessions)}</dt><dd class="mono">{data.sessions}</dd></div>
       <div><dt><TrophyIcon weight="bold" size={14} aria-hidden="true" />{t('stats.longest')}</dt><dd class="mono">{fmtDuration(data.longestMs)}</dd></div>
       <div><dt><ChartLineIcon weight="bold" size={14} aria-hidden="true" />{t('stats.avg')}</dt><dd class="mono">{fmtDuration(avg)}</dd></div>
       <div><dt><CalendarCheckIcon weight="bold" size={14} aria-hidden="true" />{t('stats.activeDays')}</dt><dd class="mono">{`${activeDays} / ${data.days.length}`}</dd></div>
