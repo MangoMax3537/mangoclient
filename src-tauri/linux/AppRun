@@ -1,0 +1,28 @@
+#!/bin/sh
+# MangoClient AppImage entry point (replaces linuxdeploy's AppRun, which is kept as AppRun.bundled).
+#
+# The AppImage is built on Ubuntu 22.04 and bundles that release's WebKitGTK. On current desktops (newer Mesa/NVIDIA,
+# Wayland) that old WebKit cannot use the GPU and paints in software: one CPU core busy at idle, laggy hovering,
+# clicks and scrolling. So the system's own WebKitGTK 4.1 is preferred whenever the system has one: the system library
+# directory goes first on LD_LIBRARY_PATH (it outranks the binary's RUNPATH $ORIGIN/../lib), so WebKit, GTK and their
+# dependencies come from one consistent, current system stack; anything the system lacks still comes from the bundle.
+# Without a system WebKitGTK (or with MANGOCLIENT_BUNDLED_WEBKIT=1) the bundled stack runs exactly as before.
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="${APPDIR:-$HERE}"
+
+system_webkit_dir() {
+  for ldc in ldconfig /sbin/ldconfig /usr/sbin/ldconfig /usr/bin/ldconfig; do
+    path="$("$ldc" -p 2>/dev/null | awk '/libwebkit2gtk-4\.1\.so\.0 / && /x86-64/ { print $NF; exit }')"
+    [ -n "$path" ] && [ -e "$path" ] && { dirname "$path"; return 0; }
+  done
+  for dir in /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib; do
+    [ -e "$dir/libwebkit2gtk-4.1.so.0" ] && { echo "$dir"; return 0; }
+  done
+  return 1
+}
+
+if [ "${MANGOCLIENT_BUNDLED_WEBKIT:-0}" != "1" ] && libdir="$(system_webkit_dir)"; then
+  export LD_LIBRARY_PATH="$libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  exec "$HERE/usr/bin/mangoclient" "$@"
+fi
+exec "$HERE/AppRun.bundled" "$@"

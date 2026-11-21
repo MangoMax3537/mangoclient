@@ -207,6 +207,38 @@ jobs:
           fi
           npx --yes "$TAURI_CLI" "${args[@]}"
 
+      # The bundled WebKitGTK (from this Ubuntu 22.04 host) paints in software on current desktops: a full CPU core at
+      # idle and a laggy UI. src-tauri/linux/AppRun prefers the system's WebKitGTK and falls back to the bundled one, so
+      # the AppImage is repacked with it. appimagetool comes from the linuxdeploy-plugin-appimage the Tauri CLI just used.
+      - name: AppImage prefers the system WebKitGTK
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          img="$(ls src-tauri/target/${TARGET}/release/bundle/appimage/*.AppImage)"
+          img="$(readlink -f "$img")"
+          plugin="$(find "$HOME/.cache/tauri" -maxdepth 2 -iname '*plugin-appimage*.AppImage' | head -n1)"
+          [ -n "$plugin" ] || { echo "::error::linuxdeploy-plugin-appimage not found in ~/.cache/tauri"; ls -la "$HOME/.cache/tauri" || true; exit 1; }
+          tools="$RUNNER_TEMP/appimage-plugin"; work="$RUNNER_TEMP/appdir"
+          mkdir -p "$tools" "$work"
+          chmod +x "$plugin"
+          (cd "$tools" && "$plugin" --appimage-extract >/dev/null)
+          appimagetool="$(find "$tools/squashfs-root" -type f -name appimagetool | head -n1)"
+          [ -x "$appimagetool" ] || { echo "::error::appimagetool not found inside $plugin"; exit 1; }
+          (cd "$work" && "$img" --appimage-extract >/dev/null)
+          mv "$work/squashfs-root/AppRun" "$work/squashfs-root/AppRun.bundled"
+          install -m 755 src-tauri/linux/AppRun "$work/squashfs-root/AppRun"
+          rm -f "$img"
+          ARCH=x86_64 "$appimagetool" --no-appstream "$work/squashfs-root" "$img"
+          # check: the repacked image starts with our entry point and still has the original one as fallback
+          check="$RUNNER_TEMP/check"; mkdir -p "$check"
+          (cd "$check" && "$img" --appimage-extract >/dev/null)
+          cmp "$check/squashfs-root/AppRun" src-tauri/linux/AppRun
+          test -x "$check/squashfs-root/AppRun.bundled"
+          ls -l "$img"
+
       - name: Collect artifacts
         shell: bash
         env:
