@@ -259,6 +259,11 @@ jobs:
         run: |
           ls -l
           sha256sum -- * > SHA256SUMS.txt
+      # 1.3.x (Electron) installs update themselves to this release through these feeds (AppImage, Windows NSIS).
+      - name: Feeds for 1.3.x updaters (latest-linux.yml, latest.yml)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: node tools/make-electron-feeds.js collected "$VERSION"
       - name: Write latest.json (Ed25519-signed)
         if: env.HAS_UPDATE_KEY == 'true'
         env:
