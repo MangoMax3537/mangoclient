@@ -25,7 +25,7 @@
       id="{idPrefix}-{o.value}" type="button" class:on class:off={!!o.disabledReason} tabindex={on ? 0 : -1} aria-disabled={o.disabledReason ? 'true' : undefined} use:tip={o.disabledReason ? { text: o.disabledReason, side: 'top' } : null}
       role={role === 'tablist' ? 'tab' : 'radio'} aria-selected={role === 'tablist' ? on : undefined} aria-checked={role === 'radiogroup' ? on : undefined}
       onclick={() => { if (!o.disabledReason) onchange(o.value); }} onkeydown={(e) => key(e, i)}
-    >{#if o.icon}<o.icon weight="bold" size={15} aria-hidden="true" />{/if}{o.label}{#if o.disabledReason}<span class="sr-only">: {o.disabledReason}</span>{/if}{#if o.count !== undefined}<span class="c mono">{o.count}</span>{/if}</button>
+    >{#if o.icon}<o.icon weight="bold" size={15} aria-hidden="true" />{/if}{o.label}{#if o.disabledReason}<span class="sr-only">: {o.disabledReason}</span>{/if}{#if o.count !== undefined}<span class="c">({o.count})</span>{/if}</button>
   {/each}
 </div>
 </div>
@@ -48,6 +48,6 @@
   button.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--accent-fill); }
   /* clip-path cuts outlines, so the ring is drawn inside the button, far enough from the notched corners to stay whole */
   button:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
-  .c { font-size: var(--fs-xs); color: var(--paper-mute); }
-  button.on .c { color: var(--paper-dim); }
+  /* "Mods (3)": the count in the label's own size and colour, only set off by the brackets */
+  .c { margin-left: -2px; }
 </style>
