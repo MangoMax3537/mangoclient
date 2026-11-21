@@ -12,11 +12,11 @@
   import ImagePick from './ImagePick.svelte';
   import { fmtDateTime } from '../lib/format';
   import { MANGO_CLIENT_ID, uniqueWallpapers, wallpapers } from '../lib/wallpapers';
-  import { buildPool, resolveAuto, versionWallpaper } from '../lib/bgCycle';
+  import AppBackground from './AppBackground.svelte';
   import BgLayer from './BgLayer.svelte';
   import { BLUR_MAX, backgroundStyle, choiceFromBackground, previewBackground, resolveBackground, sameBackground, type BackgroundChoice } from '../lib/instanceIcon';
   import { imageDrop, type PickedImage } from '../lib/pickImage';
-  import { actions, app, errorText, getApi, lang, loadPanorama, panoramas, t, toast } from '../lib/stores.svelte';
+  import { actions, app, errorText, getApi, lang, loadPanorama, panoramas, t, toast, ui } from '../lib/stores.svelte';
   import type { Screenshot } from '../lib/types';
 
   let { profileId, onclose }: { profileId: string; onclose: () => void } = $props();
@@ -59,11 +59,8 @@
   const all = uniqueWallpapers(wallpapers);
   const mangoOn = $derived(draft.kind === 'wallpaper' && draft.id === MANGO_CLIENT_ID);
   const panoText = $derived(!pano ? t('bg.auto.none') : pano.source === 'own' ? t('bg.auto.own', { v: pano.mcVersion }) : t('bg.auto.nearest', { v: pano.mcVersion }));
-  // the text must name exactly what the hero resolves to (same rules and pool as PanoramaBackground)
-  const auto = $derived(resolveAuto({ mcVersion: profile?.mcVersion ?? '', profileId, wallpapers, pool: buildPool(wallpapers, versionWallpaper(wallpapers, profile?.mcVersion ?? '', profileId)) }));
-  const autoName = $derived(auto.item.kind === 'wallpaper' ? (wallpapers.find((w) => w.id === (auto.item as { id: string }).id)?.label ?? '') : t('bg.wallpaper.mango'));
-  const autoText = $derived(auto.rule === 'version' ? t('bg.auto.version', { v: profile?.mcVersion ?? '', name: autoName })
-    : t('bg.auto.generic', { name: autoName }));
+  // auto preview = the same engine as the window background, so it cycles like the real one (dim/blur overrides applied live)
+  const autoBg = $derived({ kind: 'auto' as const, ...(effDim !== null && { dim: effDim }), ...(effBlur !== null && { blur: effBlur }) });
 
   const tabs = $derived([
     { value: 'auto', label: t('bg.tab.auto') },
@@ -105,7 +102,11 @@
 <Modal title={t('bg.title', { name: profile?.name ?? '' })} size="lg" {onclose} onenter={changed ? apply : undefined}>
   <div class="bp" use:imageDrop={{ over: (b) => (over = b), drop: onFile, reject: () => { bad = true; tab = 'upload'; } }}>
     <div class="mini on-stage" role="img" aria-label={t('bg.preview')}>
-      <PanoramaBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={shown} dim={effDim} blur={effBlur} tint={profile?.color ?? null} />
+      {#if shown.kind === 'auto'}
+        <AppBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={autoBg} tint={profile?.color ?? null} mode="hero" />
+      {:else}
+        <PanoramaBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={shown} dim={effDim} blur={effBlur} tint={profile?.color ?? null} />
+      {/if}
       <span class="mt"><b class="display">{profile?.name}</b><span class="mono">{profile?.mcVersion}</span></span>
     </div>
 
@@ -113,8 +114,7 @@
 
     <div class="panel" role="tabpanel" aria-labelledby="bpick-{tab}">
       {#if tab === 'auto'}
-        <p><b>{autoText}</b></p>
-        <p class="hint">{t('bg.auto.hint')}</p>
+        <p>{ui.cycleBackgrounds ? t('bg.auto.cycle') : t('bg.auto.still')}</p>
       {:else if tab === 'panorama'}
         <p><b>{panoText}</b></p>
         <p class="hint">{t('bg.panorama.hint')}</p>
