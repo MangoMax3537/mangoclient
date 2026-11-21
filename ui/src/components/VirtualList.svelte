@@ -31,7 +31,8 @@
 </div>
 
 <style>
-  .vl { overflow: auto; height: 100%; min-height: 0; contain: strict; }
+  /* `flex: 1 1 0` fills a flex-column parent (WebKitGTK does not resolve `height: 100%` against a flexed parent, and size containment then collapsed the list to 0 px: an EMPTY list). Without size containment a failed height shows all rows instead of none. */
+  .vl { overflow: auto; height: 100%; flex: 1 1 0; min-height: 0; contain: layout paint style; }
   .space { position: relative; }
   .win { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
   .r { overflow: hidden; }

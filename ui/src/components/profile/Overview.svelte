@@ -15,7 +15,8 @@
   import { actions, errorText, getApi, lang, nav, openDiscover, openProfile, t, toast } from '../../lib/stores.svelte';
   import type { LogEntry, ProfileView, Screenshot } from '../../lib/types';
 
-  let { profile }: { profile: ProfileView } = $props();
+  /** `modCount` comes from the same content list as the Mods tab count and the list itself (the profile view's own count can lag behind a folder sync). */
+  let { profile, modCount }: { profile: ProfileView; modCount: number } = $props();
   const shotsLoad = createLoadState<Screenshot[]>({ isEmpty: () => false });
   const logLoad = createLoadState<{ entry: LogEntry; lines: string[] } | null>({ isEmpty: () => false });
   const shots = $derived(shotsLoad.data);
@@ -55,7 +56,7 @@
     <div><dt>{t('home.playtime')}</dt><dd class="mono big">{fmtDuration(profile.playTimeMs)}</dd></div>
     <div><dt>{t('overview.created')}</dt><dd class="mono">{fmtDate(profile.created, lang())}</dd></div>
     <div><dt>{t('home.lastPlayed')}</dt><dd class="mono">{profile.lastPlayed ? fmtRelative(profile.lastPlayed, lang()) : t('home.never')}</dd></div>
-    <div><dt>{t('home.mods')}</dt><dd class="mono">{profile.modCount}</dd></div>
+    <div><dt>{t('home.mods')}</dt><dd class="mono">{modCount}</dd></div>
     <div><dt>{t('chip.java')}</dt><dd class="mono">{t('chip.auto')}</dd></div>
     <div><dt>{t('chip.ram')}</dt><dd class="mono">{profile.effectiveRamMb ? fmtRam(profile.effectiveRamMb) : t('chip.default')}</dd></div>
   </dl>

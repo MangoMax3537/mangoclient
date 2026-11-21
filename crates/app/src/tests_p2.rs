@@ -352,6 +352,32 @@ fn accounts_carry_a_head_url() {
 
 // ---------- local content ----------
 
+/// The shape of a real instance: three auto-installed performance jars plus the `.mangoclient-performance.json` manifest.
+/// The list, the profile view's count and a second (record-backed) listing must agree on the three jars.
+#[tokio::test]
+async fn performance_jars_with_manifest_list_and_count_consistently() {
+    let f = fx();
+    let mods = f.dir().join("mods");
+    for n in [
+        "ferritecore-9.0.0-fabric.jar",
+        "lithium-fabric-0.26.4+mc26.3.jar",
+        "sodium-fabric-0.9.2+mc26.3.jar",
+    ] {
+        std::fs::write(mods.join(n), b"x").unwrap();
+    }
+    std::fs::write(
+        mods.join(".mangoclient-performance.json"),
+        br#"{"files":{"ferrite-core":"ferritecore-9.0.0-fabric.jar","lithium":"lithium-fabric-0.26.4+mc26.3.jar","sodium":"sodium-fabric-0.9.2+mc26.3.jar"}}"#,
+    )
+    .unwrap();
+    for _ in 0..2 {
+        let items = f.svc.content_list(f.pid.clone()).await.unwrap();
+        assert_eq!(items.len(), 3);
+        assert!(items.iter().all(|i| i.kind == ContentType::Mod && i.enabled && !i.filename.starts_with('.')));
+        assert_eq!(f.svc.app_state().unwrap().profiles[0].mod_count, 3);
+    }
+}
+
 #[tokio::test]
 async fn content_list_syncs_the_mods_folder_and_persists() {
     let f = fx();

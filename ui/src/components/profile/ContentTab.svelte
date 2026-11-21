@@ -184,14 +184,14 @@
 {/if}
 
 <style>
-  .ct { height: 100%; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .ct { flex: 1 1 0; display: flex; flex-direction: column; gap: 10px; min-height: 320px; }
   .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .search { position: relative; flex: 1; min-width: 160px; }
   .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
   .search .field { width: 100%; padding-left: 36px; }
   .note { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; background: rgba(255, 173, 50, 0.08); border: 1px solid rgba(255, 173, 50, 0.3); color: var(--mango); }
   .note span { flex: 1; color: var(--paper); }
-  .list { flex: 1; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
+  .list { flex: 1 1 0; min-height: 200px; display: flex; flex-direction: column; border: 1px solid var(--line); overflow: hidden; min-height: 0; background: var(--ink-1); }
   .item { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 44px 36px; gap: 12px; align-items: center; height: 100%; padding: 0 10px 0 12px; }
   .item:hover { background: var(--ink-2); }
   .item.off .nm, .item.off .ver { opacity: 0.5; }

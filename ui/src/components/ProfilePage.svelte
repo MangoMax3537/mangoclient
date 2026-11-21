@@ -140,7 +140,7 @@
     <div class="panel" role="tabpanel" aria-labelledby="ptab-{tab}" use:rememberScroll={`${p.id}:${tab}`}>
       {#key `${p.id}:${tab}`}
         <div class="tabbody" in:enter={{ y: 6, duration: 160 }}>
-        {#if tab === 'overview'}<Overview profile={p} />
+        {#if tab === 'overview'}<Overview profile={p} modCount={items ? counts.mod : p.modCount} />
         {:else if isContentTab(tab)}<Lazy load={tabs.content} props={{ profile: p, type: CONTENT_TAB_TYPE[tab], items, infos, load: cl, onitems: (l: ContentItem[]) => (items = l) }} fallback={skContent} />
         {:else if tab === 'media'}<Lazy load={tabs.media} props={{ profile: p }} fallback={skMedia} />
         {:else if tab === 'backups'}<Lazy load={tabs.backups} props={{ profile: p }} fallback={skBackups} />
@@ -176,5 +176,6 @@
   /* short windows (960x600): the same hero, a little tighter, so the tab content keeps its room */
   @media (max-height: 700px) { .inner { gap: 6px; padding: 8px 20px 12px 28px; } h1 { font-size: clamp(26px, 3.4vw, 34px); } }
   .tabs { flex: none; max-width: 100%; }
-  .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; }
+  /* a flex column so a tab can fill the panel with `flex: 1` (WebKitGTK does not resolve `height: 100%` against a flexed parent) */
+  .panel { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 20px; display: flex; flex-direction: column; }
 </style>
