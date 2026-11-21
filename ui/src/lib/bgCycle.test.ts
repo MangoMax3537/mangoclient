@@ -69,9 +69,11 @@ describe('pool with only a version wallpaper', () => {
 });
 
 describe('delay', () => {
-  it('is a fixed 30 s', () => {
+  it('is 30 s plus a random 0-30 s', () => {
     expect(CYCLE_MS).toBe(30000);
-    for (let i = 0; i < 20; i++) expect(nextDelay()).toBe(30000);
+    for (let i = 0; i < 50; i++) { const d = nextDelay(); expect(d).toBeGreaterThanOrEqual(30000); expect(d).toBeLessThan(60000); }
+    expect(nextDelay(() => 0)).toBe(30000);
+    expect(nextDelay(() => 1)).toBeLessThan(60000);
   });
 });
 
@@ -91,12 +93,13 @@ describe('CycleScheduler (fake timers)', () => {
     s.done(); vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
-  it('uses the same 30 s delay every cycle', () => {
+  it('waits 30-60 s per cycle (a new random delay each time)', () => {
     vi.useFakeTimers();
-    const { s, next } = make();
+    const r = [0, 0.5];
+    const { s, next } = make({ rand: () => r.shift() ?? 0 });
     s.start(); s.setPaused(false);
     vi.advanceTimersByTime(30000); expect(next).toHaveBeenCalledTimes(1);
-    s.done(); vi.advanceTimersByTime(29999); expect(next).toHaveBeenCalledTimes(1);
+    s.done(); vi.advanceTimersByTime(44999); expect(next).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1); expect(next).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
@@ -144,7 +147,7 @@ describe('CycleScheduler restart', () => {
   it('re-arms after stop() mid-swap (a stale waiting flag must not block it) and when started late', () => {
     vi.useFakeTimers();
     const next = vi.fn();
-    const s = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) }, next);
+    const s = new CycleScheduler({ setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>), rand: () => 0 }, next);
     s.setPaused(false);
     vi.advanceTimersByTime(CYCLE_MS * 3); expect(next).not.toHaveBeenCalled(); // not started yet (no profile)
     s.start(); vi.advanceTimersByTime(CYCLE_MS); expect(next).toHaveBeenCalledTimes(1); // now waiting for done()

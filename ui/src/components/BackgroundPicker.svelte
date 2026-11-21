@@ -103,7 +103,7 @@
   <div class="bp" use:imageDrop={{ over: (b) => (over = b), drop: onFile, reject: () => { bad = true; tab = 'upload'; } }}>
     <div class="mini on-stage" role="img" aria-label={t('bg.preview')}>
       {#if shown.kind === 'auto'}
-        <AppBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={autoBg} tint={profile?.color ?? null} mode="hero" />
+        <AppBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={autoBg} tint={profile?.color ?? null} mode="hero" mirror />
       {:else}
         <PanoramaBackground {profileId} mcVersion={profile?.mcVersion ?? ''} background={shown} dim={effDim} blur={effBlur} tint={profile?.color ?? null} />
       {/if}
@@ -114,7 +114,8 @@
 
     <div class="panel" role="tabpanel" aria-labelledby="bpick-{tab}">
       {#if tab === 'auto'}
-        <p>{ui.cycleBackgrounds ? t('bg.auto.cycle') : t('bg.auto.still')}</p>
+        <p><b>{t('bg.auto.title')}</b></p>
+        <p class="hint">{ui.cycleBackgrounds ? t('bg.auto.cycle') : t('bg.auto.still')}</p>
       {:else if tab === 'panorama'}
         <p><b>{panoText}</b></p>
         <p class="hint">{t('bg.panorama.hint')}</p>

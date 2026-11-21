@@ -14,9 +14,14 @@
   import { artUrl, floorCandidates, readLastWallpaper, rememberWallpaper } from '../lib/bgFloor';
   import { loadPanorama, panoramas, ui } from '../lib/stores.svelte';
   import type { ProfileBackground } from '../lib/types';
+  import { bgNow } from '../lib/bgNow.svelte';
 
-  interface Props { profileId: string; mcVersion: string; background: ProfileBackground; tint?: string | null; mode?: 'hero' | 'full'; cycle?: boolean }
-  let { profileId, mcVersion, background, tint = null, mode = 'hero', cycle = true }: Props = $props();
+  interface Props {
+    profileId: string; mcVersion: string; background: ProfileBackground; tint?: string | null; mode?: 'hero' | 'full'; cycle?: boolean;
+    /** Follow the main engine's slide (bgNow) instead of cycling on its own: the picker's Auto preview. */
+    mirror?: boolean;
+  }
+  let { profileId, mcVersion, background, tint = null, mode = 'hero', cycle = true, mirror = false }: Props = $props();
   void DEFAULT_SCRIM;
 
   const isAuto = $derived(background.kind === 'auto');
@@ -43,7 +48,7 @@
     if (w) rememberWallpaper(w.id);
   }
   const calm = reducedMotion();
-  const cycling = $derived(cycle && isAuto && ui.cycleBackgrounds && !!profileId && pool.length > 1);
+  const cycling = $derived(!mirror && cycle && isAuto && ui.cycleBackgrounds && !!profileId && pool.length > 1);
   // dev-only: why the cycle is off (console, never UI)
   $effect(() => { if (import.meta.env.DEV && !cycling) console.debug('[bg] cycling off:', { cycle, isAuto, setting: ui.cycleBackgrounds, profileId, pool: pool.length }); });
 
@@ -66,7 +71,9 @@
   const isPaused = (): boolean => document.hidden || blurred;
 
   // what the instance itself shows (same resolution as its own hero)
-  const first = $derived(resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers, pool }));
+  const own = $derived(resolveBackground(background, { mcVersion, profileId, panorama: panoramas[profileId], wallpapers, pool }));
+  // a mirror starts on what the main engine shows (read once: later changes fade in through the follow effect below)
+  const first = $derived(mirror && isAuto ? (untrack(() => bgNow.res) ?? own) : own);
   /** `first` is applied while nothing has been swapped in yet (a changed setting or a late panorama updates it in place). */
   $effect(() => {
     const f0 = real(first);
@@ -96,6 +103,24 @@
     });
   });
   $effect(() => { order.setPool(pool); });
+  // the main engine publishes what is on screen, or what it is fading to, so a mirror loads it at the same time
+  $effect(() => { if (!mirror) bgNow.res = slots[incoming ?? base].res; });
+  // a mirror fades to whatever the main engine shows next
+  $effect(() => {
+    if (!mirror || !isAuto) return;
+    const want = real(bgNow.res);
+    untrack(() => {
+      const u = want && artUrl(want);
+      if (!want || !u || incoming !== null || isBad(want)) return;
+      const cur = slots[base].res;
+      if (cur && artUrl(cur) === u) return;
+      const other: 0 | 1 = base === 0 ? 1 : 0;
+      slots[other] = { res: want, key: `m:${u}`, shown: false };
+      incoming = other;
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => { if (incoming !== null && !fading) failed(incoming); }, 20_000);
+    });
+  });
 
   /** The pool key of what a resolved background shows, so the shuffle never starts with the same one. */
   const keyOf = (r: ResolvedBackground): string | null => {

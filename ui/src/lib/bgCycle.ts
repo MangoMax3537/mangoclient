@@ -47,12 +47,13 @@ export function resolveAuto(c: AutoCtx): { item: PoolItem; rule: AutoRuleHit } {
 }
 
 /* ---- the cycle ---- */
-/** Fixed interval between two background changes. */
+/** Shortest interval between two background changes; each wait adds a random 0..CYCLE_JITTER_MS (so 30-60 s). */
 export const CYCLE_MS = 30_000;
+export const CYCLE_JITTER_MS = 30_000;
 export const FADE_MS = 1800;
 
-/** Delay per cycle: fixed (no jitter). */
-export const nextDelay = (): number => CYCLE_MS;
+/** Delay per cycle: 30 s plus a random 0-30 s. */
+export const nextDelay = (rand: () => number = Math.random): number => CYCLE_MS + Math.floor(Math.min(0.999999, Math.max(0, rand())) * CYCLE_JITTER_MS);
 
 /** Fisher-Yates over a copy. */
 export function shuffle<T>(a: readonly T[], rand: () => number = Math.random): T[] {
@@ -118,7 +119,7 @@ export class CycleScheduler {
   #clear(): void { if (this.#h !== null) { this.deps.clearTimeout(this.#h); this.#h = null; } }
   #arm(): void {
     if (!this.#running || this.#paused || this.#waiting || this.#h !== null) return;
-    const ms = this.deps.fixedMs && this.deps.fixedMs > 0 ? this.deps.fixedMs : nextDelay();
+    const ms = this.deps.fixedMs && this.deps.fixedMs > 0 ? this.deps.fixedMs : nextDelay(this.deps.rand);
     this.#h = this.deps.setTimeout(() => { this.#h = null; this.#waiting = true; this.onNext(); }, ms);
   }
 }
