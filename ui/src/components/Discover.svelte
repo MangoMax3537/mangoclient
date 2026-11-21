@@ -220,7 +220,7 @@
   .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 132px; gap: 16px; align-items: center; padding: 12px 14px; --n: var(--notch-s); --fill: var(--ink-1); transition: background var(--dur) var(--ease); }
   .row:hover, .row:focus-within { --fill: var(--ink-2); }
-  .row:hover { background: var(--line-strong, var(--line)); }
+  .row:hover { --line: var(--line-strong, var(--line)); }
   .main { min-width: 0; display: grid; gap: 3px; }
   .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .ttl { font: 700 var(--fs-lg) var(--font-display); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

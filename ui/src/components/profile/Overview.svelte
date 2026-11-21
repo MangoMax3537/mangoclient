@@ -112,7 +112,7 @@
 <style>
   .ov { display: grid; gap: 22px; max-width: 980px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; padding: 1px; overflow: hidden; }
-  .tiles > div { padding: 12px 16px; border-right: 1px solid var(--line-soft); background: var(--ink-1); }
+  .tiles > div { padding: 12px 16px; border-right: 1px solid var(--line-soft); }
   .tiles > div:last-child { border-right: 0; }
   dt { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; }
   dt :global(svg) { flex: none; margin-top: 1px; }

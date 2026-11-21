@@ -30,7 +30,12 @@ describe('notched elements', () => {
   it('app.css defines the shared .frame helper next to .notch and .nb', () => {
     const css = readFileSync(join(root, 'app.css'), 'utf8');
     expect(css).toMatch(/\.frame::after\s*\{[^}]*evenodd/);
-    expect(css).toMatch(/\.nb::before/);
+    // .nb: fill and border are background layers (no solid layer under a translucent fill); diagonals are gradient stripes like .frame
+    const nb = css.match(/\n\.nb \{([^}]*)\}/)?.[1] ?? '';
+    expect(nb).toMatch(/linear-gradient\(to top right/);
+    expect(nb).toMatch(/linear-gradient\(to bottom left/);
+    expect(nb).toMatch(/var\(--fill\);\s*$/m);
+    expect(css).not.toMatch(/\.nb::before/);
   });
   it('no rule combines clip-path with a border (the border would be cut at the corners)', () => {
     const bad: string[] = [];

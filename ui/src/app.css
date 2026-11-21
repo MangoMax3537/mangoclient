@@ -129,8 +129,9 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; lett
    :root from the active theme's tokens, so one definition serves both themes. Dialogs, menus, listboxes and tooltips stay solid. */
 :root {
   --solid-1: var(--ink-1); --solid-2: var(--ink-2); --solid-3: var(--ink-3); --solid-4: var(--ink-4);
-  --pane-1: color-mix(in srgb, var(--ink-1) 55%, transparent); --pane-2: color-mix(in srgb, var(--ink-2) 58%, transparent);
-  --pane-3: color-mix(in srgb, var(--ink-3) 68%, transparent); --pane-4: color-mix(in srgb, var(--ink-4) 78%, transparent);
+  /* all panes as see-through as the console box (ink-1 at 55%); hover / active states (ink-3 / ink-4) stay a little denser to read as states */
+  --pane-1: color-mix(in srgb, var(--ink-1) 55%, transparent); --pane-2: color-mix(in srgb, var(--ink-2) 55%, transparent);
+  --pane-3: color-mix(in srgb, var(--ink-3) 60%, transparent); --pane-4: color-mix(in srgb, var(--ink-4) 70%, transparent);
 }
 main > .view { --ink-1: var(--pane-1); --ink-2: var(--pane-2); --ink-3: var(--pane-3); --ink-4: var(--pane-4); }
 main > .view :is(dialog, [popover], [role='menu'], [role='listbox'], [role='tooltip'], [role='dialog']) {
@@ -166,18 +167,34 @@ main > .view :is(dialog, [popover], [role='menu'], [role='listbox'], [role='tool
     linear-gradient(to top right, var(--stops)) right top / var(--n) var(--n) no-repeat,
     linear-gradient(to bottom left, var(--stops)) left bottom / var(--n) var(--n) no-repeat;
 }
-/* Notched box with a hard 1px border: the border is the element's own background (--line), a ::before inset by 1px paints the fill with a slightly smaller notch,
-   so the diagonal cuts are outlined too. Set --n (notch) and --fill per element; children render above the fill. */
+/* Notched box with a hard 1px border. .nb paints fill AND border as background layers of the element itself: the fill (may be translucent, the
+   wallpaper shows through), four 1px straight edges and the two diagonal cuts as soft gradient stripes (like .frame), all trimmed once by the
+   notch clip. Nothing solid sits under the fill. Set --n (notch) and --fill per element. .pop (floating surfaces, always solid) keeps the
+   older border-under-fill drawing. */
 :where(.nb, .pop) { position: relative; }
 /* The UA gives <dialog> and [popover] `border: solid` in the text colour (white in the dark theme): that was the bright ring around pop-ups.
    The only border of a floating surface is the neutral --line one drawn by .nb / .pop below. */
 dialog, [popover] { border: 0; outline: 0; }
 dialog:focus, dialog:focus-visible, .nb[tabindex='-1']:focus, .nb[tabindex='-1']:focus-visible { outline: none; }
-.nb, .pop {
+.nb {
+  --n: var(--notch-m); --fill: var(--ink-2); isolation: isolate;
+  --lt: 1.15px;
+  --lstops: transparent calc(50% - var(--lt) - 0.5px), var(--line) calc(50% - var(--lt) + 0.5px), var(--line) calc(50% + 2px), transparent calc(50% + 2.5px);
+  background:
+    linear-gradient(to top right, var(--lstops)) right top / var(--n) var(--n) no-repeat,
+    linear-gradient(to bottom left, var(--lstops)) left bottom / var(--n) var(--n) no-repeat,
+    linear-gradient(var(--line), var(--line)) left top / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) left bottom / 100% 1px no-repeat,
+    linear-gradient(var(--line), var(--line)) left top / 1px 100% no-repeat,
+    linear-gradient(var(--line), var(--line)) right top / 1px 100% no-repeat,
+    var(--fill);
+  clip-path: polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
+}
+.pop {
   --n: var(--notch-m); --fill: var(--ink-2); isolation: isolate; background: var(--line);
   clip-path: polygon(0 0, calc(100% - var(--n)) 0, 100% var(--n), 100% 100%, var(--n) 100%, 0 calc(100% - var(--n)));
 }
-.nb::before, .pop::before {
+.pop::before {
   content: ''; position: absolute; inset: 1px; z-index: -1; background: var(--fill); pointer-events: none;
   --m: calc(var(--n) - 0.6px);
   clip-path: polygon(0 0, calc(100% - var(--m)) 0, 100% var(--m), 100% 100%, var(--m) 100%, 0 calc(100% - var(--m)));

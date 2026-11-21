@@ -22,10 +22,10 @@
   .toasts { position: fixed; z-index: 100; left: 88px; bottom: 16px; display: grid; gap: 8px; max-width: min(460px, calc(100vw - 112px)); pointer-events: none; }
   .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 9px 7px 9px 15px; animation: in var(--dur-slow) var(--ease); }
   .toast span { flex: 1; font-size: var(--fs-md); }
-  /* the 1px border of a .nb box is its own background colour */
-  .toast.ok { background: var(--leaf); }
+  /* the 1px border of a .nb box is its --line colour */
+  .toast.ok { --line: var(--leaf); }
   .toast.ok :global(svg) { color: var(--leaf); }
-  .toast.error { background: var(--tomato); }
+  .toast.error { --line: var(--tomato); }
   .toast.error :global(svg) { color: var(--tomato); }
   .toast .btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
   @keyframes in { from { opacity: 0; transform: translateY(8px); } }

@@ -57,7 +57,7 @@
 </dialog>
 
 <style>
-  /* a notched box with a hard 1px border (.nb): the border is the dialog's own background, the fill is the ::before inside it */
+  /* a notched box with a hard 1px border (.nb): fill and border are background layers of the dialog (app.css) */
   dialog { position: fixed; --n: 16px; --fill: var(--ink-2); padding: 1px; color: var(--paper); max-height: min(86vh, 760px); overflow: hidden; }
   dialog[open] { display: flex; flex-direction: column; animation: pop var(--dur-slow) var(--ease); }
   dialog::backdrop { background: var(--backdrop); transition: opacity var(--dur) var(--ease); animation: fade var(--dur-slow) var(--ease); }
