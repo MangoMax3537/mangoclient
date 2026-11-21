@@ -210,10 +210,9 @@
   .kebab:hover { background: rgba(11, 12, 14, 0.85); }
   .card { display: grid; grid-template-rows: auto 1fr; width: 100%; text-align: left; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
   .card:hover { transform: translateY(-2px); }
-  /* the info panel is always the neutral surface (never the tile tint); selection is a 1px accent frame drawn over the card */
+  /* the info panel is always the neutral surface (never the tile tint); the selected instance has no frame here (one click opens it) */
   .card { position: relative; }
   .info { background: var(--ink-2); }
-  .card.sel { --frame: var(--accent-fill); }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; overflow: hidden; aspect-ratio: 16 / 10; }
   .info { display: grid; align-content: start; gap: 2px; padding: 12px 18px 20px 14px; min-width: 0; }
@@ -223,7 +222,7 @@
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 64px 76px 124px 120px; gap: var(--s-3); align-items: center; width: 100%; padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); }
   button.row { transition: background var(--dur) var(--ease); }
   button.row:hover { background: var(--ink-2); }
-  button.row.sel { background: var(--ink-2); box-shadow: inset 0 0 0 1px var(--accent-fill); }
+  button.row.sel { background: var(--ink-2); }
   button.row:focus-visible { outline-offset: -2px; }
   .row.head { padding-inline: 8px; border-top: 1px solid var(--line); padding-block: 8px; font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper-mute); font-weight: 600; border-bottom: 1px solid var(--line); }
   .nm { font: 600 var(--fs-lg) var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -74,12 +74,14 @@ describe('background everywhere', () => {
 });
 
 describe('neutral panels, no white rings, no rail rings', () => {
-  it('instance card info panels are the grey surface in every state; selection is a 1px accent frame', () => {
+  it('instance card info panels are the grey surface in every state; selection is framed on Home only, never in the Library', () => {
     const lib = src('../components/Library.svelte');
     expect(lib).not.toMatch(/\.info \{[^}]*tint/); expect(lib).not.toMatch(/\.card\.sel \.info/); expect(lib).not.toMatch(/color-mix\(in srgb, var\(--accent-fill\)/);
     expect(lib).toMatch(/\.info \{ background: var\(--ink-2\); \}/);
-    // drawn by the shared .frame ring (follows the notched corners), see notchGuard.test.ts
-    expect(lib).toMatch(/\.card\.sel \{ --frame: var\(--accent-fill\); \}/);
+    // Library: one click opens the instance, so the selection is not marked with the accent frame (cards nor list rows)
+    expect(lib).not.toMatch(/\.card\.sel \{[^}]*--frame/);
+    expect(lib).not.toMatch(/\.row\.sel \{[^}]*accent/);
+    // Home: drawn by the shared .frame ring (follows the notched corners), see notchGuard.test.ts
     expect(src('../components/MediaCard.svelte')).toMatch(/\.card\.sel \{ --frame: var\(--accent-fill\); \}/);
   });
   it('dialogs and popovers have no UA border in the text colour', () => {
