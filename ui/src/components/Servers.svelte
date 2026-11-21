@@ -1,33 +1,40 @@
 <script lang="ts">
+  // Servers: one angular row per server (favicon, name, address, players, ping, star, Partner badge). Add, edit, remove, star, sort and search live
+  // here; Join always opens the instance chooser unless the selected instance is known to fit (see requestJoin). The partner server is pinned first.
   import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import StarIcon from 'phosphor-svelte/lib/StarIcon';
-  import UsersIcon from 'phosphor-svelte/lib/UsersIcon';
+  import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
+  import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
+  import MagnifyingGlassIcon from 'phosphor-svelte/lib/MagnifyingGlassIcon';
   import SealCheckIcon from 'phosphor-svelte/lib/SealCheckIcon';
   import Tile from './Tile.svelte';
+  import InfoLine from './InfoLine.svelte';
   import Skeleton from './skeleton/Skeleton.svelte';
   import ServerCardSkeleton from './skeleton/ServerCardSkeleton.svelte';
+  import ServerForm from './ServerForm.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
   import { BusyGate, LOAD_TIMEOUT_MS } from '../lib/loadState.svelte';
   import LoadError from './LoadError.svelte';
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
-  import { stripMotd } from '../lib/format';
+  import { tip } from '../lib/tooltip';
   import { contextmenu } from '../lib/contextMenu.svelte';
   import { serverMenu } from '../lib/menus';
-  import { actions, app, applyPinged, errorText, getApi, isBusy, nav, selectedProfile, servers, t, toast } from '../lib/stores.svelte';
+  import { arrangeServers, SERVER_SORTS, serverFacts, type ServerSort } from '../lib/serverList';
+  import { actions, app, applyPinged, errorText, getApi, requestJoin, servers, setServerSort, t, toast } from '../lib/stores.svelte';
+  import type { Key } from '../lib/i18n';
   import type { ServerEntry } from '../lib/types';
 
-  let profileId = $state<string>('');
-  const prof = $derived(app.profiles.find((p) => p.id === profileId) ?? selectedProfile());
-  const sorted = $derived(
-    [...servers.list].sort((a, b) => Number(b.partner) - Number(a.partner) || Number(b.starred) - Number(a.starred)),
-  );
+  let query = $state('');
+  const shown = $derived(arrangeServers(servers.list, servers.status, servers.sort, query));
   $effect(() => { actions.loadServers(); });
   const gate = new BusyGate();
   $effect(() => { gate.update(!servers.loaded); return () => gate.destroy(); });
-  // statuses arrive one by one: the card shell (icon, name, address) stays, only the status area is a skeleton while the ping is pending
+  // statuses arrive one by one: the row shell (icon, name, address) stays, only the status area is a skeleton while the ping is pending
   const pingGate = new BusyGate();
-  const pendingAny = $derived(servers.loaded && sorted.some((s) => !servers.status[s.id]));
+  const pendingAny = $derived(servers.loaded && shown.some((s) => !servers.status[s.id]));
   let pingLate = $state(false);
   $effect(() => {
     pingGate.update(pendingAny);
@@ -36,80 +43,97 @@
     const h = setTimeout(() => { pingLate = true; }, LOAD_TIMEOUT_MS); // a ping that never answers ends in a message with Retry, not an endless skeleton
     return () => { clearTimeout(h); pingGate.destroy(); };
   });
-  $effect(() => { if (!profileId && selectedProfile()) profileId = selectedProfile()?.id ?? ''; });
+
+  let form = $state<{ server: ServerEntry | null } | null>(null);
+  let removing = $state<ServerEntry | null>(null);
+  let removeBusy = $state(false);
 
   async function pingOne(s: ServerEntry) {
     try { applyPinged(await getApi().serversPing({ address: s.address })); } catch (e) { toast(errorText(e), 'error'); }
   }
-  function join(s: ServerEntry) {
-    if (!prof) return;
-    actions.selectProfile(prof.id);
-    actions.play(prof.id, s.address);
-    nav.view = 'home';
+  async function star(s: ServerEntry) {
+    try { await actions.serverStar(s.id, !s.starred); } catch (e) { toast(errorText(e), 'error'); }
   }
+  async function confirmRemove() {
+    const s = removing;
+    if (!s) return;
+    removeBusy = true;
+    try { await actions.serverRemove(s.id); removing = null; } catch (e) { toast(errorText(e), 'error'); }
+    removeBusy = false;
+  }
+  const manage = { edit: (s: ServerEntry) => (form = { server: s }), star: (s: ServerEntry) => void star(s), remove: (s: ServerEntry) => (removing = s) };
 </script>
 
 <div class="sv">
   <header>
     <div><h1 class="display">{t('nav.servers')}</h1><div class="hint">{t('servers.hint')}</div></div>
     <div class="ctrl">
-      <label class="f"><span class="hint">{t('servers.joinWith')}</span>
-        <select class="field" bind:value={profileId}>{#each app.profiles as p (p.id)}<option value={p.id}>{p.name} ({p.mcVersion})</option>{/each}</select>
-      </label>
       <button class="btn" type="button" disabled={servers.pinging} onclick={() => actions.pingServers()}>
         <span class:spin={servers.pinging} class="ic"><ArrowsClockwiseIcon weight="bold" size={16} aria-hidden="true" /></span>{t('servers.refresh')}
       </button>
+      <button class="btn accent" type="button" onclick={() => (form = { server: null })}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('servers.add')}</button>
     </div>
   </header>
+
+  <div class="bar">
+    <label class="search"><MagnifyingGlassIcon weight="bold" size={16} aria-hidden="true" />
+      <input class="field" type="search" bind:value={query} placeholder={t('servers.search')} aria-label={t('servers.search')} autocomplete="off" spellcheck="false" />
+    </label>
+    <label class="sort"><span class="hint">{t('servers.sort')}</span>
+      <select class="field" value={servers.sort} onchange={(e) => setServerSort(e.currentTarget.value as ServerSort)}>
+        {#each SERVER_SORTS as k (k)}<option value={k}>{t(`servers.sort.${k}` as Key)}</option>{/each}
+      </select>
+    </label>
+  </div>
 
   {#if !app.accounts.length}<NoAccountHint />{/if}
   {#if pingLate}<LoadError compact error={{ code: 'net.timeout', message: '', needsRelogin: false }} onretry={() => actions.pingServers()} />{/if}
 
   {#if !servers.loaded}
     {#if gate.show}<ServerCardSkeleton count={6} />{/if}
-  {:else if sorted.length === 0}
+  {:else if servers.list.length === 0}
     <EmptyState title={t('servers.emptyTitle')} hint={t('servers.empty')}>
-      <button class="btn" type="button" onclick={() => actions.loadServers(true)}><ArrowsClockwiseIcon weight="bold" size={16} aria-hidden="true" />{t('servers.refresh')}</button>
+      <button class="btn accent" type="button" onclick={() => (form = { server: null })}><PlusIcon weight="bold" size={16} aria-hidden="true" />{t('servers.add')}</button>
     </EmptyState>
+  {:else if shown.length === 0}
+    <p class="hint">{t('servers.noMatch')}</p>
   {:else}
-    <ul class="grid">
-      {#each sorted as s (s.id)}
+    <ul class="list">
+      {#each shown as s (s.id)}
         {@const st = servers.status[s.id]}
         {@const icon = st?.iconUrl ?? s.iconUrl}
-        <li class="card nb" style:--n="12px" class:off={st && !st.online} use:contextmenu={() => serverMenu(s, { join, ping: pingOne, canJoin: !!prof && app.accounts.length > 0 })}>
+        {@const f = serverFacts(st, t)}
+        <li class="row nb" style:--n="12px" class:off={st && !st.online} use:contextmenu={() => serverMenu(s, { join: requestJoin, ping: pingOne, canJoin: app.accounts.length > 0, manage })}>
           <!-- icon: the stored favicon at once, the one a ping returns as soon as it arrives; the fallback only when there is no icon at all -->
           {#if !icon && !st && !pingLate}
-            <span class="slot">{#if pingGate.show}<Skeleton variant="box" w={64} h={64} radius={8} />{/if}</span>
+            <span class="slot">{#if pingGate.show}<Skeleton variant="box" w={56} h={56} radius={6} />{/if}</span>
           {:else}
-            <Tile kind="server" id={s.id} src={icon} size={64} radius={8} />
+            <Tile kind="server" id={s.id} src={icon} size={56} radius={6} />
           {/if}
           <div class="info">
             <div class="l1">
               <b class="nm">{s.name}</b>
-              {#if s.starred}<span class="star" title={t('servers.starred')}><StarIcon weight="fill" size={14} aria-hidden="true" /><span class="sr-only">{t('servers.starred')}</span></span>{/if}
               {#if s.partner}<span class="tag"><SealCheckIcon weight="bold" size={12} aria-hidden="true" />{t('servers.partner')}</span>{/if}
             </div>
             <div class="addr mono">{s.address}</div>
-            {#if !st && pingLate}
-              <div class="motd"><span class="hint">{t('load.timeout')}</span></div>
-              <div class="stat mono"><span class="dot unk" aria-hidden="true"></span><span>&hellip;</span></div>
-            {:else if !st && pingGate.show}
-              <ServerCardSkeleton status />
-            {:else if !st}
-              <div class="motd">&nbsp;</div><div class="stat mono"><span>&nbsp;</span></div>
+          </div>
+          <div class="stats mono">
+            {#if !st && pingLate}<span class="hint">{t('load.timeout')}</span>
+            {:else if !st && pingGate.show}<Skeleton variant="bar" lh={20} h={12} w={150} />
+            {:else if st}<InfoLine facts={f.stats} />{/if}
+          </div>
+          <div class="acts">
+            {#if s.partner}
+              <span class="star pinned" use:tip={{ text: t('servers.pinned'), side: 'top' }} role="img" aria-label={t('servers.pinned')}><StarIcon weight="fill" size={16} aria-hidden="true" /></span>
             {:else}
-              <div class="motd">{#if !st}<span class="hint">{t('servers.pinging')}</span>{:else if st.online}{stripMotd(st.motd) || ' '}{:else}&nbsp;{/if}</div>
-              <div class="stat mono">
-                <span class="dot" class:on={st?.online} class:unk={!st} aria-hidden="true"></span>
-                {#if st?.online}
-                  <span>{st.ping} ms</span>
-                  {#if st.players}<span><UsersIcon weight="bold" size={13} aria-hidden="true" /> {st.players.online}/{st.players.max}</span>{/if}
-                  {#if st.version}<span class="ver">{st.version}</span>{/if}
-                {:else if st}<span>{t('servers.offline')}</span>{:else}<span>&hellip;</span>{/if}
-              </div>
+              <button class="ib" class:on={s.starred} type="button" aria-pressed={s.starred} aria-label={s.starred ? t('servers.unstar') : t('servers.star')} use:tip={{ text: s.starred ? t('servers.unstar') : t('servers.star'), side: 'top' }} onclick={() => star(s)}>
+                <StarIcon weight={s.starred ? 'fill' : 'bold'} size={16} aria-hidden="true" />
+              </button>
+              <button class="ib hov" type="button" aria-label={t('servers.edit')} use:tip={{ text: t('servers.edit'), side: 'top' }} onclick={() => (form = { server: s })}><PencilSimpleIcon weight="bold" size={16} aria-hidden="true" /></button>
+              <button class="ib hov" type="button" aria-label={t('servers.remove')} use:tip={{ text: t('servers.remove'), side: 'top' }} onclick={() => (removing = s)}><TrashIcon weight="bold" size={16} aria-hidden="true" /></button>
             {/if}
           </div>
-          <button class="btn accent join" type="button" disabled={!prof || (prof ? isBusy(prof.id) : true) || !app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : prof && isBusy(prof.id) ? t('servers.busy') : ''} onclick={() => join(s)}>
+          <button class="btn accent join" type="button" disabled={!app.accounts.length} title={!app.accounts.length ? t('play.noAccount') : ''} onclick={() => requestJoin(s)}>
             <PlayIcon weight="bold" size={14} aria-hidden="true" />{t('servers.join')}
           </button>
         </li>
@@ -118,30 +142,39 @@
   {/if}
 </div>
 
+{#if form}<ServerForm server={form.server} onclose={() => (form = null)} />{/if}
+{#if removing}
+  <ConfirmDialog danger busy={removeBusy} title={t('servers.removeTitle', { name: removing.name })} body={t('servers.removeBody')} confirmLabel={t('servers.remove')} onconfirm={confirmRemove} oncancel={() => (removing = null)} />
+{/if}
+
 <style>
   .sv { height: 100%; overflow: auto; padding: var(--s-5) 32px 32px; display: flex; flex-direction: column; gap: var(--s-4); }
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   h1 { font-size: var(--fs-3xl); }
   .ctrl { display: flex; gap: 10px; align-items: flex-end; }
-  .f { display: grid; gap: 2px; font-size: 12px; }
-  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }
-  .card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px; }
-  .card.off { opacity: 0.72; }
+  .bar { display: flex; gap: var(--s-3); align-items: flex-end; flex-wrap: wrap; }
+  .search { position: relative; flex: 1; min-width: 220px; display: block; }
+  .search :global(svg) { position: absolute; left: 12px; top: 10px; color: var(--paper-mute); pointer-events: none; }
+  .search .field { width: 100%; padding-left: 36px; }
+  .sort { display: grid; gap: 2px; font-size: 12px; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(150px, auto) auto auto; gap: 16px; align-items: center; padding: 12px 14px; }
+  .row.off { opacity: 0.72; }
   .info { min-width: 0; display: grid; gap: 2px; }
   .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .nm { font: 700 17px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .star { color: var(--mango); display: inline-flex; }
+  .nm { font: 700 17px/1.25 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 1px 7px; background: rgba(255, 173, 50, 0.14); color: var(--mango); white-space: nowrap; }
-  .addr { font-size: 12.5px; color: var(--paper-mute); }
-  .motd { font-size: 13.5px; color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.45em; }
-  .stat { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: 12.5px; color: var(--paper-dim); }
-  .stat span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-  .ver { color: var(--paper-mute); }
-  .dot { width: 8px; height: 8px; background: var(--tomato); }
-  .dot.on { background: var(--leaf); }
-  .dot.unk { background: var(--paper-mute); }
+  .addr { font-size: 12.5px; color: var(--paper-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats { font-size: 12.5px; color: var(--paper-dim); min-width: 0; }
+  .acts { display: flex; align-items: center; gap: 2px; }
+  .ib, .star { width: 32px; height: 32px; display: grid; place-items: center; color: var(--paper-mute); }
+  .ib:hover { color: var(--paper); background: var(--ink-3); }
+  .ib.on, .star.pinned { color: var(--mango); }
+  .ib.hov { opacity: 0; transition: opacity var(--dur) var(--ease); }
+  .row:hover .ib.hov, .row:focus-within .ib.hov { opacity: 1; }
   .ic { display: inline-flex; }
-  .slot { display: block; width: 64px; height: 64px; }
+  .slot { display: block; width: 56px; height: 56px; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 1100px) { .row { grid-template-columns: 56px minmax(0, 1fr) auto auto; } .stats { display: none; } }
 </style>

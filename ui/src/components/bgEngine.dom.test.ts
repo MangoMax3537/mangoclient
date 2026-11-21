@@ -30,8 +30,8 @@ describe('background engine', () => {
     const app = mount(Harness, { target });
     flushSync();
     await vi.advanceTimersByTimeAsync(50);
-    const h1 = target.querySelector('h1')!, info = target.querySelector('.facts')!, content = target.querySelector('.content')!;
-    expect(h1).toBeTruthy(); expect(info.textContent).toMatch(/\//);
+    const h1 = target.querySelector('h1')!, info = target.querySelector('.hero [data-info-line]')!, content = target.querySelector('.content')!;
+    expect(h1).toBeTruthy(); expect(info.textContent).toMatch(/\d+\.\d+/); expect(info.querySelectorAll('svg').length).toBeGreaterThanOrEqual(3);
     // the engine layer sits in its own stacking context, content above it
     expect(target.querySelector('[data-bg-engine]')).toBeTruthy();
     expect(target.querySelector('[data-bg-engine]')?.contains(h1)).toBe(false);
@@ -44,7 +44,7 @@ describe('background engine', () => {
       if (cur !== last) { last = cur; swaps++; seen.add(cur); }
       // same DOM nodes, still in the document, never hidden
       expect(target.querySelector('h1')).toBe(h1);
-      expect(target.querySelector('.facts')).toBe(info);
+      expect(target.querySelector('.hero [data-info-line]')).toBe(info);
       expect(target.querySelector('.content')).toBe(content);
       expect(h1.isConnected && info.isConnected).toBe(true);
       expect(h1.textContent).toBeTruthy();

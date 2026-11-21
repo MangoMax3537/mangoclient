@@ -11,6 +11,7 @@ import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
 import GlobeIcon from 'phosphor-svelte/lib/GlobeIcon';
 import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
 import PowerIcon from 'phosphor-svelte/lib/PowerIcon';
+import StarIcon from 'phosphor-svelte/lib/StarIcon';
 import SignInIcon from 'phosphor-svelte/lib/SignInIcon';
 import TrashIcon from 'phosphor-svelte/lib/TrashIcon';
 import UserSwitchIcon from 'phosphor-svelte/lib/UserSwitchIcon';
@@ -69,13 +70,25 @@ export function backupMenu(b: Backup, o: BackupMenuOps): MenuItem[] {
 }
 
 /* ---- servers ---- */
-export interface ServerMenuOps { join: (s: ServerEntry) => void; ping: (s: ServerEntry) => void; canJoin: boolean }
+export interface ServerMenuOps {
+  join: (s: ServerEntry) => void; ping: (s: ServerEntry) => void; canJoin: boolean;
+  /** Only in the Servers view: edit, star and remove (partners offer none of them). */
+  manage?: { edit: (s: ServerEntry) => void; star: (s: ServerEntry) => void; remove: (s: ServerEntry) => void };
+}
 export function serverMenu(s: ServerEntry, o: ServerMenuOps): MenuItem[] {
-  return [
+  const items: MenuItem[] = [
     { id: 'join', label: t('servers.join'), icon: SignInIcon, disabled: !o.canJoin, reason: t('play.noAccount'), run: () => o.join(s) },
     { id: 'copy', label: t('menu.copyAddress'), icon: CopyIcon, run: () => void copyText(s.address) },
     { id: 'ping', label: t('menu.pingNow'), icon: ArrowsClockwiseIcon, run: () => o.ping(s) },
   ];
+  if (o.manage && !s.partner) {
+    const m = o.manage;
+    items.push(SEP,
+      { id: 'star', label: s.starred ? t('servers.unstar') : t('servers.star'), icon: StarIcon, run: () => m.star(s) },
+      { id: 'edit', label: t('servers.edit'), icon: PencilSimpleIcon, run: () => m.edit(s) },
+      { id: 'remove', label: t('servers.remove'), icon: TrashIcon, danger: true, run: () => m.remove(s) });
+  }
+  return items;
 }
 
 /* ---- skins ---- */

@@ -51,7 +51,7 @@ describe('notched elements', () => {
     expect(bad).toEqual([]);
   });
   it('a selection frame on a card is drawn with --frame, not a pseudo-element border', () => {
-    for (const f of ['components/Library.svelte', 'components/Home.svelte']) {
+    for (const f of ['components/Library.svelte', 'components/MediaCard.svelte']) {
       const src = readFileSync(join(root, f), 'utf8');
       expect(src).toMatch(/class="card notch frame"/);
       expect(src).not.toMatch(/\.sel::after[^}]*border/);

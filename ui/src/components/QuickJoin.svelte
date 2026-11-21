@@ -1,16 +1,21 @@
 <script lang="ts">
-  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  // Home "Quick join": the same cards, size and strip as the instances above. Card = the server's real favicon, name, supported versions,
+  // players and ping (facts only). Click: the selected instance starts and joins when it fits, otherwise the instance chooser opens.
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
+  import MediaCard from './MediaCard.svelte';
+  import MediaStrip from './MediaStrip.svelte';
+  import InfoLine from './InfoLine.svelte';
   import Tile from './Tile.svelte';
-  import ListRowSkeleton from './skeleton/ListRowSkeleton.svelte';
+  import Skeleton from './skeleton/Skeleton.svelte';
+  import JumpBackSkeleton from './skeleton/JumpBackSkeleton.svelte';
   import { BusyGate } from '../lib/loadState.svelte';
-  import { tip } from '../lib/tooltip';
-  import { actions, app, isBusy, nav, selectedProfile, servers, t } from '../lib/stores.svelte';
+  import { arrangeServers, serverFacts } from '../lib/serverList';
+  import { contextmenu } from '../lib/contextMenu.svelte';
+  import { serverMenu } from '../lib/menus';
+  import { actions, app, requestJoin, servers, t } from '../lib/stores.svelte';
+  import { nav } from '../lib/stores.svelte';
 
-  const top = $derived(
-    [...servers.list].sort((a, b) => Number(b.partner) - Number(a.partner) || Number(b.starred) - Number(a.starred)).slice(0, 4),
-  );
-  const prof = $derived(selectedProfile());
+  const top = $derived(arrangeServers(servers.list, servers.status, 'manual').slice(0, 10));
   $effect(() => { actions.loadServers(); });
   const gate = new BusyGate();
   $effect(() => { gate.update(!servers.loaded); return () => gate.destroy(); });
@@ -23,40 +28,31 @@
     <button class="btn text" type="button" onclick={() => (nav.view = 'servers')}>{t('nav.servers')}<ArrowRightIcon weight="bold" size={14} aria-hidden="true" /></button>
   </header>
   {#if !servers.loaded}
-    {#if gate.show}<ListRowSkeleton count={4} img={32} rowHeight={50} padding="0" gap={12} bars={[{ w: '36%', h: 13 }, { w: '22%', h: 10 }]} tail={32} />{/if}
+    {#if gate.show}<JumpBackSkeleton count={5} />{/if}
   {:else}
-    <ul>
+    <MediaStrip label={t('servers.quickJoin')}>
       {#each top as s (s.id)}
         {@const st = servers.status[s.id]}
-        {@const disabled = !prof || isBusy(prof.id) || !app.accounts.length}
-        <li>
-          {#if !(st?.iconUrl ?? s.iconUrl) && !st}<span class="slot"></span>{:else}<Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} size={32} notch={6} />{/if}
-          <div class="i">
-            <b>{s.name}</b>
-            <span class="m"><span class="sq" class:ok={st?.online} class:bad={st && !st.online} aria-hidden="true"></span>
-              <span class="mono">{#if st?.online}<span class="ping">{st.ping}</span> ms{#if st.players}<span class="sep">/</span>{st.players.online}{/if}{:else if st}{t('servers.offline')}{:else}&hellip;{/if}</span></span>
-          </div>
-          <button class="btn ghost ic" type="button" {disabled} use:tip={{ text: `${t('servers.join')}: ${s.name}`, side: 'top' }} aria-label="{t('servers.join')}: {s.name}"
-            onclick={() => { if (prof) { actions.play(prof.id, s.address); } }}><PlayIcon weight="bold" size={16} aria-hidden="true" /></button>
+        {@const f = serverFacts(st, t)}
+        <li use:contextmenu={() => serverMenu(s, { join: requestJoin, ping: () => actions.pingServers(), canJoin: app.accounts.length > 0 })}>
+          <MediaCard title={s.name} dimmed={!!st && !st.online} onclick={() => requestJoin(s)} ariaLabel="{t('servers.join')}: {s.name}">
+            {#snippet art()}
+              {#if !(st?.iconUrl ?? s.iconUrl) && !st}<Skeleton variant="box" w="100%" h="100%" radius={0} />{:else}<Tile kind="server" id={s.id} src={st?.iconUrl ?? s.iconUrl} fill radius={0} />{/if}
+            {/snippet}
+            {#snippet lines()}
+              <InfoLine facts={f.version} />
+              {#if st}<InfoLine facts={f.stats} />{:else}<Skeleton variant="bar" lh={20} h={11} w="55%" />{/if}
+            {/snippet}
+          </MediaCard>
         </li>
       {/each}
-    </ul>
+    </MediaStrip>
   {/if}
 </section>
 {/if}
 
 <style>
-  .slot { display: block; width: 32px; height: 32px; flex: none; }
   .qj { min-width: 0; }
-  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-2); }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-3); }
   h2 { font-size: var(--fs-xl); }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line-soft); }
-  li:last-child { border-bottom: 1px solid var(--line-soft); }
-  .i { display: grid; min-width: 0; line-height: 1.3; }
-  .i b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .m { font-size: var(--fs-sm); color: var(--paper-dim); display: inline-flex; align-items: center; gap: 8px; }
-  .ping { color: var(--paper); font-weight: 500; }
-  .sep { margin: 0 6px; opacity: 0.45; }
-  .ic { width: 32px; height: 32px; padding: 0; }
 </style>

@@ -1,6 +1,5 @@
 <script lang="ts">
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
-  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
   import SlidersIcon from 'phosphor-svelte/lib/SlidersIcon';
   import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
@@ -11,11 +10,14 @@
   import Console from './Console.svelte';
   import ProfileMenu from './ProfileMenu.svelte';
   import QuickJoin from './QuickJoin.svelte';
+  import MediaCard from './MediaCard.svelte';
+  import MediaStrip from './MediaStrip.svelte';
+  import InfoLine from './InfoLine.svelte';
   import Spark from './Spark.svelte';
   import EmptyState from './EmptyState.svelte';
   import NoAccountHint from './NoAccountHint.svelte';
   import { fmtDuration } from '../lib/format';
-  import { heroLine, lastPlayedText, versionLoader } from '../lib/infoLine';
+  import { heroFacts, playedFact, versionLoaderFacts } from '../lib/infoLine';
   import type { Key } from '../lib/i18n';
   import { tip } from '../lib/tooltip';
   import { cardHandlers } from '../lib/instanceCard';
@@ -75,7 +77,7 @@
           </div>
         {/if}
         <h1 id="hero-h" class="display">{p.name}</h1>
-        <p class="facts info mono">{heroLine(p, lang(), t)}</p>
+        <p class="info mono"><InfoLine facts={heroFacts(p, lang(), t)} size={15} /></p>
           </div>
         </div>
         <div class="actions">
@@ -101,27 +103,26 @@
           <h2 id="jb-h">{t('home.jumpBack')}</h2>
           <button class="btn text" type="button" onclick={() => (nav.view = 'library')}>{t('home.continue')}<ArrowRightIcon weight="bold" size={14} aria-hidden="true" /></button>
         </header>
-        <ul class="strip">
+        <MediaStrip label={t('home.jumpBack')}>
           {#each others as o (o.id)}
             {@const ob = isBusy(o.id)}
-            <li class="card notch frame" class:sel={o.id === p.id} class:live={ob} style:--n="14px" use:contextmenu={() => instanceMenu(o)}>
-              <button class="open" type="button" aria-pressed={o.id === p.id} {...cardHandlers(o.id, ops)}>
-                <span class="art"><InstanceIcon profile={o} fill radius={0} /></span>
-                <span class="nm">{o.name}</span>
-                <span class="meta mono">{versionLoader(o, t)}</span>
-                <span class="meta mono dim">{lastPlayedText(o, lang(), t)}</span>
-              </button>
-              <button class="go notch" style:--n="8px" type="button" disabled={ob || !app.accounts.length} use:tip={{ text: `${t('home.play')}: ${o.name}`, side: 'top' }} aria-label="{t('home.play')}: {o.name}"
-                onclick={async () => { await actions.selectProfile(o.id); actions.play(o.id); }}>
-                <PlayIcon weight="bold" size={16} aria-hidden="true" />
-              </button>
+            <li use:contextmenu={() => instanceMenu(o)}>
+              <MediaCard title={o.name} selected={o.id === p.id} live={ob} pressed={o.id === p.id} handlers={cardHandlers(o.id, ops)}
+                go={{ label: `${t('home.play')}: ${o.name}`, disabled: ob || !app.accounts.length, onclick: async () => { await actions.selectProfile(o.id); actions.play(o.id); } }}>
+                {#snippet art()}<InstanceIcon profile={o} fill radius={0} />{/snippet}
+                {#snippet lines()}
+                  <InfoLine facts={versionLoaderFacts(o, t)} />
+                  <InfoLine facts={[playedFact(o, lang(), t, Date.now(), true)]} />
+                {/snippet}
+              </MediaCard>
             </li>
           {/each}
-        </ul>
+        </MediaStrip>
       </section>
 
+      <QuickJoin />
+
       <div class="split">
-        <QuickJoin />
         {#if stats.phase !== 'ready' || (stats.data?.totalMs ?? 0) > 0}
         <section class="pt" aria-labelledby="pt-h">
           <header><h2 id="pt-h">{t('home.last14')}</h2></header>
@@ -166,11 +167,10 @@
   .pen { position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); opacity: 0; transform: translateY(3px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
   .iconbtn:hover .pen, .iconbtn:focus-visible .pen { opacity: 1; transform: none; }
   .bgbtn { position: absolute; right: 16px; top: 14px; width: 36px; padding: 0; background: rgba(var(--scrim), 0.55); border-color: var(--hero-line); color: var(--paper); z-index: 2; }
-  .sep { margin: 0 8px; opacity: 0.5; }
   .live-t { color: var(--leaf); }
   .live { animation: pulse 1.6s ease-in-out infinite; }
   h1 { font-size: var(--fs-hero); max-width: 14ch; text-wrap: balance; color: var(--paper); }
-  .facts { margin: 0; color: var(--paper-dim); font-size: var(--fs-md); }
+  .info { margin: 0; color: var(--paper-dim); font-size: var(--fs-md); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 6px; }
   .total { position: absolute; right: 40px; bottom: 44px; display: grid; justify-items: end; gap: 4px; }
   .total .n { font-size: var(--fs-2xl); color: var(--paper); letter-spacing: -0.02em; font-feature-settings: 'tnum'; }
@@ -179,21 +179,6 @@
   .body { flex: 1; background: var(--ink-0); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); padding: var(--s-5) 32px 32px 44px; }
   header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-3); }
   h2 { font-size: var(--fs-xl); }
-  .strip { list-style: none; margin: 0 -32px 0 -4px; padding: 4px 32px 8px 4px; display: flex; gap: var(--s-3); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
-  .card { position: relative; flex: none; width: 212px; scroll-snap-align: start; background: var(--ink-2); transition: transform var(--dur) var(--ease); }
-  .card:hover { transform: translateY(-2px); }
-  .card.sel { --frame: var(--accent-fill); }
-  .open { display: grid; width: 100%; text-align: left; gap: 2px; padding-bottom: 12px; }
-  .open:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
-  .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }
-  .nm { font: 700 var(--fs-lg)/1.2 var(--font-display); padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { padding: 0 12px; font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .meta.dim { color: var(--paper-mute); }
-  .card.live .nm::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 8px; background: var(--leaf); animation: pulse 1.6s ease-in-out infinite; }
-  .go { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-fill); opacity: 0; transform: translateY(-4px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); z-index: 2; }
-  .card:hover .go, .go:focus-visible, .card:focus-within .go { opacity: 1; transform: none; }
-  .go:disabled { display: none; }
-
   .split:empty { display: none; }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-7); align-items: start; }
   .pt { min-width: 0; display: grid; gap: var(--s-2); }

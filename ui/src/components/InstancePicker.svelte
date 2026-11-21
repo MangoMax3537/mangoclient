@@ -5,6 +5,8 @@
   import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
   import Modal from './Modal.svelte';
   import Tile from './Tile.svelte';
+  import InfoLine from './InfoLine.svelte';
+  import { versionLoaderFacts } from '../lib/infoLine';
   import InstanceIcon from './InstanceIcon.svelte';
   import LoadError from './LoadError.svelte';
   import DialogBodySkeleton from './skeleton/DialogBodySkeleton.svelte';
@@ -86,7 +88,7 @@
           <InstanceIcon profile={r.profile} size={44} notch={8} />
           <span class="who">
             <b class="nm">{r.profile.name}</b>
-            <span class="mono facts2">{r.profile.mcVersion}<span class="sep">/</span>{r.profile.loader === 'vanilla' ? t('profile.vanilla') : r.profile.loader}</span>
+            <span class="mono facts2"><InfoLine facts={versionLoaderFacts(r.profile, t)} /></span>
           </span>
           {#if r.selectable}
             <span class="state"><span class="box" aria-hidden="true">{#if on}<CheckIcon weight="bold" size={14} />{/if}</span>
@@ -130,7 +132,6 @@
   .who { display: grid; gap: 1px; min-width: 0; }
   .nm { font: 700 var(--fs-lg) var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .facts2 { font-size: var(--fs-sm); color: var(--paper-dim); }
-  .sep { margin: 0 6px; opacity: 0.5; }
   .state { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; text-align: right; }
   .why { max-width: 250px; font-size: var(--fs-sm); color: var(--paper-dim); gap: 6px; }
   .inst .why { color: var(--leaf); }

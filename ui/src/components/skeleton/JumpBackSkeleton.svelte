@@ -18,7 +18,7 @@
 
 <style>
   .strip { list-style: none; margin: 0 -32px 0 -4px; padding: 4px 32px 18px 4px; display: flex; gap: var(--s-3); overflow: hidden; }
-  .card { flex: none; width: 212px; background: var(--ink-2); display: grid; gap: 2px; padding-bottom: 12px; }
+  .card { flex: none; width: 212px; background: var(--ink-2); display: grid; gap: 2px; padding-bottom: 18px; }
   .art { display: block; aspect-ratio: 16 / 10; margin-bottom: 10px; }
-  .t { display: grid; gap: 2px; padding: 0 12px; }
+  .t { display: grid; gap: 2px; padding: 0 16px 0 14px; }
 </style>

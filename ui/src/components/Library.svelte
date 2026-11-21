@@ -14,7 +14,8 @@
   import FoldersIcon from 'phosphor-svelte/lib/FoldersIcon';
   import { tip } from '../lib/tooltip';
   import { fmtDuration, fmtShortDate } from '../lib/format';
-  import { lastPlayedText, versionLoader } from '../lib/infoLine';
+  import { playedFact, versionLoaderFacts } from '../lib/infoLine';
+  import InfoLine from './InfoLine.svelte';
   import { filterProfiles, groupSections, knownTags } from '../lib/portability';
   import { writeLibraryLayout } from '../lib/layoutHint';
   import { pickAndImport } from '../lib/portability.svelte';
@@ -150,8 +151,8 @@
       <span class="cover"><InstanceIcon profile={p} fill radius={0} /></span>
       <span class="info">
         <b>{p.name}</b>
-        <span class="mono sub">{versionLoader(p, t)}</span>
-        <span class="mono sub dim">{lastPlayedText(p, lang(), t)}</span>
+        <span class="mono sub"><InfoLine facts={versionLoaderFacts(p, t)} /></span>
+        <span class="mono sub"><InfoLine facts={[playedFact(p, lang(), t, Date.now(), true)]} /></span>
         {@render tagChips(p, 3)}
       </span>
     </button>
@@ -215,11 +216,10 @@
   .card.sel { --frame: var(--accent-fill); }
   .card:hover .info b { color: var(--mango); }
   .cover { position: relative; display: block; aspect-ratio: 16 / 10; }
-  .info { display: grid; align-content: start; gap: 2px; padding: 12px 14px 14px; min-width: 0; }
+  .info { display: grid; align-content: start; gap: 2px; padding: 12px 18px 20px 14px; min-width: 0; }
   .info b { font: 700 var(--fs-xl)/1.15 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--dur) var(--ease); }
-  .sub { font-size: var(--fs-sm); color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { display: block; line-height: 1.4; padding-block: 1px; font-size: var(--fs-sm); color: var(--paper-dim); min-width: 0; }
   .dim { color: var(--paper-mute); }
-  .sep { margin: 0 6px; opacity: 0.5; }
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 64px 76px 124px 120px; gap: var(--s-3); align-items: center; width: 100%; padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); }
   button.row { transition: background var(--dur) var(--ease); }
   button.row:hover { background: var(--ink-2); }

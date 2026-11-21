@@ -5,6 +5,7 @@ import { INITIAL_WIN, type WinState } from './titlebar';
 import { currentPlatform, type Platform } from './platform';
 import { classifyLoginError, isAllowedExternalUrl, type LoginErrorInfo } from './auth';
 import { runSteps, type RunStep } from './install';
+import { SERVER_SORTS, joinPlan, type ServerSort } from './serverList';
 import { listenDropped } from './drop';
 import { DEFAULT_LANG, hasKey, plural, translate, type Key, type Lang, type PluralKey, type Vars } from './i18n';
 import type {
@@ -242,7 +243,16 @@ export const keystoreMissing = (): boolean => app.accounts.some((a) => a.credent
 export const accountNeedsLogin = (a: PublicAccount): boolean => a.type === 'microsoft' && (a.needsRelogin || a.expired);
 
 /* ---- part 2 state ---- */
-export const servers = $state({ list: [] as ServerEntry[], status: {} as Record<string, ServerStatus>, loaded: false, pinging: false });
+const SORT_KEY = 'mango-server-sort';
+function readServerSort(): ServerSort {
+  try { const v = globalThis.localStorage?.getItem(SORT_KEY); return (SERVER_SORTS as readonly (string | null | undefined)[]).includes(v) ? (v as ServerSort) : 'manual'; } catch { return 'manual'; }
+}
+/** `join`: the server whose "choose an instance" dialog is open. */
+export const servers = $state({ list: [] as ServerEntry[], status: {} as Record<string, ServerStatus>, loaded: false, pinging: false, sort: readServerSort(), join: null as ServerEntry | null });
+export function setServerSort(s: ServerSort): void {
+  servers.sort = s;
+  try { globalThis.localStorage?.setItem(SORT_KEY, s); } catch { /* ignore */ }
+}
 /** Running installs keyed by projectId (modpacks have no profile yet, so projectId is the only stable key). */
 export const installs = $state<Record<string, InstallProgressEvent>>({});
 /** Bumped when a profile's content folder changed on disk; content views watch it. */
@@ -262,6 +272,24 @@ export function errorText(e: unknown): string {
   // exact code, then its family (net.request -> err.net)
   for (const key of [`err.${code}`, `err.${code.split('.')[0]}`]) if (hasKey(lang(), key)) return translate(lang(), key);
   return translate(lang(), 'err.unknown');
+}
+
+/**
+ * Join a server. The selected instance starts straight away when the server's version range says it fits; otherwise (does not fit, version
+ * unknown, instance already running) the "choose an instance" dialog opens. Without an account nothing can start.
+ */
+export function requestJoin(s: ServerEntry): void {
+  if (!app.accounts.length) { toast(translate(lang(), 'play.noAccount'), 'error'); return; }
+  const plan = joinPlan(app.profiles, servers.status[s.id], selectedProfile()?.id ?? null, isBusy);
+  if (plan.kind === 'direct') void launchJoin(plan.profileId, s);
+  else servers.join = s;
+}
+/** Start `profileId` and quick-join `s` (the chosen or the selected instance), then show Home with the launch progress. */
+export async function launchJoin(profileId: string, s: ServerEntry): Promise<void> {
+  servers.join = null;
+  nav.view = 'home';
+  await actions.selectProfile(profileId);
+  void actions.play(profileId, s.address);
 }
 
 export const selectedProfile = (): ProfileView | null =>
@@ -436,7 +464,7 @@ export function resetStores(): void {
   blocks.status = null; blocks.requested = false; panoramaAsked.clear(); panoramaPool.sets = []; panoramaPool.loaded = false;
   for (const k of Object.keys(skinRev)) delete skinRev[k];
   for (const k of Object.keys(panoramas)) delete panoramas[k];
-  toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false;
+  toasts.length = 0; servers.list = []; servers.status = {}; servers.loaded = false; servers.pinging = false; servers.join = null;
   for (const k of Object.keys(installs)) delete installs[k];
   for (const k of Object.keys(contentRev)) delete contentRev[k];
   runs.length = 0; flow.req = null;
@@ -602,6 +630,11 @@ export const actions = {
     await guard(() => currentApi.serversPingAll());
     setTimeout(() => { servers.pinging = false; }, 2500);
   },
+  /** Add / edit / star / remove return the whole list; added servers are pinged at once. Errors are thrown to the dialog or button that asked. */
+  async serverAdd(name: string, address: string) { servers.list = await currentApi.serversAdd({ name, address }); void actions.pingServers(); },
+  async serverUpdate(id: string, name: string, address?: string) { servers.list = await currentApi.serversUpdate({ id, name, ...(address !== undefined ? { address } : {}) }); void actions.pingServers(); },
+  async serverRemove(id: string) { servers.list = await currentApi.serversRemove({ id }); delete servers.status[id]; },
+  async serverStar(id: string, starred: boolean) { servers.list = await currentApi.serversStar({ id, starred }); },
   async updateCheck() {
     const u = await guard(() => currentApi.updateCheck());
     if (u) updates.status = u;

@@ -17,7 +17,8 @@
   import { enter } from '../lib/motion';
   import { rememberScroll } from '../lib/scrollMemory';
   import NoAccountHint from './NoAccountHint.svelte';
-  import { heroLine } from '../lib/infoLine';
+  import { heroFacts } from '../lib/infoLine';
+  import InfoLine from './InfoLine.svelte';
   import type { Key } from '../lib/i18n';
   import { untrack } from 'svelte';
   import { createLoadState } from '../lib/loadState.svelte';
@@ -124,7 +125,7 @@
             {:else}
               <h1 title={t('rename.hint')} ondblclick={() => (ui.renameInline = p.id)}>{p.name}</h1>
             {/if}
-            <p class="info mono" aria-label={p.name}>{heroLine(p, lang(), t)}</p>
+            <p class="info mono"><InfoLine facts={heroFacts(p, lang(), t)} size={15} /></p>
           </div>
           <div class="playcol">
             <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />

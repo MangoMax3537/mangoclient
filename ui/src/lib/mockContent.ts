@@ -18,12 +18,14 @@ export interface MockCtx {
   addProfile: (p: ProfileView) => void;
   find: (id: string) => ProfileView;
   gameActive: () => boolean;
+  /** `?mockServers=`: renders the empty, all-offline and unknown-version states of the servers views. */
+  serversMode?: 'none' | 'offline' | 'unknown';
 }
 
 export type Part2 = Pick<Api,
   'contentList' | 'contentToggle' | 'contentUninstall' | 'contentCheckUpdates' | 'contentOpenFolder' | 'searchProjects'
   | 'projectDetail' | 'projectVersions' | 'installTargets' | 'installPlan' | 'installApply' | 'modpackPlan' | 'modpackInstall'
-  | 'serversList' | 'serversPingAll' | 'serversPing' | 'screenshotsList'
+  | 'serversList' | 'serversPingAll' | 'serversPing' | 'serversAdd' | 'serversUpdate' | 'serversRemove' | 'serversStar' | 'screenshotsList'
   | 'screenshotAction' | 'logsList' | 'logsRead' | 'logsUpload' | 'logsDelete' | 'statsSummary' | 'storageUsage' | 'storageClear'
   | 'updateStatus' | 'updateCheck' | 'updateInstall'>;
 
@@ -48,21 +50,26 @@ function toHit(projectId: string, now: number): ProjectHit {
   };
 }
 
+/** Seed servers. The statuses mirror what Rust derives from a ping (`versionRange` from the version name, see mango_servers::version). */
 const SERVERS: ServerEntry[] = [
-  { id: 'srv-mango', name: 'MangoMC Network', address: 'play.mangomc.example', partner: true, starred: true, iconUrl: null },
-  { id: 'srv-bedwars', name: 'Bedwars Arena', address: 'bw.arena.example', partner: true, starred: false, iconUrl: null },
-  { id: 'srv-hollow', name: 'Iron Hollow SMP', address: 'smp.ironhollow.example:25570', partner: false, starred: true, iconUrl: brandIcon(128) },
-  { id: 'srv-skyblock', name: 'Skyblock Realms', address: 'sky.realms.example', partner: false, starred: false, iconUrl: null },
-  { id: 'srv-creative', name: 'Creative Plots', address: 'plots.example.net', partner: false, starred: false, iconUrl: null },
-  { id: 'srv-old', name: 'Old Survival 1.8', address: '192.168.1.40', partner: false, starred: false, iconUrl: null },
+  { id: 'vincentvanilla', name: 'VincentVanilla', address: 'vincentvanilla.net', partner: true, starred: true, custom: false, iconUrl: null },
+  { id: 'user:bw.arena.example', name: 'Bedwars Arena', address: 'bw.arena.example', partner: false, starred: false, custom: false, iconUrl: null },
+  { id: 'user:smp.ironhollow.example:25570', name: 'Iron Hollow SMP', address: 'smp.ironhollow.example:25570', partner: false, starred: true, custom: false, iconUrl: brandIcon(128) },
+  { id: 'user:sky.realms.example', name: 'Skyblock Realms', address: 'sky.realms.example', partner: false, starred: false, custom: false, iconUrl: null },
+  { id: 'user:plots.example.net', name: 'Creative Plots', address: 'plots.example.net', partner: false, starred: false, custom: true, iconUrl: null },
+  { id: 'user:192.168.1.40', name: 'Old Survival 1.8', address: '192.168.1.40', partner: false, starred: false, custom: true, iconUrl: null },
+  { id: 'user:modern.example.net', name: 'Modern Realm', address: 'modern.example.net', partner: false, starred: false, custom: true, iconUrl: null },
 ];
+const OFF = { online: false, ping: null, motd: '', players: null, version: null, versionRange: null, iconUrl: null } as const;
 const STATUS: Record<string, ServerStatus> = {
-  'srv-mango': { id: 'srv-mango', online: true, ping: 38, motd: '§6§lMangoMC §r§7Bedwars, Skyblock, Survival', players: { online: 1284, max: 5000 }, version: '1.21.4', iconUrl: brandIcon(128) },
-  'srv-bedwars': { id: 'srv-bedwars', online: true, ping: 61, motd: '§aSeason 14 started! Queue now.', players: { online: 342, max: 1000 }, version: '1.8.9 - 1.21.4', iconUrl: null },
-  'srv-hollow': { id: 'srv-hollow', online: true, ping: 14, motd: 'Iron Hollow, whitelisted friends only', players: { online: 3, max: 12 }, version: '1.21.4', iconUrl: null },
-  'srv-skyblock': { id: 'srv-skyblock', online: false, ping: null, motd: '', players: null, version: null, iconUrl: null },
-  'srv-creative': { id: 'srv-creative', online: true, ping: 112, motd: 'Free plots, no ranks needed.', players: { online: 57, max: 200 }, version: '1.21.1', iconUrl: null },
-  'srv-old': { id: 'srv-old', online: false, ping: null, motd: '', players: null, version: null, iconUrl: null },
+  vincentvanilla: { id: 'vincentvanilla', online: true, ping: 12, motd: '§6§lVincentVanilla §r§7Survival', players: { online: 0, max: 500 }, version: 'VincentVanilla 1.21.5 - 26.x', versionRange: { min: '1.21.5', max: '26.x' }, iconUrl: brandIcon(128) },
+  'user:bw.arena.example': { id: 'user:bw.arena.example', online: true, ping: 61, motd: '§aSeason 14 started! Queue now.', players: { online: 342, max: 1000 }, version: 'Velocity 1.7-1.21', versionRange: { min: '1.7', max: '1.21' }, iconUrl: null },
+  'user:smp.ironhollow.example:25570': { id: 'user:smp.ironhollow.example:25570', online: true, ping: 14, motd: 'Iron Hollow, whitelisted friends only', players: { online: 3, max: 12 }, version: 'Paper 1.21.4', versionRange: { min: '1.21.4', max: '1.21.4' }, iconUrl: null },
+  'user:sky.realms.example': { id: 'user:sky.realms.example', ...OFF },
+  // online, but the ping names no version: "not sure", the chooser opens
+  'user:plots.example.net': { id: 'user:plots.example.net', online: true, ping: 112, motd: 'Free plots, no ranks needed.', players: { online: 57, max: 200 }, version: 'Folia', versionRange: null, iconUrl: null },
+  'user:192.168.1.40': { id: 'user:192.168.1.40', ...OFF },
+  'user:modern.example.net': { id: 'user:modern.example.net', online: true, ping: 33, motd: '', players: { online: 8, max: 64 }, version: 'Gate 1.7.2-1.7.5-26.3', versionRange: { min: '1.7.2', max: '26.3' }, iconUrl: null },
 };
 
 const LOG_LINES = [
@@ -113,6 +120,10 @@ Fabric Mods:
 export function createContentApi(ctx: MockCtx): Part2 {
   const { now } = ctx;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * ctx.scale));
+  // servers are per mock backend: add / edit / star / remove only touch this copy
+  let serverList: ServerEntry[] = ctx.serversMode === 'none' ? [] : structuredClone(SERVERS);
+  const norm = (a: string) => a.trim().toLowerCase().replace(/\.$/, '').replace(/:25565$/, '');
+  const srvFail = (code: string) => ({ code, message: code, needsRelogin: false });
 
   /* ---------- content per profile ---------- */
   const lists = new Map<string, ContentItem[]>();
@@ -191,7 +202,8 @@ export function createContentApi(ctx: MockCtx): Part2 {
   /* ---------- servers ---------- */
   const pingStatus = (id: string): ServerStatus => {
     const s = STATUS[id];
-    if (!s) return { id, online: false, ping: null, motd: '', players: null, version: null, iconUrl: null };
+    if (!s || ctx.serversMode === 'offline') return { id, ...OFF };
+    if (ctx.serversMode === 'unknown') return { ...s, versionRange: null, version: 'Folia' };
     return s.online ? { ...s, ping: (s.ping ?? 40) + Math.floor(Math.random() * 6) } : { ...s };
   };
 
@@ -428,14 +440,51 @@ export function createContentApi(ctx: MockCtx): Part2 {
       return structuredClone(p);
     },
 
-    async serversList() { return structuredClone(SERVERS); },
+    async serversList() { return structuredClone(serverList); },
     async serversPingAll() {
-      SERVERS.forEach((s, i) => { setTimeout(() => ctx.emit('servers:pinged', pingStatus(s.id)), (260 + i * 330) * ctx.scale); });
+      serverList.forEach((s, i) => { setTimeout(() => ctx.emit('servers:pinged', pingStatus(s.id)), (260 + i * 330) * ctx.scale); });
     },
     async serversPing({ address }) {
       await sleep(300);
-      const s = SERVERS.find((x) => x.address === address);
-      return s ? pingStatus(s.id) : { id: address, online: false, ping: null, motd: '', players: null, version: null, iconUrl: null };
+      const s = serverList.find((x) => norm(x.address) === norm(address));
+      return s ? pingStatus(s.id) : { id: `user:${norm(address)}`, ...OFF };
+    },
+    async serversAdd({ name, address }) {
+      const n = name.trim(), a = address.trim();
+      if (!n || n.length > 64) throw srvFail('servers.name');
+      if (!a || /\s/.test(a) || a.length > 255) throw srvFail('servers.address');
+      if (serverList.some((x) => norm(x.address) === norm(a))) throw srvFail('servers.duplicate');
+      serverList = [...serverList, { id: `user:${norm(a)}`, name: n, address: a, partner: false, starred: false, custom: true, iconUrl: null }];
+      return structuredClone(serverList);
+    },
+    async serversUpdate({ id, name, address }) {
+      const i = serverList.findIndex((x) => x.id === id);
+      if (i < 0) throw srvFail('servers.not_found');
+      const cur = serverList[i];
+      if (cur.partner) throw srvFail('servers.partner');
+      if (!name.trim() || name.trim().length > 64) throw srvFail('servers.name');
+      let next = { ...cur, name: name.trim() };
+      if (cur.custom && address && norm(address) !== norm(cur.address)) {
+        if (/\s/.test(address) || address.length > 255) throw srvFail('servers.address');
+        if (serverList.some((x) => norm(x.address) === norm(address))) throw srvFail('servers.duplicate');
+        next = { ...next, address: address.trim(), id: `user:${norm(address)}` };
+      }
+      serverList = serverList.map((x, k) => (k === i ? next : x));
+      return structuredClone(serverList);
+    },
+    async serversRemove({ id }) {
+      const cur = serverList.find((x) => x.id === id);
+      if (!cur) throw srvFail('servers.not_found');
+      if (cur.partner) throw srvFail('servers.partner');
+      serverList = serverList.filter((x) => x.id !== id);
+      return structuredClone(serverList);
+    },
+    async serversStar({ id, starred }) {
+      const cur = serverList.find((x) => x.id === id);
+      if (!cur) throw srvFail('servers.not_found');
+      if (cur.partner) throw srvFail('servers.partner');
+      serverList = serverList.map((x) => (x.id === id ? { ...x, starred } : x));
+      return structuredClone(serverList);
     },
 
     async screenshotsList({ profileId }) { return structuredClone(shotsFor(profileId)); },

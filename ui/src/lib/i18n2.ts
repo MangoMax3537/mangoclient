@@ -46,7 +46,7 @@ export const en2 = {
   'drawer.noVersions': 'No versions found.', 'drawer.compatible': 'Compatible with this profile', 'drawer.incompatible': 'Different game version or loader',
   'drawer.installVersion': 'Install', 'drawer.vtype.release': 'Release', 'drawer.vtype.beta': 'Beta', 'drawer.vtype.alpha': 'Alpha',
 
-  'servers.hint': 'Live status. Partner servers and stars come first.', 'servers.joinWith': 'Join with', 'servers.refresh': 'Refresh', 'servers.empty': 'No servers yet.',
+  'servers.hint': 'Live status. Partner servers and stars come first.', 'servers.refresh': 'Refresh', 'servers.empty': 'No servers yet.',
   'servers.join': 'Join', 'servers.quickJoin': 'Quick join', 'servers.partner': 'Partner', 'servers.starred': 'Starred', 'servers.offline': 'Offline', 'servers.pinging': 'Checking...',
 
   'stats.range': 'Time range', 'stats.days': '{n} days', 'stats.total': 'Playtime', 'stats.sessions': 'Sessions', 'stats.longest': 'Longest session', 'stats.avg': 'Daily average',
@@ -124,7 +124,7 @@ export const de2: Record<keyof typeof en2, string> = {
   'drawer.noVersions': 'Keine Versionen gefunden.', 'drawer.compatible': 'Kompatibel mit diesem Profil', 'drawer.incompatible': 'Andere Spielversion oder anderer Loader',
   'drawer.installVersion': 'Installieren', 'drawer.vtype.release': 'Release', 'drawer.vtype.beta': 'Beta', 'drawer.vtype.alpha': 'Alpha',
 
-  'servers.hint': 'Live-Status. Partner-Server und Favoriten stehen oben.', 'servers.joinWith': 'Beitreten mit', 'servers.refresh': 'Aktualisieren', 'servers.empty': 'Noch keine Server.',
+  'servers.hint': 'Live-Status. Partner-Server und Favoriten stehen oben.', 'servers.refresh': 'Aktualisieren', 'servers.empty': 'Noch keine Server.',
   'servers.join': 'Beitreten', 'servers.quickJoin': 'Schnellbeitritt', 'servers.partner': 'Partner', 'servers.starred': 'Favorit', 'servers.offline': 'Offline', 'servers.pinging': 'Wird geprüft...',
 
   'stats.range': 'Zeitraum', 'stats.days': '{n} Tage', 'stats.total': 'Spielzeit', 'stats.sessions': 'Sitzungen', 'stats.longest': 'Längste Sitzung', 'stats.avg': 'Tagesschnitt',

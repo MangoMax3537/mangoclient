@@ -16,7 +16,7 @@
   import DropHint from './components/DropHint.svelte';
   import { dialogs, screens, skeletons } from './lib/lazy';
   import { pf, watchDrops } from './lib/portability.svelte';
-  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, selectedProfile, t, toast, ui, updates, lang } from './lib/stores.svelte';
+  import { actions, app, auth, errorText, flow, init, initTheme, nav, platform, selectedProfile, servers, t, toast, ui, updates, lang } from './lib/stores.svelte';
   import { inTauri, kind } from './lib/api';
   import { installShortcuts } from './lib/shortcutActions';
   import { installNativeMenuGuard } from './lib/contextMenu.svelte';
@@ -98,6 +98,7 @@
   {#if flow.req}<Lazy load={dialogs.installFlow} />{/if}
   {#if nav.iconPicker}<Lazy load={dialogs.iconPicker} props={{ profileId: nav.iconPicker, onclose: () => (nav.iconPicker = null) }} />{/if}
   {#if nav.backgroundPicker}<Lazy load={dialogs.backgroundPicker} props={{ profileId: nav.backgroundPicker, onclose: () => (nav.backgroundPicker = null) }} />{/if}
+  {#if servers.join}<Lazy load={dialogs.serverJoin} props={{ server: servers.join, onclose: () => (servers.join = null) }} />{/if}
   {#if pf.imp && pf.impOpen}<Lazy load={dialogs.importDialog} />{/if}
   {#if pf.exp}<Lazy load={dialogs.exportDialog} props={{ profileId: pf.exp.profileId, onclose: () => (pf.exp = null) }} />{/if}
   {#if pf.diag}<Lazy load={dialogs.diagnosticsDialog} props={{ profileId: pf.diag.profileId, onclose: () => (pf.diag = null) }} />{/if}

@@ -48,6 +48,8 @@ export interface MockOptions {
   /** Part 13: `?mockSkinError=<code>` makes uploads, username copies and cape changes fail; `?mockCapes=0` = an account without capes. */
   skinError?: string;
   noCapes?: boolean;
+  /** Servers view states (`?mockServers=none|offline|unknown`): empty list, every server offline, every server without a version range. */
+  servers?: 'none' | 'offline' | 'unknown';
   /** Latency / slow / fail controls (`?mockLatency`, `?mockDelay`, `?mockSlow`, `?mockFail`). Absent = no wrapping (unit tests). */
   dev?: MockDevOptions;
 }
@@ -73,6 +75,7 @@ export function mockOptionsFromSearch(search: string): MockOptions {
     blocks: ((['off', 'preparing', 'error'] as const).find((m) => m === q.get('mockBlocks')) ?? 'default') as MockBlocksMode,
     panorama: q.get('mockPanorama') === 'off' ? 'off' : 'default',
     running: q.has('mockRunning'),
+    servers: ((['none', 'offline', 'unknown'] as const).find((m) => m === q.get('mockServers'))),
     backupError: q.get('mockBackupError') || undefined,
     crash: MOCK_CRASHES.find((m) => m === q.get('mockCrash')),
     importError: q.get('mockImportError') || undefined,
@@ -207,6 +210,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
   const part2 = createContentApi({
     now, scale, emit, profiles: () => profiles, addProfile: (p) => { Object.assign(p, mangoFlags(p, config.mangoConfig)); profiles = [...profiles, p]; icons.sync(); }, find,
     gameActive: () => running.size > 0 || timers.size > 0,
+    serversMode: opts.servers,
   });
   const api: MockApi = {
     ...part2,

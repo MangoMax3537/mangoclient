@@ -47,7 +47,7 @@ describe('stores', () => {
     expect(installs['x'].done).toBe(2);
     applyInstallProgress({ profileId: 'p', projectId: 'x', done: 5, total: 5, label: 'X' });
     expect(installs['x']).toBeUndefined();
-    applyPinged({ id: 's1', online: true, ping: 20, motd: '', players: null, version: null, iconUrl: null });
+    applyPinged({ id: 's1', online: true, ping: 20, motd: '', players: null, version: null, versionRange: null, iconUrl: null });
     expect(servers.status['s1'].ping).toBe(20);
     openProfile('abc', 'mods');
     expect(nav).toMatchObject({ view: 'profile', profileId: 'abc', profileTab: 'mods' });

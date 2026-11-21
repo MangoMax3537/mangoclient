@@ -11,6 +11,7 @@ import { de12, en12 } from './i18n12';
 import { de13, en13 } from './i18n13';
 import { de14, en14 } from './i18n14';
 import { de15, en15 } from './i18n15';
+import { de16, en16 } from './i18n16';
 
 export type Lang = 'de' | 'en';
 
@@ -75,6 +76,7 @@ const en = {
   ...en13,
   ...en14,
   ...en15,
+  ...en16,
 } as const;
 
 export type Key = keyof typeof en;
@@ -142,6 +144,7 @@ const de: Record<Key, string> = {
   ...de13,
   ...de14,
   ...de15,
+  ...de16,
 };
 
 export const dictionaries: Record<Lang, Partial<Record<string, string>>> = { de, en };
