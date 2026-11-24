@@ -64,7 +64,7 @@ export const en2 = {
 
   'update.title': 'Updates', 'update.check': 'Check for updates', 'update.install': 'Install and restart', 'update.later': 'Later', 'update.available': 'Update {v} is ready',
   'update.installing': 'Installing update', 'update.installingHint': 'The launcher restarts in a moment. Please do not close it.', 'update.noNotes': 'A new version is ready to install.',
-  'update.restartHint': 'The launcher restarts. Running games are not affected.',
+  'update.restartHint': 'The launcher restarts. Running games are not affected. With "Later" the update is installed the next time you close the launcher.',
   'update.pill.checking': 'Checking for updates', 'update.pill.downloading': 'Updating {n}%', 'update.pill.ready': 'Update {v}',
   'update.status.idle': 'Not checked yet.', 'update.status.checking': 'Checking...', 'update.status.downloading': 'Downloading {v}, {n}%', 'update.status.ready': 'Version {v} is ready to install.',
   'update.status.current': 'You are up to date.', 'update.error.no-release': 'No release found.', 'update.error.offline': 'No connection.', 'update.error.other': 'The update check failed.',
@@ -142,7 +142,7 @@ export const de2: Record<keyof typeof en2, string> = {
 
   'update.title': 'Updates', 'update.check': 'Nach Updates suchen', 'update.install': 'Installieren und neu starten', 'update.later': 'Später', 'update.available': 'Update {v} ist bereit',
   'update.installing': 'Update wird installiert', 'update.installingHint': 'Der Launcher startet gleich neu. Bitte nicht schließen.', 'update.noNotes': 'Eine neue Version ist bereit zur Installation.',
-  'update.restartHint': 'Der Launcher startet neu. Laufende Spiele bleiben unberührt.',
+  'update.restartHint': 'Der Launcher startet neu. Laufende Spiele bleiben unberührt. Mit „Später“ wird das Update beim nächsten Schließen des Launchers installiert.',
   'update.pill.checking': 'Suche nach Updates', 'update.pill.downloading': 'Update {n} %', 'update.pill.ready': 'Update {v}',
   'update.status.idle': 'Noch nicht geprüft.', 'update.status.checking': 'Prüfe...', 'update.status.downloading': 'Lade {v} herunter, {n} %', 'update.status.ready': 'Version {v} ist bereit zur Installation.',
   'update.status.current': 'Du bist auf dem neuesten Stand.', 'update.error.no-release': 'Kein Release gefunden.', 'update.error.offline': 'Keine Verbindung.', 'update.error.other': 'Die Update-Prüfung ist fehlgeschlagen.',

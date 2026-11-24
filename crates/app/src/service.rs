@@ -65,9 +65,6 @@ pub struct ServiceOptions {
     pub update_platform: Option<mango_updater::Platform>,
     /// Which URLs an update may come from. `None` = GitHub over https.
     pub update_policy: Option<mango_updater::UrlPolicy>,
-    /// Pause between a verified launch-time update and handing it to the
-    /// installer, so the UI can paint.
-    pub update_relaunch_delay: Duration,
     /// Check for updates at startup and every 3 h (`start_background`).
     pub auto_update_check: bool,
     /// Telemetry base, already validated. `None` = `MANGO_API_BASE` / legacy.
@@ -118,7 +115,6 @@ impl Default for ServiceOptions {
             update_public_key: mango_updater::UPDATE_PUBLIC_KEY_B64.to_string(),
             update_platform: None,
             update_policy: None,
-            update_relaunch_delay: Duration::from_millis(800),
             auto_update_check: true,
             api_base: None,
             watch_interval: Duration::from_secs(2),

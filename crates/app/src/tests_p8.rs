@@ -108,7 +108,6 @@ async fn upd_fx(signer: &SigningKey, trusted: &SigningKey, auto: bool) -> UpdFx 
             appimage: true,
         }),
         update_policy: Some(mango_updater::UrlPolicy::insecure_for_tests(&["127.0.0.1"])),
-        update_relaunch_delay: Duration::from_millis(10),
         app_version: "1.0.0".into(),
         partners: Vec::new(),
         ..ServiceOptions::default()
@@ -160,21 +159,27 @@ async fn unverified_update_never_reaches_the_installer() {
 }
 
 #[tokio::test]
-async fn launch_time_check_applies_through_the_installer() {
+async fn launch_time_check_only_stages_the_update_and_never_restarts_by_itself() {
     let key = SigningKey::from_bytes(&[7; 32]);
     let f = upd_fx(&key, &key, true).await;
     f.svc.start_background();
     let inst = f.installer.clone();
-    wait_for(move || inst.applied() == 1).await;
-    assert_eq!(f.installer.staged().len(), 1);
-    // Exactly once, also after the periodic machinery had time to run.
-    tokio::time::sleep(Duration::from_millis(150)).await;
-    assert_eq!(f.installer.applied(), 1);
+    wait_for(move || inst.staged().len() == 1).await;
+    // downloaded and verified, then it waits: no install, no restart
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+        f.installer.applied(),
+        0,
+        "the update waits for the click or the next restart"
+    );
     assert!(f
         .sink
         .events()
         .iter()
         .any(|e| matches!(e, Event::UpdateStatus(s) if s.state == "ready")));
+    // the banner's "Restart now" installs it, exactly once
+    assert!(f.svc.update_install().unwrap());
+    assert_eq!(f.installer.applied(), 1);
 }
 
 // ---------- strict validation ----------
