@@ -325,11 +325,21 @@ mod unix {
         let java = script(
             dir.path(),
             "java",
-            "trap '' TERM\nwhile :; do sleep 0.05; done",
+            "trap '' TERM\n: > ignoring-term\nwhile :; do sleep 0.05; done",
         );
         let (cb, _store) = collect();
         let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
         wait_until_alive(&g.session());
+        // only once the script really ignores SIGTERM (otherwise the polite request alone would end it)
+        let ready = dir.path().join("ignoring-term");
+        let t0 = std::time::Instant::now();
+        while !ready.exists() {
+            assert!(
+                t0.elapsed() < Duration::from_secs(5),
+                "script never got ready"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let begun = std::time::Instant::now();
         g.stop().unwrap();
         let exit = g
