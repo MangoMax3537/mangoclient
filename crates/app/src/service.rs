@@ -365,6 +365,8 @@ impl AppService {
             ram_limits: mango_core::ram_limits(total).into(),
             running: self.game_running(),
             root_dir: inner.paths.root().display().to_string(),
+            desktop_integration_available: crate::desktop_entry::DesktopIntegration::detect()
+                .is_some(),
         })
     }
 
@@ -374,6 +376,9 @@ impl AppService {
             .with_store(|s| s.set_config(&patch).map(ConfigView::from))?;
         // Opting in/out takes effect immediately (needs a runtime to spawn on).
         self.sync_telemetry();
+        if patch.get("desktopIntegration").is_some() || patch.get("firstRunDone").is_some() {
+            self.sync_desktop_integration();
+        }
         Ok(view)
     }
 

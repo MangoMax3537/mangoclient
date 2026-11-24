@@ -31,8 +31,9 @@
     try { await actions.addOffline(name); name = ''; } catch (err) { error = errorText(err); }
     busy = false;
   }
+  let integrate = $state(true);
   async function finish() {
-    await actions.setConfig({ firstRunDone: true });
+    await actions.setConfig({ firstRunDone: true, ...(app.desktopIntegrationAvailable ? { desktopIntegration: integrate } : {}) });
     // no default instance exists: the next thing to do is creating one (the dialog focuses its name field)
     if (app.profiles.length === 0) nav.newProfile = true;
   }
@@ -87,6 +88,13 @@
         <dt>{t('settings.language')}</dt><dd>{t(`settings.language.${cfg?.language ?? 'de'}` as Key)}</dd>
         <dt>{t('accounts.title')}</dt><dd>{app.accounts.length ? app.accounts.map((a) => a.name).join(', ') : t('onb.done.noAccount')}</dd>
       </dl>
+      {#if app.desktopIntegrationAvailable}
+        <!-- Linux AppImage only: on by default, applied with the finish -->
+        <label class="integrate">
+          <input type="checkbox" bind:checked={integrate} />
+          <span><b>{t('settings.desktopIntegration')}</b><span class="hint">{t('settings.desktopIntegrationHint')}</span></span>
+        </label>
+      {/if}
     {/if}
 
     <div class="nav">
@@ -107,6 +115,10 @@
   h1 { font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -0.03em; line-height: 0.98; }
   h1:focus { outline: none; }
   .lead { margin: 0; color: var(--paper-dim); font-size: 15px; }
+  .integrate { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .integrate input { margin-top: 3px; accent-color: var(--accent-fill); width: 16px; height: 16px; flex: none; }
+  .integrate > span { display: grid; gap: 2px; }
+  .integrate .hint { color: var(--paper-mute); font-size: var(--fs-sm); }
   .dots { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
   .dots li { width: 28px; height: 4px; background: var(--ink-4); }
   .dots li.done { background: var(--paper-mute); }

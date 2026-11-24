@@ -278,6 +278,8 @@ pub struct ConfigView {
     pub auto_snapshot: bool,
     /// 1..50.
     pub backup_keep: u32,
+    /// Linux AppImage: keep a menu entry and icon in the user's applications.
+    pub desktop_integration: bool,
 }
 
 impl From<&Config> for ConfigView {
@@ -303,6 +305,7 @@ impl From<&Config> for ConfigView {
             telemetry: c.telemetry,
             sidebar_open: c.sidebar_open,
             auto_snapshot: c.auto_snapshot,
+            desktop_integration: c.desktop_integration,
             backup_keep: c.backup_keep,
         }
     }
@@ -340,6 +343,8 @@ pub struct AppState {
     pub ram_limits: RamLimitsView,
     pub running: Vec<String>,
     pub root_dir: String,
+    /// Running as a Linux AppImage: the desktop integration setting applies (the setup and Settings show it).
+    pub desktop_integration_available: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

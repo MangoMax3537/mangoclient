@@ -36,6 +36,8 @@ export const app = $state({
   defaultRamMb: 4096,
   ramLimits: { minMb: 1024, maxMb: 8192, totalMb: 16384 } as RamLimitsView,
   rootDir: '',
+  /** Running as a Linux AppImage: the setup and Settings offer the menu entry. */
+  desktopIntegrationAvailable: false,
   error: null as { code: string; message: string } | null,
 });
 
@@ -357,6 +359,7 @@ function applyAppState(s: AppState): void {
   app.defaultRamMb = s.defaultRamMb;
   app.ramLimits = s.ramLimits;
   app.rootDir = s.rootDir;
+  app.desktopIntegrationAvailable = !!s.desktopIntegrationAvailable;
   for (const id of s.running) if (!isBusy(id)) applyState(id, 'running');
 }
 

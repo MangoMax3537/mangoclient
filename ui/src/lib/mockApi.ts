@@ -154,7 +154,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     keepLauncherOpen: true, hideOnLaunch: false, showSnapshots: false, mangoConfig: true, performanceMods: true,
     concurrentDownloads: 8, performancePreset: 'balanced', selectedProfile: null, selectedAccount: null,
     firstRunDone: !opts.firstRun, telemetry: true, sidebarOpen: true,
-    autoSnapshot: true, backupKeep: 5,
+    autoSnapshot: true, backupKeep: 5, desktopIntegration: true,
   };
   let profiles = opts.noProfiles ? [] : seedProfiles(now);
   let accounts = seedAccounts(now, opts);
@@ -222,7 +222,7 @@ export function createMockApi(opts: MockOptions = {}): MockApi {
     async appState(): Promise<AppState> {
       return {
         version: '2.0.0', config: { ...config }, profiles: structuredClone(profiles).map((p) => ({ ...p, ...derivedRam(p.ram, p.ramSource, config.ram), ...mangoFlags(p, config.mangoConfig) })), accounts: structuredClone(accounts),
-        totalRamMb: 16384, defaultRamMb: 4096, ramLimits: { minMb: 1024, maxMb: 14336, totalMb: 16384 }, running: [...running], rootDir: '~/.mangoclient',
+        totalRamMb: 16384, defaultRamMb: 4096, ramLimits: { minMb: 1024, maxMb: 14336, totalMb: 16384 }, running: [...running], rootDir: '~/.mangoclient', desktopIntegrationAvailable: true,
       };
     },
     async configSet({ patch }) {

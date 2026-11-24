@@ -11,6 +11,7 @@ pub mod bindings;
 mod block_icons;
 mod content;
 mod crash;
+mod desktop_entry;
 pub mod dispatch;
 mod error;
 mod events;

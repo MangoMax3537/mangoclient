@@ -18,6 +18,7 @@ impl AppService {
     /// only a weak reference, so they end with the service.
     pub fn start_background(&self) {
         self.sync_telemetry();
+        self.sync_desktop_integration();
         self.spawn_update_events();
         if self.inner.opts.auto_update_check {
             let updater = self.inner.updater.clone();
@@ -34,6 +35,28 @@ impl AppService {
         }
         self.spawn_mods_watcher();
         self.spawn_skin_prefetch();
+    }
+
+    /// Linux AppImage: add, refresh (the AppImage path changes with updates) or remove the menu entry to match
+    /// `config.desktopIntegration`. Before the first-run setup is done nothing is added (the setup asks). Never fails
+    /// the caller.
+    pub(crate) fn sync_desktop_integration(&self) {
+        let Some(d) = crate::desktop_entry::DesktopIntegration::detect() else {
+            return;
+        };
+        let (on, setup_done) = self
+            .inner
+            .with_store(|s| (s.config.desktop_integration, s.config.first_run_done));
+        let result = if !on {
+            d.remove().map(|_| ())
+        } else if setup_done {
+            d.install().map(|_| ())
+        } else {
+            Ok(())
+        };
+        if let Err(e) = result {
+            tracing::warn!("desktop integration: {e}");
+        }
     }
 
     /// Start or stop telemetry to match `config.telemetry`. A no-op without a

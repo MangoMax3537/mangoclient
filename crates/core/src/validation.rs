@@ -142,7 +142,7 @@ pub fn config_field(key: &str, v: &Value) -> Option<R<Value>> {
             enum_value(v, "performancePreset", &["potato", "balanced", "quality"])
         }
         "selectedProfile" | "selectedAccount" => nullable_id(v, key),
-        "autoSnapshot" => boolean(v, key),
+        "autoSnapshot" | "desktopIntegration" => boolean(v, key),
         "backupKeep" => integer(v, "backupKeep", 1, 50),
         _ => return None,
     })

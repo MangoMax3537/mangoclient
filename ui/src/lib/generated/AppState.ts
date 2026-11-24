@@ -12,4 +12,8 @@ defaultRamMb: number,
 /**
  * What an instance's heap may be on this machine.
  */
-ramLimits: RamLimitsView, running: Array<string>, rootDir: string, };
+ramLimits: RamLimitsView, running: Array<string>, rootDir: string, 
+/**
+ * Running as a Linux AppImage: the desktop integration setting applies (the setup and Settings show it).
+ */
+desktopIntegrationAvailable: boolean, };

@@ -132,6 +132,11 @@
               <Toggle checked={cfg.keepLauncherOpen} onchange={(on) => actions.setConfig({ keepLauncherOpen: on })} />
             </SettingRow>
           {/if}
+          {#if show('desktopIntegration') && app.desktopIntegrationAvailable}
+            <SettingRow id="desktopIntegration" asLabel label={t('settings.desktopIntegration')} hint={t('settings.desktopIntegrationHint')}>
+              <Toggle checked={cfg.desktopIntegration} onchange={(on) => actions.setConfig({ desktopIntegration: on })} />
+            </SettingRow>
+          {/if}
           {#if show('telemetry')}
             <SettingRow id="telemetry" asLabel label={t('settings.telemetry')} hint={t('settings.telemetryHint')}>
               <Toggle checked={cfg.telemetry} onchange={(on) => actions.setConfig({ telemetry: on })} />

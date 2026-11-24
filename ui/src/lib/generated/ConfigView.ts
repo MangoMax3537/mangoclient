@@ -7,4 +7,8 @@ export type ConfigView = { language: 'de' | 'en', ram: number, javaPath: string,
 /**
  * 1..50.
  */
-backupKeep: number, };
+backupKeep: number, 
+/**
+ * Linux AppImage: keep a menu entry and icon in the user's applications.
+ */
+desktopIntegration: boolean, };

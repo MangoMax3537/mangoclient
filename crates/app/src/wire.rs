@@ -87,6 +87,9 @@ pub struct ConfigPatch {
     /// 1..50; out of range is rejected.
     #[ts(optional)]
     pub backup_keep: Option<u32>,
+    /// Linux AppImage: keep a menu entry and icon in the user's applications.
+    #[ts(optional)]
+    pub desktop_integration: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -178,6 +181,7 @@ mod tests {
             sidebar_open: Some(false),
             auto_snapshot: Some(true),
             backup_keep: Some(5),
+            desktop_integration: Some(true),
         };
         let ours = keys(serde_json::to_value(patch).unwrap_or(Value::Null));
         // `theme` is accepted by the core but not part of the UI contract.
@@ -209,10 +213,11 @@ mod tests {
             "sidebarOpen",
             "autoSnapshot",
             "backupKeep",
+            "desktopIntegration",
         ] {
             assert!(ours.contains(k), "missing {k}");
         }
-        assert_eq!(ours.len(), 21);
+        assert_eq!(ours.len(), 22);
     }
 
     #[test]

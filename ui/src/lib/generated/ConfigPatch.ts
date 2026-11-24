@@ -10,4 +10,8 @@ export type ConfigPatch = { language?: Language, ram?: number, javaPath?: string
 /**
  * 1..50; out of range is rejected.
  */
-backupKeep?: number, };
+backupKeep?: number, 
+/**
+ * Linux AppImage: keep a menu entry and icon in the user's applications.
+ */
+desktopIntegration?: boolean, };

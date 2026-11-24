@@ -44,6 +44,7 @@ export const SETTINGS_INDEX: readonly SettingEntry[] = [
   e('app', 'look', 'cycleBg', 'settings.cycleBg', ['hintergrund', 'wallpaper', 'mango client', 'mango-client', 'wechseln', 'cycle', 'slideshow', 'diashow', 'background', 'home', 'panorama', 'rotate', 'überblenden', 'crossfade', 'animation'], 'settings.cycleBgHint'),
   e('app', 'launcher', 'language', 'settings.language', ['language', 'sprache', 'locale', 'deutsch', 'english', 'englisch', 'german', 'translation', 'übersetzung']),
   e('app', 'launcher', 'keepOpen', 'settings.keepOpen', ['launcher', 'fenster', 'window', 'hide', 'ausblenden', 'minimieren', 'close', 'schließen', 'tray'], 'settings.keepOpenHint'),
+  e('app', 'launcher', 'desktopIntegration', 'settings.desktopIntegration', ['menu', 'menü', 'apps', 'anwendungen', 'desktop', 'icon', 'taskleiste', 'taskbar', 'appimage', 'linux', 'startmenü'], 'settings.desktopIntegrationHint'),
   e('app', 'launcher', 'telemetry', 'settings.telemetry', ['telemetry', 'telemetrie', 'ping', 'analytics', 'statistik', 'privacy', 'datenschutz', 'tracking', 'anonym', 'anonymous', 'nutzungsdaten'], 'settings.telemetryHint'),
   e('app', 'accounts', 'accounts', 'nav.accounts', ['account', 'accounts', 'konto', 'konten', 'login', 'anmelden', 'microsoft', 'offline', 'skin'], 'settings.accounts.hint'),
   e('app', 'game', 'ram', 'settings.ram', ['ram', 'memory', 'speicher', 'arbeitsspeicher', 'heap', 'xmx', 'gb', 'gigabyte'], 'settings.ramHint'),

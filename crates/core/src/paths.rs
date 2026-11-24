@@ -46,6 +46,18 @@ impl Paths {
         Self::platform_default_root()
     }
 
+    /// `$XDG_DATA_HOME`, else `~/.local/share` (Linux desktop entries and icons live below it). `None` without a home.
+    pub fn xdg_data_home() -> Option<PathBuf> {
+        if let Some(d) = std::env::var_os("XDG_DATA_HOME").filter(|d| !d.is_empty()) {
+            let d = PathBuf::from(d);
+            if d.is_absolute() {
+                return Some(d);
+            }
+        }
+        let home = std::env::var_os("HOME").filter(|h| !h.is_empty())?;
+        Some(PathBuf::from(home).join(".local").join("share"))
+    }
+
     /// The per-user data dir of the real install, ignoring `MANGOCLIENT_HOME`.
     pub fn platform_default_root() -> PathBuf {
         let home = || {

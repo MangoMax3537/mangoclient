@@ -64,6 +64,9 @@ pub struct Config {
     /// reset; from then on `performance_mods` only changes by the user's hand.
     #[serde(default)]
     pub performance_mods_reset: bool,
+    /// Linux AppImage: keep a menu entry and icon in the user's applications (on by default, set in the first-run setup).
+    #[serde(default = "default_true")]
+    pub desktop_integration: bool,
 }
 
 fn default_backup_keep() -> u32 {
@@ -100,6 +103,7 @@ impl Config {
             auto_snapshot: true,
             backup_keep: default_backup_keep(),
             performance_mods_reset: true,
+            desktop_integration: true,
         }
     }
 
