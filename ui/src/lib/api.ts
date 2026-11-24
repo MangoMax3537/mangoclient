@@ -4,14 +4,21 @@ import type { AppError } from './types';
 import { createApi, type Api, type Unlisten } from './apiFacade';
 import { backendFromSearch, createHttpApi } from './httpApi';
 import type { MockApi } from './mockApi';
+import { mapStrings, servesSchemeOnLocalhost, toLocalhostImg, toRawImg } from './imgScheme';
 
 export { createApi, COMMANDS, DEPRECATED_COMMANDS } from './apiFacade';
 export type { Api, Invoke, Subscribe, Transport, Unlisten } from './apiFacade';
 
-/** Tauri transport: `invoke` and `listen` from the shell, nothing else. */
+// Windows (WebView2): images load from http(s)://mangoimg.localhost, see imgScheme.ts.
+const localhostImg = typeof navigator !== 'undefined' && servesSchemeOnLocalhost(navigator.userAgent);
+const httpsPage = typeof location !== 'undefined' && location.protocol === 'https:';
+const inbound = <T,>(v: T): T => (localhostImg ? mapStrings(v, (s) => toLocalhostImg(s, httpsPage)) : v);
+const outbound = <T,>(v: T): T => (localhostImg ? mapStrings(v, toRawImg) : v);
+
+/** Tauri transport: `invoke` and `listen` from the shell (image URLs adapted to the platform's webview). */
 export const tauriApi: Api = createApi({
-  invoke: (command, args) => invoke(command, args as Record<string, unknown>),
-  listen: (name, cb) => tauriListen<never>(name, (e) => cb(e.payload as never)) as Promise<Unlisten>,
+  invoke: async (command, args) => inbound(await invoke(command, outbound(args) as Record<string, unknown>)),
+  listen: (name, cb) => tauriListen<never>(name, (e) => cb(inbound(e.payload) as never)) as Promise<Unlisten>,
 });
 
 /**

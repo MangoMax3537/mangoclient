@@ -3,6 +3,7 @@
 // The token lives in memory (a closure) only: it is never stored, never logged and never part of an error message.
 import { createApi, type Api, type Invoke, type Subscribe } from './apiFacade';
 import type { AppError, CommandName, EventName } from './generated';
+import { mapStrings } from './imgScheme';
 
 export interface BackendParams { base: string; token: string }
 
@@ -24,13 +25,7 @@ const IMG = 'mangoimg://';
 
 /** `mangoimg://k/r` -> `${base}/img/k/r?token=...`. Applied to every string of every result and event. */
 export function rewriteImages<T>(value: T, base: string, token: string): T {
-  const walk = (v: unknown): unknown => {
-    if (typeof v === 'string') return v.startsWith(IMG) ? `${base}/img/${v.slice(IMG.length)}?token=${encodeURIComponent(token)}` : v;
-    if (Array.isArray(v)) return v.map(walk);
-    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
-    return v;
-  };
-  return walk(value) as T;
+  return mapStrings(value, (v) => (v.startsWith(IMG) ? `${base}/img/${v.slice(IMG.length)}?token=${encodeURIComponent(token)}` : v));
 }
 
 const isAppError = (e: unknown): e is AppError =>
