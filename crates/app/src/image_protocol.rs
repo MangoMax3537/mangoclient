@@ -156,9 +156,14 @@ pub fn sniff_extension(data: &[u8]) -> Option<&'static str> {
 
 // ---- resolution ----
 
-/// `mangoimg://kind/arg` (either spelling) -> `(kind, arg)`.
-fn split_url(url: &str) -> Option<(&str, &str)> {
+/// `mangoimg://kind/arg` (any spelling) -> `(kind, arg)`.
+///
+/// On Windows the webview requests `http://mangoimg.localhost/kind/arg`, and wry rewrites that to
+/// `mangoimg://localhost/kind/arg` before the handler sees it (custom_protocol_workaround: only `http://mangoimg.` is
+/// replaced, the `localhost/` stays). Without that form every image on Windows was a 400.
+pub(crate) fn split_url(url: &str) -> Option<(&str, &str)> {
     let rest = [
+        "mangoimg://localhost/",
         "mangoimg://",
         "http://mangoimg.localhost/",
         "https://mangoimg.localhost/",
@@ -598,6 +603,27 @@ mod tests {
     use super::*;
 
     const UUID: &str = "12345678-1234-4234-8234-123456789abc";
+
+    /// Every spelling a request can arrive in resolves to the same kind and argument: the raw scheme (Linux, macOS),
+    /// the form wry hands the handler on Windows after its localhost workaround, and the webview's own http(s) form.
+    #[test]
+    fn every_platform_spelling_of_an_image_url_resolves_alike() {
+        let b64 = "aHR0cHM6Ly9jZG4ubW9kcmludGguY29tL2RhdGEvUDdkUjhtU0gvaWNvbi5wbmc";
+        for url in [
+            format!("mangoimg://icon/{b64}"),
+            format!("mangoimg://localhost/icon/{b64}"),
+            format!("http://mangoimg.localhost/icon/{b64}"),
+            format!("https://mangoimg.localhost/icon/{b64}"),
+        ] {
+            assert_eq!(split_url(&url), Some(("icon", b64)), "{url}");
+        }
+        assert_eq!(
+            split_url("mangoimg://localhost/head/abc?v=1"),
+            Some(("head", "abc"))
+        );
+        // "localhost" alone is never a kind
+        assert_eq!(split_url("mangoimg://localhost/"), None);
+    }
 
     fn setup() -> (tempfile::TempDir, Paths) {
         let tmp = tempfile::tempdir().unwrap();
