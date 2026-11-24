@@ -317,6 +317,36 @@ mod unix {
         assert!(!is_session_alive(&g.session()));
     }
 
+    /// A game that ignores the polite request (SIGTERM) is killed after the grace time: Stop always ends it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn stop_kills_a_game_that_ignores_the_polite_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let java = script(
+            dir.path(),
+            "java",
+            "trap '' TERM\nwhile :; do sleep 0.05; done",
+        );
+        let (cb, _store) = collect();
+        let g = GameInstance::spawn(opts(dir.path(), java, cb)).unwrap();
+        wait_until_alive(&g.session());
+        let begun = std::time::Instant::now();
+        g.stop().unwrap();
+        let exit = g
+            .wait_exit(Some(STOP_GRACE + Duration::from_secs(5)))
+            .expect("killed after the grace time");
+        assert!(
+            begun.elapsed() >= STOP_GRACE - Duration::from_millis(200),
+            "not before the grace time: {:?}",
+            begun.elapsed()
+        );
+        assert_eq!(
+            exit.state,
+            GameState::Stopped,
+            "a requested stop is never a crash"
+        );
+    }
+
     #[test]
     fn stop_refuses_non_java_process() {
         let dir = tempfile::tempdir().unwrap();
@@ -381,7 +411,7 @@ mod unix {
         let ad = AdoptOptions::new("pid", g.log_file().to_path_buf(), cb2);
         assert!(GameInstance::adopt(&stale, ad).is_none());
         assert_eq!(
-            crate::terminate_java_started(real.pid, Some(stale.started_at))
+            crate::terminate_java_started(real.pid, Some(stale.started_at), false)
                 .unwrap_err()
                 .code(),
             "not_java"

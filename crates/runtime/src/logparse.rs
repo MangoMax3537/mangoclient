@@ -65,7 +65,8 @@ fn emit_event(xml: &str, emit: &mut dyn FnMut(&str, LogLevel)) {
     } else {
         LogLevel::Info
     };
-    let mut lines = body.split('\n');
+    // Java on Windows writes CRLF: no line keeps a stray `\r`
+    let mut lines = body.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l));
     let first = lines.next().unwrap_or("");
     emit(
         &format!("[{time}] [{}/{level}]: {first}", attr(xml, "thread")),

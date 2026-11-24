@@ -158,14 +158,15 @@ pub(crate) fn parse_etime_secs(raw: &str) -> Option<u64> {
     Some(days * 86_400 + secs)
 }
 
-/// Ask a verified Java process to terminate (SIGTERM; `taskkill /F` on Windows).
+/// Ask a verified Java process to terminate (SIGTERM; `taskkill` = close the window on Windows), so the game saves.
 pub fn terminate_java(pid: u32) -> Result<()> {
-    terminate_java_started(pid, None)
+    terminate_java_started(pid, None, false)
 }
 
 /// Like [`terminate_java`], and when `started_at_ms` is given the process
 /// must also have started then (a reused pid of another JVM is refused).
-pub fn terminate_java_started(pid: u32, started_at_ms: Option<u64>) -> Result<()> {
+/// `force` kills without asking (SIGKILL; `taskkill /F`): the follow-up when the game did not end in time.
+pub fn terminate_java_started(pid: u32, started_at_ms: Option<u64>, force: bool) -> Result<()> {
     if let Some(recorded) = started_at_ms {
         if is_game_alive(pid)
             && !start_time_matches(recorded, process_start_ms(pid), START_TOLERANCE_MS)
@@ -183,7 +184,7 @@ pub fn terminate_java_started(pid: u32, started_at_ms: Option<u64>) -> Result<()
     }
     #[cfg(unix)]
     let status = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
+        .args([if force { "-KILL" } else { "-TERM" }, &pid.to_string()])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -194,11 +195,20 @@ pub fn terminate_java_started(pid: u32, started_at_ms: Option<u64>) -> Result<()
         hide_console(&mut cmd);
         cmd
     }
-    .args(["/PID", &pid.to_string(), "/F"])
+    .args(if force {
+        vec!["/PID".to_string(), pid.to_string(), "/F".to_string()]
+    } else {
+        vec!["/PID".to_string(), pid.to_string()]
+    })
     .stdin(Stdio::null())
     .stdout(Stdio::null())
     .stderr(Stdio::null())
     .status();
+    // Without /F, taskkill closes the game window (Minecraft saves and quits); a JVM without a window refuses it: kill.
+    #[cfg(windows)]
+    if !force && !matches!(status, Ok(s) if s.success()) {
+        return terminate_java_started(pid, started_at_ms, true);
+    }
     match status {
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(RuntimeError::Stop {

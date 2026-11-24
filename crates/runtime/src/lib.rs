@@ -19,7 +19,7 @@ pub use error::{Result, RuntimeError};
 pub use follower::{FollowStart, LogFollower, DEFAULT_POLL, MAX_READ_BYTES};
 pub use instance::{
     is_session_alive, log_file_for, AdoptOptions, EventCb, ExitInfo, GameEvent, GameInstance,
-    GameState, SpawnOptions, ADOPT_POLL, RUNNING_FALLBACK,
+    GameState, SpawnOptions, ADOPT_POLL, RUNNING_FALLBACK, STOP_GRACE,
 };
 pub use logparse::{LogLevel, LogParser, Utf8Chunker};
 pub use process::{

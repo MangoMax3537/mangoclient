@@ -237,6 +237,9 @@ impl Inner {
     }
 }
 
+/// How long Stop waits for the game to quit on its own (saving the world) before it is killed.
+pub const STOP_GRACE: Duration = Duration::from_secs(3);
+
 /// Handle to a game process. Cheap to clone.
 #[derive(Clone)]
 pub struct GameInstance {
@@ -472,10 +475,17 @@ impl GameInstance {
         // Our own child is certainly the game; an adopted pid must also have
         // started when the session says (it may have been reused).
         let started = self.inner.adopted.then_some(self.inner.started_at_ms);
-        if let Err(e) = terminate_java_started(self.inner.pid, started) {
+        if let Err(e) = terminate_java_started(self.inner.pid, started, false) {
             self.inner.stop_requested.store(false, Ordering::SeqCst);
             return Err(e);
         }
+        // Asked nicely first (the world is saved); a game that has not ended after the grace time is killed.
+        let me = self.clone();
+        std::thread::spawn(move || {
+            if me.wait_exit_slot(Some(STOP_GRACE)).is_none() {
+                let _ = terminate_java_started(me.inner.pid, started, true);
+            }
+        });
         Ok(())
     }
 
