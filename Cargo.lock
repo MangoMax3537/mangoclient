@@ -1471,7 +1471,7 @@ checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
 name = "mango-app"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1513,7 +1513,7 @@ dependencies = [
 
 [[package]]
 name = "mango-archive"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "flate2",
  "tar",
@@ -1524,7 +1524,7 @@ dependencies = [
 
 [[package]]
 name = "mango-auth"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -1545,7 +1545,7 @@ dependencies = [
 
 [[package]]
 name = "mango-cli"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-trait",
  "mango-app",
@@ -1568,7 +1568,7 @@ dependencies = [
 
 [[package]]
 name = "mango-content"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -1587,7 +1587,7 @@ dependencies = [
 
 [[package]]
 name = "mango-core"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1599,7 +1599,7 @@ dependencies = [
 
 [[package]]
 name = "mango-devserver"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "axum",
  "futures-util",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "mango-java"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "flate2",
  "hex",
@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "mango-loaders"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "mango-archive",
  "mango-core",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "mango-mango"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "chrono",
  "mango-core",
@@ -1671,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "mango-minecraft"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "mango-archive",
  "mango-core",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "mango-modrinth"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "hex",
  "mango-archive",
@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "mango-net"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "hex",
  "reqwest",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "mango-runtime"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "chrono",
  "mango-core",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "mango-servers"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "flate2",
  "hickory-resolver",
@@ -1745,7 +1745,7 @@ dependencies = [
 
 [[package]]
 name = "mango-updater"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
