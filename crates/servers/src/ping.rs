@@ -74,7 +74,19 @@ impl SrvResolver for HickorySrv {
             if host.parse::<std::net::IpAddr>().is_ok() {
                 return None;
             }
-            let mut builder = hickory_resolver::TokioResolver::builder_tokio().ok()?;
+            let mut builder = if cfg!(windows) {
+                // A UDP socket bound to the wildcard address makes the Windows Firewall ask whether Mango Client may
+                // use the network (seen in a Windows 11 VM on the first server ping). DNS over TCP to the same system
+                // name servers is an outgoing connection only: no prompt.
+                let (config, opts) = hickory_resolver::system_conf::read_system_conf().ok()?;
+                hickory_resolver::TokioResolver::builder_with_config(
+                    tcp_only(config),
+                    hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+                )
+                .with_options(opts)
+            } else {
+                hickory_resolver::TokioResolver::builder_tokio().ok()?
+            };
             builder.options_mut().timeout = Duration::from_secs(3);
             let resolver = builder.build().ok()?;
             let name = format!("_minecraft._tcp.{}.", host.trim_end_matches('.'));
@@ -98,6 +110,18 @@ impl SrvResolver for HickorySrv {
             select_srv(&records)
         })
     }
+}
+
+/// The same system name servers, reached over TCP only.
+fn tcp_only(
+    config: hickory_resolver::config::ResolverConfig,
+) -> hickory_resolver::config::ResolverConfig {
+    let (domain, search, servers) = config.into_parts();
+    let servers = servers
+        .into_iter()
+        .map(|s| hickory_resolver::config::NameServerConfig::tcp(s.ip))
+        .collect();
+    hickory_resolver::config::ResolverConfig::from_parts(domain, search, servers)
 }
 
 /// The resolver the app should use by default.
