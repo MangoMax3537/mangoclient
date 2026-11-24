@@ -83,9 +83,13 @@ pub async fn extract_natives(
     })
     .await
     .map_err(|e| MinecraftError::Join(e.to_string()))?;
-    for line in failures {
-        on_log(&line);
+    for line in &failures {
+        on_log(line);
     }
-    tokio::fs::write(&stamp_file, stamp).await?;
+    // Only a complete set is marked done: with a failed extraction (an antivirus or another process holding a DLL on
+    // Windows) the next launch tries again instead of reusing a broken folder forever.
+    if failures.is_empty() {
+        tokio::fs::write(&stamp_file, stamp).await?;
+    }
     Ok(dir)
 }

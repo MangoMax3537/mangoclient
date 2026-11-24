@@ -551,12 +551,23 @@ async fn fetch_sha1_sidecar(artifact_url: &str, fetch: &FetchOptions) -> Option<
     (token.len() == 40 && token.bytes().all(|b| b.is_ascii_hexdigit())).then_some(token)
 }
 
+/// Forwards the installer's output line by line until it closes. Lines are decoded lossily: Java 8-17 on Windows writes in
+/// the system code page (an umlaut in the user name is not UTF-8), and stopping at such a line would leave the pipe
+/// undrained, so the installer would block forever once it filled.
 async fn pump<R: AsyncRead + Unpin>(r: R, on_log: &(dyn Fn(&str) + Send + Sync)) {
-    let mut lines = BufReader::new(r).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let t = line.trim_end();
-        if !t.is_empty() {
-            on_log(t);
+    let mut reader = BufReader::new(r);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                let line = String::from_utf8_lossy(&buf);
+                let t = line.trim_end();
+                if !t.is_empty() {
+                    on_log(t);
+                }
+            }
         }
     }
 }
@@ -629,6 +640,37 @@ async fn run_installer(
 /// Path of a version's JSON inside the versions dir.
 pub fn version_json_path(paths: &Paths, id: &str) -> PathBuf {
     paths.versions().join(id).join(format!("{id}.json"))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod pump_tests {
+    use super::pump;
+    use std::sync::Mutex;
+
+    #[tokio::test]
+    async fn non_utf8_output_is_logged_and_the_pipe_keeps_draining() {
+        let mut data = b"Installing\r\nC:\\Users\\J\xfcrgen\\x\r\n".to_vec();
+        data.extend(std::iter::repeat_n(b'a', 200_000));
+        data.extend(b"\nDone\n");
+        let got = Mutex::new(Vec::<String>::new());
+        pump(&data[..], &|l: &str| {
+            got.lock().unwrap().push(l.to_string())
+        })
+        .await;
+        let got = got.into_inner().unwrap();
+        assert_eq!(got.first().map(String::as_str), Some("Installing"));
+        assert!(
+            got[1].starts_with("C:\\Users\\J") && got[1].ends_with("rgen\\x"),
+            "{:?}",
+            got[1]
+        );
+        assert_eq!(
+            got.last().map(String::as_str),
+            Some("Done"),
+            "reading went on after the non-UTF-8 line"
+        );
+    }
 }
 
 #[cfg(test)]

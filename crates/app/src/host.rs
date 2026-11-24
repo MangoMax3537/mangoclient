@@ -73,9 +73,13 @@ impl OpenFolder for SystemOpener {
         }
         let mut cmd = std::process::Command::new(file_manager());
         if cfg!(target_os = "windows") {
-            let mut arg = std::ffi::OsString::from("/select,");
-            arg.push(file);
-            cmd.arg(arg);
+            // Explorer parses `/select,"<path>"` itself: passed as one normal argument, a path with spaces gets quoted
+            // as a whole and Explorer opens its default folder instead.
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.raw_arg(format!("/select,\"{}\"", file.display()));
+            }
         } else if cfg!(target_os = "macos") {
             cmd.arg("-R").arg(file);
         } else {

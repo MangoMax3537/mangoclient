@@ -12,6 +12,25 @@ use crate::error::{Error, Result};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// `rename`, retried a few times on Windows: an antivirus or the search indexer briefly holding the target makes the
+/// replace fail with "access denied" for a moment, which must not lose a save.
+fn rename_retrying(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut attempt = 0;
+    loop {
+        match fs::rename(from, to) {
+            Err(e)
+                if cfg!(windows)
+                    && e.kind() == std::io::ErrorKind::PermissionDenied
+                    && attempt < 5 =>
+            {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(30 * attempt));
+            }
+            r => return r,
+        }
+    }
+}
+
 fn valid_json(raw: &str) -> bool {
     serde_json::from_str::<Value>(raw).is_ok()
 }
@@ -49,7 +68,7 @@ pub fn write_file_atomic(file: &Path, data: &[u8], mode: u32) -> Result<()> {
         f.write_all(data)?;
         f.sync_all()?;
         drop(f);
-        fs::rename(&tmp, file)?;
+        rename_retrying(&tmp, file)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
