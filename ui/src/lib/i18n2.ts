@@ -68,7 +68,7 @@ export const en2 = {
   'update.pill.checking': 'Checking for updates', 'update.pill.downloading': 'Updating {n}%', 'update.pill.ready': 'Update {v}',
   'update.status.idle': 'Not checked yet.', 'update.status.checking': 'Checking...', 'update.status.downloading': 'Downloading {v}, {n}%', 'update.status.ready': 'Version {v} is ready to install.',
   'update.status.current': 'You are up to date.', 'update.error.no-release': 'No release found.', 'update.error.offline': 'No connection.', 'update.error.other': 'The update check failed.',
-  'update.disabled.dev': 'Updates are off in development builds.', 'update.disabled.unsupported': 'This installation type cannot update itself.',
+  'update.disabled.dev': 'Updates are off in development builds.', 'update.disabled.unsupported': 'This installation cannot update itself. On a Mac, move Mango Client into the Applications folder and open it from there.',
 
   'onb.progress': 'Step {n} of {total}', 'onb.step.welcome': 'Welcome', 'onb.step.language': 'Language', 'onb.step.account': 'Account', 'onb.step.done': 'Done',
   'onb.welcome.title': 'Your worlds, your setups, one launcher.', 'onb.welcome.body': 'A few quick questions and you can play. Everything can be changed later in Settings.',
@@ -146,7 +146,7 @@ export const de2: Record<keyof typeof en2, string> = {
   'update.pill.checking': 'Suche nach Updates', 'update.pill.downloading': 'Update {n} %', 'update.pill.ready': 'Update {v}',
   'update.status.idle': 'Noch nicht geprüft.', 'update.status.checking': 'Prüfe...', 'update.status.downloading': 'Lade {v} herunter, {n} %', 'update.status.ready': 'Version {v} ist bereit zur Installation.',
   'update.status.current': 'Du bist auf dem neuesten Stand.', 'update.error.no-release': 'Kein Release gefunden.', 'update.error.offline': 'Keine Verbindung.', 'update.error.other': 'Die Update-Prüfung ist fehlgeschlagen.',
-  'update.disabled.dev': 'In Entwicklungs-Builds sind Updates aus.', 'update.disabled.unsupported': 'Diese Installationsart kann sich nicht selbst aktualisieren.',
+  'update.disabled.dev': 'In Entwicklungs-Builds sind Updates aus.', 'update.disabled.unsupported': 'Diese Installation kann sich nicht selbst aktualisieren. Auf dem Mac: Mango Client in den Ordner „Programme“ ziehen und von dort öffnen.',
 
   'onb.progress': 'Schritt {n} von {total}', 'onb.step.welcome': 'Willkommen', 'onb.step.language': 'Sprache', 'onb.step.account': 'Konto', 'onb.step.done': 'Fertig',
   'onb.welcome.title': 'Deine Welten, deine Setups, ein Launcher.', 'onb.welcome.body': 'Ein paar kurze Fragen, dann kannst du spielen. Alles lässt sich später in den Einstellungen ändern.',

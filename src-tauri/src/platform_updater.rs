@@ -27,9 +27,26 @@ pub fn detect_target() -> Option<Target> {
                     .find(|p| p.extension().is_some_and(|e| e == "app"))
                     .map(Path::to_path_buf)
             })
+            .filter(|bundle| mac_bundle_replaceable(bundle))
             .map(Target::MacApp),
         _ => None,
     }
+}
+
+/// A macOS bundle can replace itself only from a writable folder it really lives in: not from the read-only copy macOS
+/// runs a quarantined app from (App Translocation, e.g. straight out of Downloads), not from a mounted DMG, and not where
+/// the user may not write (/Applications for a non-admin). There the app says it cannot update itself.
+fn mac_bundle_replaceable(bundle: &Path) -> bool {
+    let s = bundle.to_string_lossy();
+    if s.contains("/AppTranslocation/") || s.starts_with("/Volumes/") {
+        return false;
+    }
+    bundle.parent().is_some_and(|dir| {
+        let probe = dir.join(format!(".mangoclient-write-test-{}", std::process::id()));
+        let ok = std::fs::write(&probe, b"").is_ok();
+        let _ = std::fs::remove_file(&probe);
+        ok
+    })
 }
 
 /// The installer for this install; `download_dir` is the updater's download

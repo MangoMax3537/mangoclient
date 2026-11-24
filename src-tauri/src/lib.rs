@@ -1239,9 +1239,17 @@ pub fn run() {
     app.run(|handle, event| {
         // Closing the last window must not quit while a game runs or work is
         // active; a normal quit installs a staged update.
-        if let RunEvent::ExitRequested { code, api, .. } = event {
+        if let RunEvent::ExitRequested { code, api, .. } = &event {
             if window::on_exit_requested(handle, code.is_some()) {
                 api.prevent_exit();
+            }
+        }
+        // macOS: clicking the Dock icon (or opening the app again) re-activates this process instead of starting a second
+        // one, so the single-instance hook never fires. Bring the window back the same way, e.g. after "hide on launch".
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen { has_visible_windows: false, .. } = event {
+            if let Some(life) = handle.try_state::<window::Lifecycle>() {
+                life.send(PolicyInput::SecondInstance);
             }
         }
     });
