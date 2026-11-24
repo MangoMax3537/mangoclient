@@ -22,7 +22,7 @@ export interface ConsoleLine { id: number; line: string; level: LogLevel }
 export interface LaunchInfo {
   state: LaunchState | 'idle';
   progress: LaunchProgressEvent | null;
-  /** 0..1 of the current "downloading" stage, from launch:progress. */
+  /** 0..1 within the current stage, from launch:progress: the "java" stage (Java download) and the "downloading" stage. */
   downloadFraction: number;
 }
 
@@ -320,7 +320,7 @@ export function stageProgress(info: LaunchInfo): number {
   const i = LAUNCH_STAGES.indexOf(info.state as Stage);
   if (i < 0) return 0;
   if (info.state === 'running') return 1;
-  const within = info.state === 'downloading' ? info.downloadFraction : 0;
+  const within = info.state === 'downloading' || info.state === 'java' ? info.downloadFraction : 0;
   return (i + within) / LAUNCH_STAGES.length;
 }
 
@@ -329,8 +329,8 @@ export function applyState(profileId: string, state: LaunchState): void {
   const prev = launches[profileId];
   launches[profileId] = {
     state,
-    progress: state === 'downloading' ? prev?.progress ?? null : null,
-    downloadFraction: state === 'downloading' ? prev?.downloadFraction ?? 0 : 0,
+    progress: prev?.state === state ? prev.progress : null,
+    downloadFraction: prev?.state === state ? prev.downloadFraction : 0,
   };
 }
 
@@ -340,6 +340,9 @@ export function applyProgress(ev: LaunchProgressEvent): void {
   if (ev.phase === 'client' || ev.phase === 'libraries' || ev.phase === 'assets') {
     const idx = { client: 0, libraries: 1, assets: 2 }[ev.phase];
     f = Math.max(f, (idx + (ev.total > 0 ? ev.done / ev.total : 1)) / 3);
+  } else if (ev.phase === 'java') {
+    // the Java runtime download (only while the instance is in the java stage)
+    if (prev.state === 'java') f = ev.total > 0 ? ev.done / ev.total : f;
   } else if (ev.phase === 'done') f = 1;
   launches[ev.profileId] = { ...prev, progress: ev, downloadFraction: Math.min(1, f) };
 }

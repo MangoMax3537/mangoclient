@@ -44,8 +44,8 @@
   const pct = $derived(info ? Math.round(stageProgress(info) * 100) : 0);
   const stageLabel = $derived(info && launching ? t(`launch.${info.state}` as Key) : '');
   const isStopping = $derived(p ? !!stopping[p.id] && busy : false);
-  const label = $derived(isStopping ? t('home.stopping') : running ? t('home.stop') : launching ? `${stageLabel}${info?.state === 'downloading' ? ` ${pct}%` : ''}` : t('home.play'));
-  const prog = $derived(launching && info ? (info.state === 'downloading' ? stageProgress(info) : null) : null);
+  const label = $derived(isStopping ? t('home.stopping') : running ? t('home.stop') : launching ? `${stageLabel}${info?.state === 'downloading' || (info?.state === 'java' && info.progress) ? ` ${pct}%` : ''}` : t('home.play'));
+  const prog = $derived(launching && info ? (info.state === 'downloading' || (info.state === 'java' && info.progress) ? stageProgress(info) : null) : null);
   void LAUNCH_STAGES;
 
   const stats = createLoadState<StatsSummary>({ isEmpty: () => false });

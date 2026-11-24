@@ -94,6 +94,12 @@ impl Default for FetchOptions {
     }
 }
 
+/// A connection that cannot be opened within this is given up (then retried by the callers that retry).
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// No byte for this long ends the transfer with an error instead of hanging forever (a stalled GitHub release
+/// download kept the Java stage at 14% on macOS). Large files still take as long as they need while data flows.
+const STALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 fn client() -> Result<Client, NetError> {
     static CLIENT: OnceLock<Client> = OnceLock::new();
     if let Some(c) = CLIENT.get() {
@@ -101,6 +107,8 @@ fn client() -> Result<Client, NetError> {
     }
     let c = Client::builder()
         .user_agent(UA)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(STALL_TIMEOUT)
         .build()
         .map_err(NetError::Client)?;
     let _ = CLIENT.set(c.clone());
@@ -112,6 +120,8 @@ pub fn restricted_client(policy: &HostPolicy) -> Result<Client, NetError> {
     let policy = policy.clone();
     Client::builder()
         .user_agent(UA)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(STALL_TIMEOUT)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
             if attempt.previous().len() >= 10 {
                 attempt.error("too many redirects")

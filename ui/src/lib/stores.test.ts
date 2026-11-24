@@ -15,6 +15,18 @@ describe('stores', () => {
     expect(consoles['p'][0].line).toBe('line 50');
   });
 
+  it('the java stage moves with the Java download instead of sitting at one seventh', () => {
+    applyState('j', 'java');
+    const start = stageProgress(launchInfo('j'));
+    applyProgress({ profileId: 'j', phase: 'java', done: 30, total: 60, label: '' });
+    expect(launchInfo('j').downloadFraction).toBeCloseTo(0.5, 5);
+    expect(stageProgress(launchInfo('j'))).toBeGreaterThan(start);
+    // the next stage starts from its own beginning
+    applyState('j', 'loader');
+    expect(launchInfo('j').downloadFraction).toBe(0);
+    applyState('j', 'stopped');
+  });
+
   it('derives busy/progress from events', () => {
     expect(isBusy('p')).toBe(false);
     applyState('p', 'downloading');

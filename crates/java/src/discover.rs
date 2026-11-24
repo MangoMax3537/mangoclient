@@ -19,9 +19,14 @@ impl SearchRoots {
         let java_home = std::env::var_os("JAVA_HOME")
             .filter(|v| !v.is_empty())
             .map(PathBuf::from);
-        let path_dirs = std::env::var_os("PATH")
+        let mut path_dirs: Vec<PathBuf> = std::env::var_os("PATH")
             .map(|p| std::env::split_paths(&p).collect())
             .unwrap_or_default();
+        if platform.os == Os::Mac {
+            // macOS's /usr/bin/java is only Apple's stub: without a JDK, running it can pop up an "install Java" dialog.
+            // Real JDKs are found in the JavaVirtualMachines folders below.
+            path_dirs.retain(|d| d != Path::new("/usr/bin"));
+        }
         let mut jvm_dirs: Vec<PathBuf> = ["/usr/lib/jvm", "/usr/java", "/opt/java"]
             .iter()
             .map(PathBuf::from)
@@ -29,6 +34,10 @@ impl SearchRoots {
         match platform.os {
             Os::Mac => {
                 jvm_dirs.push("/Library/Java/JavaVirtualMachines".into());
+                // per-user JDKs (e.g. IntelliJ downloads, SDKMAN-style installs)
+                if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
+                    jvm_dirs.push(Path::new(&home).join("Library/Java/JavaVirtualMachines"));
+                }
             }
             Os::Windows => {
                 let vendors = [

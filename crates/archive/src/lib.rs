@@ -368,6 +368,7 @@ pub fn extract_tar_gz<R: Read>(
             fs::create_dir_all(parent)?;
             safe_archive_path(dest, &name)?;
         }
+        let mode = entry.header().mode().ok();
         let mut out = fs::File::create(&target)?;
         let remaining = limits.total_size.saturating_sub(total);
         let n = copy_bounded(
@@ -377,8 +378,25 @@ pub fn extract_tar_gz<R: Read>(
             &name,
         )?;
         total += n;
+        keep_exec_bit(&out, mode)?;
     }
     Ok(total)
+}
+
+/// Executables keep their execute bit (a JRE's `bin/*` and `lib/jspawnhelper`); nothing else is taken from the
+/// archive: the result is 0755 or the default mode, never setuid/setgid/sticky or world-writable.
+#[cfg(unix)]
+fn keep_exec_bit(file: &fs::File, mode: Option<u32>) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    if mode.is_some_and(|m| m & 0o111 != 0) {
+        file.set_permissions(fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn keep_exec_bit(_file: &fs::File, _mode: Option<u32>) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -607,6 +625,45 @@ mod tests {
         let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         enc.write_all(&raw).unwrap();
         enc.finish().unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tar_gz_keeps_the_execute_bit_but_nothing_dangerous() {
+        use std::os::unix::fs::PermissionsExt;
+        let dest = tempfile::tempdir().unwrap();
+        let gz = make_tar_gz(|b| {
+            for (name, mode) in [
+                ("jre/lib/jspawnhelper", 0o755),
+                ("jre/lib/modules", 0o644),
+                ("jre/bin/evil", 0o4777),
+            ] {
+                let mut h = tar::Header::new_gnu();
+                h.set_size(1);
+                h.set_mode(mode);
+                h.set_cksum();
+                b.append_data(&mut h, name, &b"x"[..]).unwrap();
+            }
+        });
+        extract_tar_gz(&gz[..], dest.path(), &Limits::default()).unwrap();
+        let mode = |p: &str| {
+            fs::metadata(dest.path().join(p))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777
+        };
+        assert_eq!(mode("jre/lib/jspawnhelper"), 0o755);
+        assert_eq!(
+            mode("jre/lib/modules") & 0o111,
+            0,
+            "data files stay non-executable"
+        );
+        assert_eq!(
+            mode("jre/bin/evil"),
+            0o755,
+            "setuid and world-writable bits are dropped"
+        );
     }
 
     #[test]

@@ -78,7 +78,7 @@ pub async fn download_runtime(major: u32, opts: &ResolveOptions) -> Result<PathB
         return Err(JavaError::InvalidPackageName(pkg.name));
     }
 
-    tokio::fs::create_dir_all(&dir).await?;
+    tokio::fs::create_dir_all(&opts.runtimes_dir).await?;
     tokio::fs::create_dir_all(&opts.cache_dir).await?;
     let archive = opts.cache_dir.join(&pkg.name);
     download_file(
@@ -97,19 +97,32 @@ pub async fn download_runtime(major: u32, opts: &ResolveOptions) -> Result<PathB
     )
     .await?;
 
-    let (a, d) = (archive.clone(), dir.clone());
+    // Unpack next to the final folder and move it into place only when complete: an interrupted unpack (Stop, crash,
+    // power loss) must never leave a half runtime that the "already installed" check above would accept next time.
+    let staging = opts.runtimes_dir.join(format!(".jre-{major}.partial"));
+    let (a, d, target) = (archive.clone(), staging.clone(), dir.clone());
     let extracted = tokio::task::spawn_blocking(move || -> Result<(), JavaError> {
+        let _ = std::fs::remove_dir_all(&d);
         let file = std::fs::File::open(&a)?;
         if a.extension().is_some_and(|e| e == "zip") {
             mango_archive::extract_zip(file, &d, &Limits::default())?;
         } else {
             mango_archive::extract_tar_gz(std::io::BufReader::new(file), &d, &Limits::default())?;
         }
+        if java_executable(&d, platform, false).is_none() {
+            let _ = std::fs::remove_dir_all(&d);
+            return Err(JavaError::NoExecutable);
+        }
+        let _ = std::fs::remove_dir_all(&target);
+        std::fs::rename(&d, &target)?;
         Ok(())
     })
     .await
     .map_err(|e| JavaError::Join(e.to_string()))?;
     let _ = tokio::fs::remove_file(&archive).await;
+    if extracted.is_err() {
+        let _ = tokio::fs::remove_dir_all(&staging).await;
+    }
     extracted?;
 
     let exe = java_executable(&dir, platform, false).ok_or(JavaError::NoExecutable)?;
