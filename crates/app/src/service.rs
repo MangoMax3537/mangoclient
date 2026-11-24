@@ -177,6 +177,33 @@ fn dev_bundle_dir() -> PathBuf {
     std::env::temp_dir().join("mangoclient-no-bundle")
 }
 
+/// Stop signal of a launch in progress. `cancel` is sticky: a waiter that starts late still sees it, and blocking steps
+/// (unpacking) can poll `is_cancelled`.
+#[derive(Default)]
+pub(crate) struct LaunchCancel {
+    flag: std::sync::atomic::AtomicBool,
+    notify: tokio::sync::Notify,
+}
+
+impl LaunchCancel {
+    pub(crate) fn cancel(&self) {
+        self.flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.notify.notify_one();
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Resolves once `cancel` was called (also when it was called before).
+    pub(crate) async fn cancelled(&self) {
+        if self.is_cancelled() {
+            return;
+        }
+        self.notify.notified().await;
+    }
+}
+
 pub(crate) struct Inner {
     pub paths: Paths,
     pub store: Mutex<Store>,
@@ -184,6 +211,8 @@ pub(crate) struct Inner {
     pub opts: ServiceOptions,
     pub games: Mutex<HashMap<String, GameInstance>>,
     pub launching: Mutex<HashSet<String>>,
+    /// Stop signal of each launch that has not reached the game process yet.
+    pub launch_cancel: Mutex<HashMap<String, Arc<LaunchCancel>>>,
     pub states: Mutex<HashMap<String, LaunchState>>,
     pub throttle: Mutex<ProgressThrottle>,
     pub host: Host,
@@ -302,6 +331,7 @@ impl AppService {
                 opts,
                 games: Mutex::new(HashMap::new()),
                 launching: Mutex::new(HashSet::new()),
+                launch_cancel: Mutex::new(HashMap::new()),
                 states: Mutex::new(HashMap::new()),
                 throttle: Mutex::new(ProgressThrottle::default()),
                 host,
@@ -632,12 +662,19 @@ impl AppService {
     }
 
     /// `true` when a stop signal was sent.
+    /// Stops the instance at once, whatever stage it is in: a running game is terminated (SIGTERM, then SIGKILL), a
+    /// launch that has not reached the game yet is cancelled (downloads, unpacking and installer processes end with it).
     pub fn game_stop(&self, profile_id: String) -> Res<bool> {
         validate_profile_id(&profile_id)?;
         let game = lock(&self.inner.games).get(&profile_id).cloned();
-        match game {
-            Some(g) => {
-                g.stop()?;
+        if let Some(g) = game {
+            g.stop()?;
+            return Ok(true);
+        }
+        let pending = lock(&self.inner.launch_cancel).get(&profile_id).cloned();
+        match pending {
+            Some(c) => {
+                c.cancel();
                 Ok(true)
             }
             None => Ok(false),

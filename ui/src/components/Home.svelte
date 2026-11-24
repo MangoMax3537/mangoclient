@@ -24,7 +24,7 @@
   import { instanceMenu } from '../lib/instanceMenu';
   import { contextmenu } from '../lib/contextMenu.svelte';
   import {
-    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openIconPicker, openProfile, selectedProfile, stageProgress, t, tp,
+    LAUNCH_STAGES, actions, app, consoles, getApi, isBusy, isRunning, lang, launchInfo, nav, openBackgroundPicker, openIconPicker, openProfile, selectedProfile, stageProgress, stopping, t, tp,
   } from '../lib/stores.svelte';
   import type { StatsSummary } from '../lib/types';
   import Loadable from './Loadable.svelte';
@@ -43,7 +43,8 @@
   const others = $derived([...app.profiles].sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0)).slice(0, 12));
   const pct = $derived(info ? Math.round(stageProgress(info) * 100) : 0);
   const stageLabel = $derived(info && launching ? t(`launch.${info.state}` as Key) : '');
-  const label = $derived(running ? t('home.stop') : launching ? `${stageLabel}${info?.state === 'downloading' ? ` ${pct}%` : ''}` : t('home.play'));
+  const isStopping = $derived(p ? !!stopping[p.id] && busy : false);
+  const label = $derived(isStopping ? t('home.stopping') : running ? t('home.stop') : launching ? `${stageLabel}${info?.state === 'downloading' ? ` ${pct}%` : ''}` : t('home.play'));
   const prog = $derived(launching && info ? (info.state === 'downloading' ? stageProgress(info) : null) : null);
   void LAUNCH_STAGES;
 
@@ -82,7 +83,7 @@
         </div>
         <div class="actions">
           <PlayButton mode={running ? 'stop' : launching ? 'busy' : 'play'} {label} progress={prog} onclick={toggle} disabled={!app.accounts.length && !busy} />
-          {#if launching}<button class="btn text" type="button" onclick={toggle}>{t('home.stop')}</button>{/if}
+          {#if launching}<button class="btn text" type="button" onclick={toggle} disabled={isStopping}>{isStopping ? t('home.stopping') : t('home.stop')}</button>{/if}
           {#if !app.accounts.length && !busy}<NoAccountHint />{/if}
           <ProfileMenu currentId={p.id} disabled={busy} />
           <button class="btn text" type="button" onclick={() => openProfile(p.id)}><SlidersIcon weight="bold" size={16} aria-hidden="true" />{t('home.openProfile')}</button>

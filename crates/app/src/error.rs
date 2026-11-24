@@ -38,6 +38,11 @@ impl AppError {
     pub fn already_running() -> Self {
         AppError::new("already_running", "This profile is already running")
     }
+
+    /// The player pressed Stop while the instance was still being prepared.
+    pub fn launch_cancelled() -> Self {
+        AppError::new("launch_cancelled", "The launch was stopped")
+    }
 }
 
 macro_rules! from_coded {

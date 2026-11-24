@@ -42,6 +42,8 @@ export const app = $state({
 });
 
 export const launches = $state<Record<string, LaunchInfo>>({});
+/** Stop was pressed and the instance has not reported stopped yet: the button says so at once. */
+export const stopping = $state<Record<string, boolean>>({});
 export const consoles = $state<Record<string, ConsoleLine[]>>({});
 export type View = 'home' | 'library' | 'discover' | 'servers' | 'skins' | 'stats' | 'settings' | 'profile';
 export type ProfileTab = 'overview' | 'mods' | 'shaders' | 'resourcepacks' | 'datapacks' | 'media' | 'backups' | 'logs' | 'settings';
@@ -323,6 +325,7 @@ export function stageProgress(info: LaunchInfo): number {
 }
 
 export function applyState(profileId: string, state: LaunchState): void {
+  if (state === 'stopped' || state === 'crashed' || state === 'preparing') delete stopping[profileId];
   const prev = launches[profileId];
   launches[profileId] = {
     state,
@@ -576,6 +579,8 @@ export const actions = {
       await currentApi.gameLaunch(quickJoin ? { profileId: id, quickJoin } : { profileId: id });
     } catch (e) {
       const err = toAppError(e);
+      // Stop pressed while the instance was still being prepared: not an error
+      if (err.code === 'launch_cancelled') { applyState(id, 'stopped'); return; }
       if (err.needsRelogin) {
         applyState(id, 'stopped');
         auth.error = null;
@@ -648,7 +653,11 @@ export const actions = {
     const ok = await guard(() => currentApi.updateInstall());
     if (!ok) { updates.installing = false; updates.overlay = false; }
   },
-  async stop(id: string) { await guard(() => currentApi.gameStop({ profileId: id })); },
+  async stop(id: string) {
+    stopping[id] = true;
+    const acted = await guard(() => currentApi.gameStop({ profileId: id }));
+    if (!acted) delete stopping[id];
+  },
 };
 
 /** Re-reads the account list (accounts:changed); keeps everything else untouched. */

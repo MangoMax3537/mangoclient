@@ -32,6 +32,7 @@ struct LaunchGuard {
 impl Drop for LaunchGuard {
     fn drop(&mut self) {
         lock(&self.inner.launching).remove(&self.id);
+        lock(&self.inner.launch_cancel).remove(&self.id);
     }
 }
 
@@ -65,12 +66,29 @@ impl AppService {
             let _ = inner.patch_profile(&profile_id, &json!({"session": null}));
         }
 
+        let cancel = Arc::new(crate::service::LaunchCancel::default());
+        lock(&inner.launch_cancel).insert(profile_id.clone(), Arc::clone(&cancel));
+
         let svc = self.clone();
         let task = tokio::spawn(async move {
             let _guard = guard;
             let id = profile.id.clone();
-            let result = svc.run_pipeline(profile, quick_join).await;
-            if let Err(e) = &result {
+            // Stop wins at any await point: dropping the pipeline aborts its HTTP transfers (partial files are removed by
+            // their temp guards), its download pool and any installer child (kill_on_drop). The game process is spawned
+            // and registered without an await in between, so it is never orphaned; once it runs, Stop goes to it.
+            let result = tokio::select! {
+                biased;
+                () = cancel.cancelled() => Err(AppError::launch_cancelled()),
+                r = svc.run_pipeline(profile, quick_join) => r,
+            };
+            if result.as_ref().is_err_and(|e| e.code == "launch_cancelled") {
+                svc.inner.emit(Event::LaunchLog(LaunchLogEvent {
+                    profile_id: id.clone(),
+                    line: "Launch stopped".to_string(),
+                    level: LogLevelName::Info,
+                }));
+                svc.inner.set_state(&id, LaunchState::Stopped);
+            } else if let Err(e) = &result {
                 svc.inner.emit(Event::LaunchLog(LaunchLogEvent {
                     profile_id: id.clone(),
                     line: format!("Launch failed: {} ({})", e.message, e.code),

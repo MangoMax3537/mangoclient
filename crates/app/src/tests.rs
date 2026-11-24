@@ -584,3 +584,67 @@ fn new_profile_with(svc: &AppService, mc: &str) -> ProfileView {
     svc.profile_create("Supported".into(), mc.into(), "fabric".into(), None)
         .unwrap()
 }
+
+/// Stop during the launch (here: a version manifest request that never answers) ends the launch at once with
+/// `launch_cancelled`, reports it stopped, and frees the instance for the next start.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_cancels_a_launch_that_has_not_reached_the_game() {
+    // a server that accepts and then never answers
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for s in listener.incoming().flatten() {
+            held.push(s);
+        }
+    });
+    let tmp = tempfile::tempdir().unwrap();
+    let sink = Arc::new(MockSink::default());
+    let opts = ServiceOptions {
+        open_folders: false,
+        manifest_url: format!("http://{addr}/version_manifest_v2.json"),
+        ..ServiceOptions::default()
+    };
+    let svc = AppService::new(mango_core::Paths::new(tmp.path()), sink.clone(), opts).unwrap();
+    svc.account_add_offline("Steve".into()).unwrap();
+    let p = new_profile(&svc, "Stalled");
+
+    let launch = tokio::spawn({
+        let svc = svc.clone();
+        let id = p.id.clone();
+        async move { svc.game_launch(id, None).await }
+    });
+    // wait until the launch is registered, then stop it
+    let begun = Instant::now();
+    while !lock(&svc.inner.launch_cancel).contains_key(&p.id) {
+        assert!(
+            begun.elapsed() < Duration::from_secs(5),
+            "launch never registered"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let stop_at = Instant::now();
+    assert!(
+        svc.game_stop(p.id.clone()).unwrap(),
+        "Stop acts on a launch in progress"
+    );
+    let result = tokio::time::timeout(Duration::from_secs(3), launch)
+        .await
+        .expect("launch ended at once")
+        .unwrap();
+    assert!(
+        stop_at.elapsed() < Duration::from_secs(2),
+        "stopped in {:?}",
+        stop_at.elapsed()
+    );
+    assert_eq!(result.unwrap_err().code, "launch_cancelled");
+    assert!(sink.events().iter().any(|e| matches!(e, Event::LaunchState(s) if s.profile_id == p.id && s.state == LaunchState::Stopped)));
+    // the instance is free again; nothing is left registered
+    assert!(!lock(&svc.inner.launching).contains(&p.id));
+    assert!(!lock(&svc.inner.launch_cancel).contains_key(&p.id));
+    assert!(
+        !svc.game_stop(p.id.clone()).unwrap(),
+        "nothing left to stop"
+    );
+}

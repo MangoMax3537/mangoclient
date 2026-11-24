@@ -32,7 +32,7 @@
   import { untrack } from 'svelte';
   import { createLoadState } from '../lib/loadState.svelte';
   import { CONTENT_TAB_TYPE, effectiveTab, isContentTab, profileTabs } from '../lib/profileTabs';
-  import { actions, app, contentRev, errorText, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, lang, t, toast, ui, type ProfileTab } from '../lib/stores.svelte';
+  import { actions, app, contentRev, errorText, getApi, isBusy, nav, openBackgroundPicker, openIconPicker, lang, t, toast, ui, type ProfileTab, stopping } from '../lib/stores.svelte';
   import type { ContentItem, ContentType, UpdateInfo } from '../lib/types';
 
   let { id }: { id: string } = $props();
@@ -141,7 +141,7 @@
             <p class="info mono"><InfoLine facts={heroFacts(p, lang(), t)} size={15} /></p>
           </div>
           <div class="playcol">
-            <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? t('home.stop') : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
+            <PlayButton mode={busy ? 'stop' : 'play'} label={busy ? (stopping[p.id] ? t('home.stopping') : t('home.stop')) : t('home.play')} onclick={toggle} disabled={!app.accounts.length && !busy} />
             {#if !app.accounts.length && !busy}<NoAccountHint />{/if}
           </div>
         </div>
